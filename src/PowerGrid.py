@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from functools import wraps, partial
-from typing import Callable, Hashable, Any
+from typing import Callable, Hashable, Any, Concatenate
 
 import networkx as nx
 import numpy as np
@@ -10,36 +10,38 @@ from scipy import optimize
 from scipy.optimize import OptimizeResult
 
 
-def cached[K: Hashable, T](func: Callable[[K], T]) -> Callable[[K], T]:
-    """ Function decorator that saves evaluation results in function's internal dict and reads them if the function is called again with the same argument. """
+def cached[K: Hashable, **P, R](func: Callable[Concatenate[K, P], R]) -> Callable[Concatenate[K, P], R]:
+    """ Function decorator that adds saving of function's evaluation result in function's internal dict under the value of the function's first argument and reads it from the
+    dict if the function is called again with the same first argument. """
     @wraps(func)
-    def wrapper(arg: K) -> T:
-        if arg not in wrapper.cache:
-            wrapper.cache[arg] = func(arg)
-        return wrapper.cache[arg]
+    def wrapper(key: K, *args: P.args, **kwargs: P.kwargs) -> R:
+        if key not in wrapper.cache:
+            wrapper.cache[key] = func(key, *args, **kwargs)
+        return wrapper.cache[key]
 
     wrapper.cache = {}
     return wrapper
 
 
-def get_penalty(powers: list[float], constraints: list[dict[str, Any]], mult: float = 1e1) -> float:
-    """ Evaluates penalty term for a given power vector and list of constraints. """
+def get_penalty(params: list[float], constraints: list[dict[str, Any]], mult: float = 1e1) -> float:
+    """ Evaluates penalty term for a given optimization parameter vector and list of constraints. """
     penalty = 0
     for constraint in constraints:
-        val = constraint["fun"](powers)
-        if val < 0:
-            penalty += mult * val ** 2
+        val = constraint["fun"](params)
+        penalty += mult * np.sum(min(val, 0) ** 2)
     return penalty
 
 
 @dataclass
 class Generator:
     """
-    Describes a generator
-    :var power_range: (min, max) values of power for this generator.
+    Describes a generator.
+    :var power_range: (min, max) values of active power (p) for this generator.
+    :var reactive_power_range: (min, max) values of reactive power for this generator.
     :var cost_terms: (a, b, c) terms of quadratic generation cost function (ap^2 + bp + c).
     """
     power_range: tuple[float, float]
+    reactive_power_range: tuple[float, float]
     cost_terms: tuple[float, float, float]
 
     def generation_cost(self, power: float) -> float:
@@ -56,25 +58,25 @@ class GeneratorCommitmentProblem:
     def __post_init__(self):
         self.optimize_power = cached(self.optimize_power)
 
-    def optimize_power(self, bitstring: str) -> OptimizeResult:
+    def optimize_power(self, generator_statuses: str, penalty_mult: float = 10) -> OptimizeResult:
         """ Finds optimal generation cost for a given generator assignment. """
         def generation_cost_total(powers: list[float]) -> float:
             return sum(gen.generation_cost(power) for gen, power in zip(enabled_generators, powers))
 
-        enabled_generators = self.generators[[int(val) == 1 for val in bitstring]]
+        enabled_generators = self.generators[[int(val) == 1 for val in generator_statuses]]
         initial_point = [gen.power_range[1] for gen in enabled_generators]
         bounds = [gen.power_range for gen in enabled_generators] if enabled_generators.size > 0 else None
         constraints = [{"type": "ineq", "fun": lambda powers: sum(powers) - self.load}]
         result = optimize.minimize(generation_cost_total, initial_point, method="SLSQP", bounds=bounds, constraints=constraints)
-        result.penalty = get_penalty(result.x, constraints)
+        result.penalty = get_penalty(result.x, constraints, penalty_mult)
         result.total = result.fun + result.penalty
         return result
 
-    def evaluate(self, bitstring: str) -> float:
-        return self.optimize_power(bitstring).total
+    def evaluate(self, generator_statuses: str, penalty_mult: float = 10) -> float:
+        return self.optimize_power(generator_statuses, penalty_mult).total
 
 
-class PowerFlowProblem:
+class SimplePowerFlowProblem:
     """ Generalized version of GeneratorCommitmentProblem, where locations of generators and loads are taken into account.
     Specifically, the problem is described by a graph, where nodes represent neighborhoods that can include generators and loads.
     Generated power is consumed by local loads. Any excess power can be transferred to adjacent nodes to supplement their generators.
@@ -102,7 +104,7 @@ class PowerFlowProblem:
         nx.set_edge_attributes(self.graph, {(u, v): {"var_ind": i + var_ind, "start": u} for i, (u, v) in enumerate(self.graph.edges)})
 
     def evaluate_power_balance(self, powers: list[float], node_label: Hashable) -> float:
-        """ Evaluates power balance at a given node, i.e. sum of all generated powers + incoming - outgoing - load. """
+        """ Evaluates power balance at a given node, i.e. sum of all generated params + incoming - outgoing - load. """
         power_balance = 0
         this_node = self.graph.nodes[node_label]
         for gen_ind in this_node["var_inds"]:
@@ -121,7 +123,7 @@ class PowerFlowProblem:
         return constraints
 
     def optimize_power(self, bitstring: str) -> OptimizeResult:
-        """ Finds optimal power vector for a given set of enabled generators, defined by the bitstring. """
+        """ Finds optimal power vector for a given set of enabled generators, defined by the generator_statuses. """
         def generation_cost_total(powers: list[float]) -> float:
             return sum(gen.generation_cost(power) for gen, power in zip(self.generators, powers))
 
@@ -138,3 +140,96 @@ class PowerFlowProblem:
     def evaluate(self, bitstring: str) -> float:
         """ Returns optimal generation cost + penalty for a given set of enabled generators. """
         return self.optimize_power(bitstring).total
+
+
+class PowerFlowACProblem:
+    """ Physical version of SimplePowerFlowProblem, where power is complex, lines are not lossless and line flows have to satisfy physical constraints. """
+
+    def __init__(self, graph: Graph):
+        """ Graph nodes should have the following properties:
+        1) generators: list[Generator]. List of generator instances located at a given node.
+        2) load: complex. Total load at a given node.
+        3) voltage_range: tuple[float, float]. Range of allowed voltage magnitudes at this node.
+        4) angle_range: tuple[float, float]. Range of allowed phase angles at this node.
+        Graph edges should have the following properties:
+        1) capacity: float > 0. Maximum absolute value of power that can be routed through a given edge.
+        2) admittance: complex. Line admittance.
+        The following additional properties control mapping between node parameters and the overall optimization vector.
+        1) gen_inds: list[int]. List of generator indices in self.generators corresponding to generators at this node.
+        Collects generators from all nodes into a single generators list. """
+        self.graph = graph
+        self.optimize_power = cached(self.optimize_power)
+
+        self.generators = []
+        for i, (_, data) in enumerate(sorted(self.graph.nodes(data=True))):
+            data["node_ind"] = i
+            data["gen_inds"] = list(range(len(self.generators), len(self.generators) + len(data["generators"])))
+            self.generators += data["generators"]
+
+    def get_bounds(self, generator_status: str) -> list[NDArray[float]]:
+        """ Returns list of NDArray of 2 elements: [min, max], i.e. bounds on each optimization parameter. """
+        bounds_active = [np.array(gen.power_range) * int(generator_status[i]) for i, gen in enumerate(self.generators)]
+        bounds_reactive = [np.array(gen.reactive_power_range) * int(generator_status[i]) for i, gen in enumerate(self.generators)]
+        bounds_voltage = [0] * len(self.graph)
+        bounds_angle = [0] * len(self.graph)
+        for node, data in self.graph.nodes(data=True):
+            bounds_voltage[data["node_ind"]] = np.array(data["voltage_range"])
+            bounds_angle[data["node_ind"]] = np.array(data["angle_range"])
+        bounds = bounds_active + bounds_reactive + bounds_voltage + bounds_angle
+        return bounds
+
+    @staticmethod
+    def get_initial_point(bounds: list[NDArray[float]]) -> list[float]:
+        """ Returns initial point for the optimization. """
+        initial_point = [np.average(bound) for bound in bounds]
+        return initial_point
+
+    def evaluate_constraints(self, params: list[float]) -> list[float]:
+        """
+        Evaluates all constraints, i.e. power balance at each node (generated params + incoming - outgoing - load >= 0) and line capacities (|S_ij| <= max capacity).
+        :param params: Vector of optimization parameters.
+        Includes real power of each generator, then reactive power of each generator, then voltage of each node, then phase angle of each node.
+        Total length is 2G + 2N, where G is the total number of generators in the graph and N is the number of nodes.
+        :return: List of constraint values (>= 0 is feasible).
+        """
+        active_powers = np.array(params[:len(self.generators)])
+        reactive_powers = np.array(params[len(self.generators):2 * len(self.generators)])
+        voltage_magnitudes = np.array(params[2 * len(self.generators):2 * len(self.generators) + len(self.graph)])
+        phase_angles = np.array(params[2 * len(self.generators) + len(self.graph):])
+        powers = active_powers + 1j * reactive_powers
+        voltages = voltage_magnitudes * np.exp(1j * phase_angles)
+
+        constraints = []
+        for node_label, node_data in self.graph.nodes(data=True):
+            generated_power = np.sum(powers[node_data["gen_inds"]])
+            line_powers = []
+            for _, neighbor, line_data in self.graph.edges(node_label, data=True):
+                current = line_data["admittance"] * (voltages[node_data["node_ind"]] - voltages[self.graph.nodes[neighbor]["node_ind"]])
+                line_power = voltages[node_data["node_ind"]] * np.conj(current)
+                constraints.append(line_data["capacity"] - np.abs(line_power))
+                line_powers.append(line_power)
+            power_balance = generated_power - node_data["load"] - np.sum(line_powers)
+            constraints.append(np.real(power_balance))
+            constraints.append(np.imag(power_balance))
+        return constraints
+
+    def get_generation_cost(self, generator_statuses: str, params: list[float]) -> float:
+        """ Returns the total cost of generation for a given set of enabled generators at given optimization parameters. """
+        active_powers = params[:len(self.generators)]
+        return sum(int(status) * gen.generation_cost(power) for status, gen, power in zip(generator_statuses, self.generators, active_powers))
+
+    def optimize_power(self, generator_statuses: str, penalty_mult: float = 10) -> OptimizeResult:
+        """ Finds optimal power vector for a given set of enabled generators, defined by the generator_statuses. """
+        bounds = self.get_bounds(generator_statuses)
+        initial_point = self.get_initial_point(bounds)
+        constraints = [{"type": "ineq", "fun": self.evaluate_constraints}]
+        cost_function = partial(self.get_generation_cost, generator_statuses)
+        options = {"maxiter": 2 ** 31 - 1}
+        result = optimize.minimize(cost_function, initial_point, method="SLSQP", bounds=bounds, constraints=constraints, options=options)
+        result.penalty = get_penalty(result.x, constraints, penalty_mult)
+        result.total = result.fun + result.penalty
+        return result
+
+    def evaluate(self, generator_statuses: str, penalty_mult: float = 10) -> float:
+        """ Returns optimal generation cost + penalty for a given set of enabled generators. """
+        return self.optimize_power(generator_statuses, penalty_mult).total

@@ -7,6 +7,7 @@ from qiskit import QuantumCircuit
 from scipy import optimize
 from scipy.optimize import OptimizeResult
 
+import src.utils as utils
 from src.CircuitLayer import CircuitLayer
 from src.Sampler import Sampler, ExactSampler
 
@@ -30,10 +31,9 @@ class VariationalCircuit:
         self.circuit = self.build()
 
     def get_cost_expectation(self, cost_function: Callable[[str], float], param_vals: Sequence[float]):
-        """ Evaluates expectation of the cost function at given circuit parameter values. """
+        """ Evaluates expectation of the cost function for given circuit parameter values. """
         probabilities = self.sampler.get_sample_probabilities(self.circuit, param_vals)
-        expectation = sum(cost_function(bitstring) * probability for bitstring, probability in probabilities.items())
-        return expectation
+        return utils.get_cost_expectation(cost_function, probabilities)
 
     def optimize_parameters(self, cost_function: Callable[[str], float], initial_angles: ndarray) -> OptimizeResult:
         """ Optimizes variational parameters of the circuit to minimize expectation of cost function and returns optimized parameter values. """

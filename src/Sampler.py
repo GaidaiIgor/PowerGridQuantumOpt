@@ -18,7 +18,7 @@ class Sampler(ABC):
 
 
 class ExactSampler(Sampler):
-    """ Calculates exact probabilities of each bitstring. """
+    """ Calculates exact probabilities of each generator_statuses. """
 
     def get_sample_probabilities(self, circuit: QuantumCircuit, param_vals: Sequence[float]) -> dict[str, float]:
         bound = circuit.assign_parameters(param_vals)
@@ -44,12 +44,18 @@ class IonQSampler(Sampler):
         self.backend_name = backend_name
         self.backend = IonQProvider().get_backend(backend_name)
         self.shots = shots
+        self.samples = 0
         if noise_model is not None:
             self.backend.set_options(noise_model=noise_model)
 
     def get_sample_probabilities(self, circuit: QuantumCircuit, param_vals: Sequence[float]) -> dict[str, float]:
+        print(f"Sample #{self.samples}")
+        print(f"Parameters: {param_vals}")
         bound = circuit.assign_parameters(param_vals)
+        bound.measure_all()
         result = self.backend.run(bound, shots=self.shots).result()
         counts = result.get_counts()
         counts = {key.rjust(circuit.num_qubits, "0"): value / self.shots for key, value in counts.items()}
+        print(f"Probabilities: {counts}")
+        self.samples += 1
         return counts
