@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import wraps, partial
 from typing import Callable, Hashable, Any, Concatenate
@@ -53,14 +54,28 @@ class Generator:
 
 
 @dataclass
-class GeneratorCommitmentProblem:
+class PowerGridProblem(ABC):
+    """ Generic protocol for a power grid problem. """
+    generators: NDArray[Generator]
+
+    def __init_subclass__(cls, **kwargs):
+        cls.optimize_power = cached(cls.optimize_power)
+
+    @abstractmethod
+    def optimize_power(self, generator_statuses: str, penalty_mult: float = 10) -> OptimizeResult:
+        """ Optimizes continuous problem variables for given generator statuses. Returns full OptimizeResult. Cached. """
+        pass
+
+    def evaluate(self, generator_statuses: str, penalty_mult: float = 10) -> float:
+        """ Returns the value of the cost function after optimization. """
+        return self.optimize_power(generator_statuses, penalty_mult).total
+
+
+@dataclass
+class GeneratorCommitmentProblem(PowerGridProblem):
     """ Describes a unit commitment problem in a power grid.
     I.e. given a set of generators, which ones should be enabled and at what power in order to meet target load using the smallest operation cost. """
-    generators: NDArray[Generator]
     load: float
-
-    def __post_init__(self):
-        self.optimize_power = cached(self.optimize_power)
 
     def optimize_power(self, generator_statuses: str, penalty_mult: float = 10) -> OptimizeResult:
         """ Finds optimal generation cost for a given generator assignment. """
@@ -76,11 +91,8 @@ class GeneratorCommitmentProblem:
         result.total = result.fun + result.penalty
         return result
 
-    def evaluate(self, generator_statuses: str, penalty_mult: float = 10) -> float:
-        return self.optimize_power(generator_statuses, penalty_mult).total
 
-
-class SimplePowerFlowProblem:
+class SimplePowerFlowProblem(PowerGridProblem):
     """ Generalized version of GeneratorCommitmentProblem, where locations of generators and loads are taken into account.
     Specifically, the problem is described by a graph, where nodes represent neighborhoods that can include generators and loads.
     Generated power is consumed by local loads. Any excess power can be transferred to adjacent nodes to supplement their generators.
@@ -98,8 +110,8 @@ class SimplePowerFlowProblem:
         3) start: node key type, added to edges. Defines positive flow direction by choosing an arbitrary end of a given edge as start.
         Collects generators from all nodes into a single generators list. """
         self.graph = graph
-        self.generators = np.array([gen for _, gens in self.graph.nodes(data="generators") for gen in gens])
-        self.optimize_power = cached(self.optimize_power)
+        generators = np.array([gen for _, gens in self.graph.nodes(data="generators") for gen in gens])
+        super().__init__(generators)
 
         var_ind = 0
         for _, data in self.graph.nodes(data=True):
@@ -141,12 +153,8 @@ class SimplePowerFlowProblem:
         result.total = result.fun + result.penalty
         return result
 
-    def evaluate(self, bitstring: str) -> float:
-        """ Returns optimal generation cost + penalty for a given set of enabled generators. """
-        return self.optimize_power(bitstring).total
 
-
-class PowerFlowACProblem:
+class PowerFlowACProblem(PowerGridProblem):
     """ Physical version of SimplePowerFlowProblem, where power is complex, lines are not lossless and line flows have to satisfy physical constraints. """
 
     def __init__(self, graph: Graph):
@@ -162,13 +170,12 @@ class PowerFlowACProblem:
         1) gen_inds: list[int]. List of generator indices in self.generators corresponding to generators at this node.
         Collects generators from all nodes into a single generators list. """
         self.graph = graph
-        self.optimize_power = cached(self.optimize_power)
-
-        self.generators = []
+        generators = []
         for i, (_, data) in enumerate(sorted(self.graph.nodes(data=True))):
             data["node_ind"] = i
-            data["gen_inds"] = list(range(len(self.generators), len(self.generators) + len(data["generators"])))
-            self.generators += data["generators"]
+            data["gen_inds"] = list(range(len(generators), len(generators) + len(data["generators"])))
+            generators += data["generators"]
+        super().__init__(generators)
 
     def get_bounds(self, generator_status: str) -> list[NDArray[float]]:
         """ Returns list of NDArray of 2 elements: [min, max], i.e. bounds on each optimization parameter. """
@@ -254,7 +261,3 @@ class PowerFlowACProblem:
         result.penalty = get_penalty(result.x, constraints, penalty_mult)
         result.total = result.fun + result.penalty
         return result
-
-    def evaluate(self, generator_statuses: str, penalty_mult: float = 10) -> float:
-        """ Returns optimal generation cost + penalty for a given set of enabled generators. """
-        return self.optimize_power(generator_statuses, penalty_mult).total
