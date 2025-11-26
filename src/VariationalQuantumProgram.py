@@ -12,8 +12,8 @@ from src.CircuitLayer import CircuitLayer
 from src.Sampler import Sampler, ExactSampler
 
 
-class VariationalCircuit:
-    def build(self) -> QuantumCircuit:
+class VariationalQuantumProgram:
+    def build_circuit(self) -> QuantumCircuit:
         qc = QuantumCircuit(self.layer_types[0].num_qubits)
         qc.h(range(qc.num_qubits))
         # qc.barrier()
@@ -28,7 +28,7 @@ class VariationalCircuit:
         self.num_layers = num_layers
         self.layer_types = layer_types
         self.sampler = sampler
-        self.circuit = self.build()
+        self.circuit = self.build_circuit()
 
     def get_cost_expectation(self, cost_function: Callable[[str], float], param_vals: Sequence[float]):
         """ Evaluates expectation of the cost function for given circuit parameter values. """

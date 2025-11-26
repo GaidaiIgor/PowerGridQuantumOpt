@@ -11,9 +11,10 @@ from qiskit_ionq import IonQProvider
 
 import src.utils as utils
 from src.CircuitLayer import AllToAllEntangler, ZXMixer
-from src.PowerGrid import GeneratorCommitmentProblem, Generator, SimplePowerFlowProblem, PowerFlowACProblem
+from src.HybridSolver import HybridSolver
+from src.PowerGridProblem import GeneratorCommitmentProblem, Generator, SimplePowerFlowProblem, PowerFlowACProblem
 from src.Sampler import ExactSampler, MySamplerV2, IonQSampler
-from src.VariationalCircuit import VariationalCircuit
+from src.VariationalQuantumProgram import VariationalQuantumProgram
 
 
 def get_generator_commitment_problem() -> GeneratorCommitmentProblem:
@@ -62,14 +63,9 @@ def get_power_flow_ac_problem() -> PowerFlowACProblem:
     return PowerFlowACProblem(graph)
 
 
-def main():
-    # problem = get_generator_commitment_problem()
-    problem = get_power_flow_ac_problem()
-    penalty_mult = 10
-    num_gen = len(problem.generators)
-
-    entangler = AllToAllEntangler(num_gen)
-    mixer = ZXMixer(num_gen)
+def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgram:
+    entangler = AllToAllEntangler(num_qubits)
+    mixer = ZXMixer(num_qubits)
     num_layers = 1
 
     sampler = ExactSampler()
@@ -77,30 +73,28 @@ def main():
     # sampler = IonQSampler("simulator", 1000, None)
     # sampler = IonQSampler("qpu.forte-enterprise-1", 1000, None)
 
-    seed = 0
-    rng = random.default_rng(seed)
+    return VariationalQuantumProgram(num_layers, [entangler, mixer], sampler)
 
-    vqa = VariationalCircuit(num_layers, [entangler, mixer], sampler)
-    initial_angles = rng.uniform(-np.pi, np.pi, len(vqa.circuit.parameters))
-    cost_function = partial(problem.evaluate, penalty_mult=penalty_mult)
-    result = vqa.optimize_parameters(cost_function, initial_angles)
 
-    exact_sampler = ExactSampler()
-    final_probs = exact_sampler.get_sample_probabilities(vqa.circuit, result.x)
-    final_expectation = utils.get_cost_expectation(cost_function, final_probs)
-    print(f"Angle optimization successful: {result.success}")
-    print(f"Optimized angles: {result.x}")
-    print(f"Optimized probabilities: {final_probs}")
-    print(f"Optimized expectation: {final_expectation}")
-    print(f"Number of jobs: {result.nfev}")
+def main():
+    # problem = get_generator_commitment_problem()
+    problem = get_power_flow_ac_problem()
 
-    best_sample = min(problem.optimize_power.cache.items(), key=lambda pair: pair[1].total)
+    num_gen = len(problem.generators)
+    vqp = get_variational_quantum_program(num_gen)
+    solver = HybridSolver(vqp)
+
+    solution = solver.solve(problem)
+    print(f"Optimized probabilities: {solution.extra["final_probs"]}")
+    print(f"Optimized expectation: {solution.extra["cost_expectation"]}")
+    print(f"Number of jobs: {solution.extra["num_jobs"]}")
+
     print("=== Best sample ===")
-    print(f"Classical optimization successful: {best_sample[1].success}")
-    print(f"Generators selected: {best_sample[0]}")
-    print(f"Optimized classical variables: {best_sample[1].x}")
-    print(f"Optimized cost: {best_sample[1].fun}")
-    print(f"Penalty: {best_sample[1].penalty}")
+    print(f"Classical optimization successful: {solution.extra["opt_result"].success}")
+    print(f"Generators selected: {solution.generator_statuses}")
+    print(f"Optimized classical variables: {solution.grid_parameters}")
+    print(f"Optimized cost: {solution.cost}")
+    print(f"Penalty: {solution.extra["opt_result"].penalty}")
 
 
 if __name__ == "__main__":

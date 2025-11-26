@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import wraps, partial
 from typing import Callable, Hashable, Any, Concatenate
 
@@ -58,8 +58,8 @@ class PowerGridProblem(ABC):
     """ Generic protocol for a power grid problem. """
     generators: NDArray[Generator]
 
-    def __init_subclass__(cls, **kwargs):
-        cls.optimize_power = cached(cls.optimize_power)
+    def __post_init__(self):
+        self.optimize_power = cached(self.optimize_power)
 
     @abstractmethod
     def optimize_power(self, generator_statuses: str, penalty_mult: float = 10) -> OptimizeResult:
@@ -261,3 +261,12 @@ class PowerFlowACProblem(PowerGridProblem):
         result.penalty = get_penalty(result.x, constraints, penalty_mult)
         result.total = result.fun + result.penalty
         return result
+
+
+@dataclass
+class PowerGridSolution:
+    """ Represents solution to a power grid problem. """
+    generator_statuses: str
+    grid_parameters: NDArray[float]
+    cost: float
+    extra: dict[str, Any] = field(default_factory=dict)
