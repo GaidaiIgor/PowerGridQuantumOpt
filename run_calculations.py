@@ -3,41 +3,17 @@ import time
 import numpy as np
 from networkx import Graph
 
-from src.CircuitLayer import AllToAllEntangler, ZXMixer
-from src.PowerGridSolver import HybridSolver, ClassicalACSolver
-from src.PowerGridProblem import GeneratorCommitmentProblem, Generator, PowerNetwork
-from src.Sampler import ExactSampler
-from src.VariationalQuantumProgram import VariationalQuantumProgram
+from CircuitLayer import AllToAllEntangler, ZXMixer
+from ContinuousPowerOptimizer import ContinuousPowerOptimizer
+from Generator import Generator
+from PowerFlowProblem import PowerFlowProblem
+from PowerFlowSolver import HybridSolver
+from Sampler import ExactSampler
+from VariationalQuantumProgram import VariationalQuantumProgram
+from utils import my_format
 
 
-def get_generator_commitment_problem() -> GeneratorCommitmentProblem:
-    generators = np.array([Generator((15, 20), (0, 0), (0, 1, 10)),
-                           Generator((0, 10), (0, 0), (1, 0, 1))])
-    load = 10
-
-    # generators = np.array([Generator((100, 600), (0.002, 10, 500)),
-    #                        Generator((100, 400), (0.0025, 8, 300)),
-    #                        Generator((50, 200), (0.005, 6, 100))])
-    # load = 170
-    #
-    # generators = np.array([Generator((150, 455), (0.00048, 16.19, 1000)),
-    #                        Generator((150, 455), (0.00031, 17.26, 970)),
-    #                        Generator((20, 130), (0.002, 16.6, 700)),
-    #                        Generator((20, 130), (0.00211, 16.5, 680)),
-    #                        Generator((25, 162), (0.00398, 19.7, 450)),
-    #                        Generator((20, 80), (0.00712, 22.26, 370)),
-    #                        Generator((25, 85), (0.00079, 27.74, 480)),
-    #                        Generator((10, 55), (0.00413, 25.92, 660)),
-    #                        Generator((10, 55), (0.00222, 27.27, 665)),
-    #                        Generator((10, 55), (0.00173, 27.79, 670))
-    #                        ])
-    # load = 700
-
-    problem = GeneratorCommitmentProblem(generators, load)
-    return problem
-
-
-def get_power_flow_ac_problem() -> PowerNetwork:
+def get_power_flow_ac_problem() -> PowerFlowProblem:
     voltage_range = (0, 10)
     angle_range = (-np.pi, np.pi)
     graph = Graph()
@@ -53,7 +29,7 @@ def get_power_flow_ac_problem() -> PowerNetwork:
     # graph.add_edge(0, 2, capacity=5, admittance=1)
     # graph.add_edge(1, 2, capacity=10, admittance=1)
 
-    return PowerNetwork(graph)
+    return PowerFlowProblem(graph)
 
 
 def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgram:
@@ -69,29 +45,32 @@ def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgra
     return VariationalQuantumProgram(num_layers, [entangler, mixer], sampler)
 
 
+def get_hybrid_solver(num_generators: int) -> HybridSolver:
+    vqp = get_variational_quantum_program(num_generators)
+    penalty_mult = 10
+    inner_optimizer_factory = lambda problem: ContinuousPowerOptimizer(problem, penalty_mult)
+    seed = 0
+    return HybridSolver(vqp, inner_optimizer_factory, seed)
+
+
 def main():
-    # network = get_generator_commitment_problem()
-    network = get_power_flow_ac_problem()
+    problem = get_power_flow_ac_problem()
 
-    solver = ClassicalACSolver()
+    # solver = ClassicalSolver()
+    solver = get_hybrid_solver(len(problem.generators))
 
-    # num_gen = len(network.generators)
-    # vqp = get_variational_quantum_program(num_gen)
-    # solver = HybridSolver(vqp)
+    solution = solver.solve(problem)
+    print("\nSolution:")
+    print(solution)
 
-    network = solver.solve(network)
-    network.print_solution()
+    if isinstance(solver, HybridSolver):
+        print(f"Optimized probabilities: {my_format(solution.extra["final_probs"])}")
+        print(f"Optimized expectation: {solution.extra["cost_expectation"]}")
+        print(f"Number of jobs: {solution.extra["num_jobs"]}")
 
-    # print(f"Optimized probabilities: {solution.extra["final_probs"]}")
-    # print(f"Optimized expectation: {solution.extra["cost_expectation"]}")
-    # print(f"Number of jobs: {solution.extra["num_jobs"]}")
-    #
-    # print("=== Best sample ===")
-    # print(f"Classical optimization successful: {solution.extra["opt_result"].success}")
-    # print(f"Generators selected: {solution.generator_statuses}")
-    # print(f"Optimized classical variables: {solution.grid_parameters}")
-    # print(f"Optimized cost: {solution.cost}")
-    # print(f"Penalty: {solution.extra["opt_result"].penalty}")
+        print("=== Best sample ===")
+        print(f"Inner optimization successful: {solution.extra["opt_result"].success}")
+        print(f"Penalty: {solution.extra["opt_result"].penalty}")
 
 
 if __name__ == "__main__":

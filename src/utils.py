@@ -1,5 +1,6 @@
-from typing import Callable
+from typing import Callable, Mapping, Any, TextIO
 
+import numpy as np
 import qiskit
 from qiskit import QuantumCircuit
 from qiskit_ionq import IonQProvider
@@ -18,3 +19,34 @@ def get_job_cost(circuit: QuantumCircuit, nfev: int) -> tuple[int, int, int, flo
     num_two_qubit_gates = sum(1 for instruction in circuit_transpiled.data if instruction.operation.num_qubits == 2)
     return num_one_qubit_gates, num_two_qubit_gates, nfev, (num_one_qubit_gates * 0.0001645 + num_two_qubit_gates * 0.0011213) * nfev
 
+
+def my_format(obj: Any, sig: int = 3, *, _top: bool = True) -> str:
+    if isinstance(obj, np.generic):
+        obj = obj.item()
+    elif isinstance(obj, np.ndarray):
+        obj = obj.tolist()
+
+    if isinstance(obj, float):
+        return format(obj, f".{sig}g")
+    if obj is None or isinstance(obj, (bool, int)):
+        return repr(obj)
+    if isinstance(obj, str):
+        return obj if _top else repr(obj)
+
+    if isinstance(obj, Mapping):
+        return "{" + ", ".join(f"{my_format(k, sig, _top=False)}: {my_format(v, sig, _top=False)}" for k, v in obj.items()) + "}"
+
+    if isinstance(obj, list):
+        return "[" + ", ".join(my_format(v, sig, _top=False) for v in obj) + "]"
+
+    if isinstance(obj, tuple):
+        inner = ", ".join(my_format(v, sig, _top=False) for v in obj)
+        if len(obj) == 1:
+            inner += ","
+        return "(" + inner + ")"
+
+    return str(obj) if _top else repr(obj)
+
+
+def my_print(*args: Any, sig: int = 3, sep: str = " ", end: str = "\n", file: TextIO | None = None, flush: bool = False) -> None:
+    print(*(my_format(a, sig, _top=True) for a in args), sep=sep, end=end, file=file, flush=flush)
