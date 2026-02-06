@@ -7,9 +7,9 @@ from qiskit import QuantumCircuit
 from scipy import optimize
 from scipy.optimize import OptimizeResult
 
-import src.utils as utils
-from src.CircuitLayer import CircuitLayer
-from src.Sampler import Sampler, ExactSampler
+from . import utils
+from .CircuitLayer import CircuitLayer
+from .Sampler import Sampler, ExactSampler
 
 
 class VariationalQuantumProgram:

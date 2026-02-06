@@ -8,11 +8,11 @@ from numpy import random
 from pyscipopt import Model, sin, cos, quicksum
 from pyscipopt.recipes.nonlinear import set_nonlinear_objective
 
-import utils
-from ContinuousPowerOptimizer import ContinuousPowerOptimizer
-from PowerFlowProblem import PowerFlowProblem, PowerFlowSolution
-from Sampler import ExactSampler
-from VariationalQuantumProgram import VariationalQuantumProgram
+from . import utils
+from .ContinuousPowerOptimizer import ContinuousPowerOptimizer
+from .PowerFlowProblem import PowerFlowProblem, PowerFlowSolution
+from .Sampler import ExactSampler
+from .VariationalQuantumProgram import VariationalQuantumProgram
 
 
 class PowerFlowSolver(ABC):

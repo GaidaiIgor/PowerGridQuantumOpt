@@ -1,4 +1,4 @@
-from typing import Callable, Mapping, Any, TextIO
+from typing import Callable, Mapping, Any
 
 import numpy as np
 import qiskit

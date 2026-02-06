@@ -6,7 +6,7 @@ from numpy.typing import NDArray
 from scipy import optimize
 from scipy.optimize import OptimizeResult, NonlinearConstraint, LinearConstraint
 
-from PowerFlowProblem import PowerFlowProblem
+from .PowerFlowProblem import PowerFlowProblem
 
 
 @dataclass

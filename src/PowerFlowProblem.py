@@ -7,7 +7,7 @@ import numpy as np
 from networkx import Graph
 from numpy.typing import NDArray
 
-from utils import my_format
+from .utils import my_format
 
 
 class PowerFlowProblem:
