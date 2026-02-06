@@ -36,8 +36,8 @@ class ClassicalSolver(PowerFlowSolver):
         for node_label, node_data in problem.graph.nodes(data=True):
             for i, gen in enumerate(node_data["generators"]):
                 u = model.addVar(vtype="B", name=f"u_{node_label}_{i}")
-                p = model.addVar(lb=0, ub=gen.power_range[1], name=f"p_{node_label}_{i}")
-                q = model.addVar(lb=0, ub=gen.reactive_power_range[1], name=f"q_{node_label}_{i}")
+                p = model.addVar(lb=gen.power_range[0], ub=gen.power_range[1], name=f"p_{node_label}_{i}")
+                q = model.addVar(lb=gen.reactive_power_range[0], ub=gen.reactive_power_range[1], name=f"q_{node_label}_{i}")
                 model.addCons(p >= gen.power_range[0] * u, name=f"p_min_{node_label}_{i}")
                 model.addCons(p <= gen.power_range[1] * u, name=f"p_max_{node_label}_{i}")
                 model.addCons(q >= gen.reactive_power_range[0] * u, name=f"q_min_{node_label}_{i}")
