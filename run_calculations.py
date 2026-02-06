@@ -7,7 +7,7 @@ from CircuitLayer import AllToAllEntangler, ZXMixer
 from ContinuousPowerOptimizer import ContinuousPowerOptimizer
 from Generator import Generator
 from PowerFlowProblem import PowerFlowProblem
-from PowerFlowSolver import HybridSolver
+from PowerFlowSolver import ClassicalSolver, HybridSolver
 from Sampler import ExactSampler
 from VariationalQuantumProgram import VariationalQuantumProgram
 from utils import my_format
@@ -18,7 +18,7 @@ def get_power_flow_ac_problem() -> PowerFlowProblem:
     angle_range = (-np.pi, np.pi)
     graph = Graph()
 
-    graph.add_node(0, generators=[Generator((0, 100), (0, 100), (0, 1, 1))], load=0, voltage_range=voltage_range, angle_range=angle_range)
+    graph.add_node(0, generators=[Generator((0, 100), (-100, 100), (0, 1, 1))], load=0, voltage_range=voltage_range, angle_range=angle_range)
     graph.add_node(1, generators=[], load=10, voltage_range=voltage_range, angle_range=angle_range)
     graph.add_edge(0, 1, capacity=100, admittance=1+1j)
 
@@ -56,8 +56,8 @@ def get_hybrid_solver(num_generators: int) -> HybridSolver:
 def main():
     problem = get_power_flow_ac_problem()
 
-    # solver = ClassicalSolver()
-    solver = get_hybrid_solver(len(problem.generators))
+    solver = ClassicalSolver()
+    # solver = get_hybrid_solver(len(problem.generators))
 
     solution = solver.solve(problem)
     print("\nSolution:")

@@ -54,10 +54,11 @@ class ContinuousPowerOptimizer:
         for constraint in constraints:
             if isinstance(constraint, LinearConstraint):
                 residuals = constraint.residual(params)
-                val = np.concatenate((*residuals,))
+                violations = np.concatenate(residuals)
             elif isinstance(constraint, NonlinearConstraint):
-                val = constraint.fun(params)
-            penalty += self.penalty_mult * np.sum(np.minimum(val, 0) ** 2)
+                vals = np.array(constraint.fun(params))
+                violations = np.concatenate((vals - constraint.lb, constraint.ub - vals))
+            penalty += self.penalty_mult * np.sum(np.minimum(violations, 0) ** 2)
         return penalty
 
     def _optimize(self, generator_statuses: str) -> OptimizeResult:
@@ -65,7 +66,8 @@ class ContinuousPowerOptimizer:
         Returns optimization result with extra fields: penalty and total (fun + penalty). """
         bounds = self.problem.get_bounds(generator_statuses)
         initial_point = self.get_initial_point(bounds)
-        constraints = [self.convert_bounds_to_constraints(bounds), NonlinearConstraint(self.evaluate_constraints, 0, np.inf)]
+        upper_bound = [0] * (2 * len(self.problem.graph) + 1) + [np.inf] * self.problem.graph.size()
+        constraints = [self.convert_bounds_to_constraints(bounds), NonlinearConstraint(self.evaluate_constraints, 0, upper_bound)]
         cost_function = partial(self.get_generation_cost, generator_statuses)
         options = {"maxiter": 2 ** 31 - 1}
         result = optimize.minimize(cost_function, initial_point, method="SLSQP", constraints=constraints, options=options)

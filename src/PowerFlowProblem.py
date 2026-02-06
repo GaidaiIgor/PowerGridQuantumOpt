@@ -47,27 +47,31 @@ class PowerFlowProblem:
     def evaluate_constraints(self, active_powers: NDArray[float], reactive_powers: NDArray[float], voltages: NDArray[float], angles: NDArray[float]) \
             -> list[float]:
         """
-        Evaluates all constraints, i.e. power balance at each node (generated params + incoming - outgoing - load >= 0)
-        and line capacities (|S_ij| <= max capacity).
-        Returns list of constraint values (>=0 is feasible).
+        Evaluates all constraints other than bounds, i.e. power balance at each node (generated params + incoming - outgoing - load == 0)
+        and line capacities (|I_ij| <= max capacity).
+        Returns a list with constraint values. First equality constraints (len = 2 * len(voltages) + 1), then inequality constraints (>= 0 is feasible for all).
         """
         complex_powers = active_powers + 1j * reactive_powers
         voltage_phasors = voltages * np.exp(1j * angles)
 
-        constraints = []
+        equality_constraints = [angles[0]]
+        inequality_constraints = []
         for node_label, node_data in self.graph.nodes(data=True):
             generated_power = np.sum(complex_powers[node_data["gen_inds"]])
             outgoing_line_powers = []
-            for _, neighbor, line_data in self.graph.edges(node_label, data=True):
-                volt_diff = voltage_phasors[node_data["node_ind"]] - voltage_phasors[self.graph.nodes[neighbor]["node_ind"]]
+            for _, neighbor_label, line_data in self.graph.edges(node_label, data=True):
+                neighbor_data = self.graph.nodes[neighbor_label]
+                volt_diff = voltage_phasors[node_data["node_ind"]] - voltage_phasors[neighbor_data["node_ind"]]
                 current_phasor = line_data["admittance"] * volt_diff
                 line_power = voltage_phasors[node_data["node_ind"]] * np.conj(current_phasor)
-                constraints.append(line_data["capacity"] - np.abs(line_power))
                 outgoing_line_powers.append(line_power)
+                if node_data["node_ind"] < neighbor_data["node_ind"]:
+                    inequality_constraints.append(line_data["capacity"] - np.abs(current_phasor))
+
             power_balance = generated_power - node_data["load"] - np.sum(outgoing_line_powers)
-            constraints.append(np.real(power_balance))
-            constraints.append(np.imag(power_balance))
-        return constraints
+            equality_constraints.append(np.real(power_balance))
+            equality_constraints.append(np.imag(power_balance))
+        return equality_constraints + inequality_constraints
 
     def get_generation_cost(self, generator_statuses: str, active_powers: Sequence[float]) -> float:
         """ Returns the total cost of generation for a given set of enabled generators at given power outputs. """

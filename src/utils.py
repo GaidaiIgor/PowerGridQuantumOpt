@@ -46,7 +46,3 @@ def my_format(obj: Any, sig: int = 3, *, _top: bool = True) -> str:
         return "(" + inner + ")"
 
     return str(obj) if _top else repr(obj)
-
-
-def my_print(*args: Any, sig: int = 3, sep: str = " ", end: str = "\n", file: TextIO | None = None, flush: bool = False) -> None:
-    print(*(my_format(a, sig, _top=True) for a in args), sep=sep, end=end, file=file, flush=flush)
