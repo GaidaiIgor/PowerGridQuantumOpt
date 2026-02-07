@@ -43,6 +43,16 @@ class ContinuousPowerOptimizer:
         active_powers, reactive_powers, voltage_magnitudes, phase_angles = self.split_params(params)
         return self.problem.evaluate_constraints(active_powers, reactive_powers, voltage_magnitudes, phase_angles)
 
+    def evaluate_equality_constraints(self, params: list[float]) -> list[float]:
+        """ Returns equality constraints only. """
+        all_constraints = self.evaluate_constraints(params)
+        return all_constraints[:2 * len(self.problem.graph) + 1]
+
+    def evaluate_inequality_constraints(self, params: list[float]) -> list[float]:
+        """ Returns inequality constraints only. """
+        all_constraints = self.evaluate_constraints(params)
+        return all_constraints[2 * len(self.problem.graph) + 1:]
+
     def get_generation_cost(self, generator_statuses: str, params: list[float]) -> float:
         """ Returns the total cost of generation for a given set of enabled generators at given optimization parameters. """
         active_powers = self.split_params(params)[0]
@@ -66,11 +76,10 @@ class ContinuousPowerOptimizer:
         Returns optimization result with extra fields: penalty and total (fun + penalty). """
         bounds = self.problem.get_bounds(generator_statuses)
         initial_point = self.get_initial_point(bounds)
-        upper_bound = [0] * (2 * len(self.problem.graph) + 1) + [np.inf] * self.problem.graph.size()
-        constraints = [self.convert_bounds_to_constraints(bounds), NonlinearConstraint(self.evaluate_constraints, 0, upper_bound)]
+        constraints = [NonlinearConstraint(self.evaluate_equality_constraints, 0, 0), NonlinearConstraint(self.evaluate_inequality_constraints, 0, np.inf)]
         cost_function = partial(self.get_generation_cost, generator_statuses)
         options = {"maxiter": 2 ** 31 - 1}
-        result = optimize.minimize(cost_function, initial_point, method="SLSQP", constraints=constraints, options=options)
+        result = optimize.minimize(cost_function, initial_point, method="SLSQP", bounds=bounds, constraints=constraints, options=options)
         result.penalty = self.get_penalty(result.x, constraints)
         result.total = result.fun + result.penalty
         return result
