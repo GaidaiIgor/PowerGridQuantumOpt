@@ -122,4 +122,5 @@ class HybridSolver(PowerFlowSolver):
         solution.extra["final_probs"] = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
         solution.extra["cost_expectation"] = utils.get_cost_expectation(inner_optimizer.get_optimized_cost, solution.extra["final_probs"])
         solution.extra["num_jobs"] = result.nfev
+        solution.extra["classical_eval_time_s"] = getattr(result, "classical_eval_time", None)
         return solution
