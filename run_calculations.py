@@ -56,8 +56,8 @@ def get_hybrid_solver(num_generators: int) -> HybridSolver:
 def main():
     problem = get_power_flow_ac_problem()
 
-    solver = ClassicalSolver()
-    # solver = get_hybrid_solver(len(problem.generators))
+    # solver = ClassicalSolver()
+    solver = get_hybrid_solver(len(problem.generators))
 
     solution = solver.solve(problem)
     print("\nSolution:")
@@ -67,6 +67,7 @@ def main():
         print(f"Optimized probabilities: {my_format(solution.extra["final_probs"])}")
         print(f"Optimized expectation: {solution.extra["cost_expectation"]}")
         print(f"Number of jobs: {solution.extra["num_jobs"]}")
+        print(f"Total classical time: {solution.extra["classical_eval_time_s"]}")
 
         print("=== Best sample ===")
         print(f"Inner optimization successful: {solution.extra["opt_result"].success}")

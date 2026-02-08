@@ -20,7 +20,7 @@ class PowerFlowProblem:
         3) voltage_range: tuple[float, float]. Range of allowed voltage magnitudes at this node.
         4) angle_range: tuple[float, float]. Range of allowed phase angles at this node.
         Graph edges should have the following properties:
-        1) capacity: float > 0. Maximum absolute value of power that can be routed through a given edge.
+        1) capacity: float > 0. Maximum absolute value of current that can be routed through a given edge.
         2) admittance: complex. Line admittance.
         The following additional properties control mapping between node parameters and the overall optimization vector.
         1) gen_inds: list[int]. List of generator indices in self.generators corresponding to generators at this node.
