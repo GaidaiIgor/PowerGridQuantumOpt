@@ -1,3 +1,5 @@
+"""Building blocks for parameterized quantum circuit layers used in VQA."""
+
 import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -27,7 +29,10 @@ class CircuitLayer(ABC):
 
 
 class AllToAllEntangler(CircuitLayer):
+    """Entangler that applies parameterized ZZ couplings to all qubit pairs."""
+
     def get_circuit(self, name_suffix: str) -> QuantumCircuit:
+        """Build an all-to-all ZZ entangling layer."""
         qc = QuantumCircuit(self.num_qubits)
         params = ParameterVector(f"G_{name_suffix}", self.num_qubits * (self.num_qubits - 1) // 2)
         for ind, (i, j) in enumerate(combinations(range(self.num_qubits), 2)):
@@ -36,6 +41,8 @@ class AllToAllEntangler(CircuitLayer):
 
 
 class ButterflyEntangler(CircuitLayer):
+    """Recursive butterfly-style ZZ entangler over contiguous qubit ranges."""
+
     def connect_qubits(self, qc: QuantumCircuit, qubit_range: tuple[int, int], name_suffix: str):
         """ Applies couplings in the specified qubit range. """
         range_len = qubit_range[1] - qubit_range[0]
@@ -49,13 +56,17 @@ class ButterflyEntangler(CircuitLayer):
         self.connect_qubits(qc, (sum(qubit_range) // 2, qubit_range[1]), name_suffix)
 
     def get_circuit(self, name_suffix: str) -> QuantumCircuit:
+        """Build a butterfly entangling layer spanning all qubits."""
         qc = QuantumCircuit(self.num_qubits)
         self.connect_qubits(qc, (0, self.num_qubits), name_suffix)
         return qc
 
 
 class ZXMixer(CircuitLayer):
+    """Mixer layer composed of RZ and RX rotations on every qubit."""
+
     def get_circuit(self, name_suffix: str) -> QuantumCircuit:
+        """Build the parameterized ZX mixer circuit."""
         qc = QuantumCircuit(self.num_qubits)
         params = ParameterVector(f"B_{name_suffix}", 2 * self.num_qubits)
         for i in range(self.num_qubits):

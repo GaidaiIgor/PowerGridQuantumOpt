@@ -1,3 +1,5 @@
+"""Generator model containing operating ranges and quadratic production cost."""
+
 from dataclasses import dataclass
 
 
@@ -14,4 +16,5 @@ class Generator:
     cost_terms: tuple[float, float, float]
 
     def generation_cost(self, power: float) -> float:
+        """Evaluate quadratic generation cost at the provided active power."""
         return self.cost_terms[0] * power ** 2 + self.cost_terms[1] * power + self.cost_terms[2]

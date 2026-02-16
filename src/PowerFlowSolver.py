@@ -1,3 +1,5 @@
+"""Classical and hybrid solvers for ``PowerFlowProblem`` instances."""
+
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
@@ -107,6 +109,7 @@ class HybridSolver(PowerFlowSolver):
     seed: int = None
 
     def solve(self, problem: PowerFlowProblem) -> PowerFlowSolution:
+        """Optimize quantum parameters and return the best cached continuous solution."""
         inner_optimizer = self.inner_optimizer_factory(problem)
         rng = random.default_rng(self.seed)
         initial_angles = rng.uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))

@@ -1,3 +1,5 @@
+"""Variational quantum program for optimizing generator commitment distributions."""
+
 from typing import Callable, Sequence
 import time
 
@@ -14,7 +16,10 @@ from .Sampler import Sampler, ExactSampler
 
 
 class VariationalQuantumProgram:
+    """Parameterized quantum circuit program with classical outer-loop optimization."""
+
     def build_circuit(self) -> QuantumCircuit:
+        """Build the layered ansatz circuit from configured layer templates."""
         qc = QuantumCircuit(self.layer_types[0].num_qubits)
         qc.h(range(qc.num_qubits))
         # qc.barrier()

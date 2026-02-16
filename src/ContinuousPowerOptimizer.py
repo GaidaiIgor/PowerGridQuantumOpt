@@ -1,3 +1,5 @@
+"""Continuous-variable optimizer for fixed binary generator commitment states."""
+
 from dataclasses import dataclass, field
 from functools import partial
 

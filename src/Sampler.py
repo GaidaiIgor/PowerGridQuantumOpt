@@ -1,3 +1,5 @@
+"""Sampling backends used by the variational quantum optimization loop."""
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Sequence
@@ -21,6 +23,7 @@ class ExactSampler(Sampler):
     """ Calculates exact probabilities of each generator_statuses. """
 
     def get_sample_probabilities(self, circuit: QuantumCircuit, param_vals: Sequence[float]) -> dict[str, float]:
+        """Return exact probabilities from the bound circuit statevector."""
         bound = circuit.assign_parameters(param_vals)
         return Statevector(bound).probabilities_dict()
 
@@ -31,6 +34,7 @@ class MySamplerV2(Sampler):
     sampler: BaseSamplerV2
 
     def get_sample_probabilities(self, circuit: QuantumCircuit, param_vals: Sequence[float]) -> dict[str, float]:
+        """Return empirical probabilities using a ``BaseSamplerV2`` implementation."""
         measured_circuit = circuit.measure_all(inplace=False)
         counts = self.sampler.run([(measured_circuit, param_vals)]).result()[0].data.meas.get_counts()
         probabilities = {key: value / self.sampler.default_shots for key, value in counts.items()}
@@ -41,6 +45,7 @@ class IonQSampler(Sampler):
     """ Uses IonQ's hardware or cloud simulators to get probability distribution. """
 
     def __init__(self, backend_name: str, shots: int = 1000, noise_model: str = None):
+        """Initialize an IonQ backend and optional noise model for sampling."""
         self.backend_name = backend_name
         self.backend = IonQProvider().get_backend(backend_name)
         self.shots = shots
@@ -49,6 +54,7 @@ class IonQSampler(Sampler):
             self.backend.set_options(noise_model=noise_model)
 
     def get_sample_probabilities(self, circuit: QuantumCircuit, param_vals: Sequence[float]) -> dict[str, float]:
+        """Execute the circuit on IonQ backend and return normalized bitstring frequencies."""
         print(f"Sample #{self.samples}")
         print(f"Parameters: {param_vals}")
         bound = circuit.assign_parameters(param_vals)
