@@ -27,10 +27,9 @@ class LognormalSpec:
 class RandomPowerFlowProblemGenerator:
     """Factory for random AC power-flow problem instances."""
 
-    def __init__(self, *, central_probability: float = 0.9, base_cost_multiplier: float = 1.0, random_seed: int | None = None):
+    def __init__(self, *, spread_ref: float = 0.9, random_seed: int | None = None):
         """Initialize generator-level defaults and a reproducible random number stream."""
-        self.central_probability = central_probability
-        self.base_cost_multiplier = base_cost_multiplier
+        self.spread_ref = spread_ref
         self._rng = np.random.default_rng(random_seed)
 
     def generate_instances(
@@ -38,26 +37,26 @@ class RandomPowerFlowProblemGenerator:
         num_generators: int,
         *,
         num_instances: int = 1,
-        output_folder: str | Path = "generated_instances",
+        output_folder: str | Path = "data",
         generator_density: float = 2.0,
         average_node_degree: float = 3.0,
-        beta: float = 0.3,
+        degree_bias: float = 0.3,
         load_p_spec: LognormalSpec = LognormalSpec(10.0, 10.0),
-        load_rpf_range: tuple[float, float] = (0.0, 0.1),
-        generator_reference_p_spec: LognormalSpec = LognormalSpec(10.0, 10.0),
-        generator_plfv_spec: LognormalSpec = LognormalSpec(1.5, 1.2),
-        generator_rpf_range: tuple[float, float] = (0.0, 0.1),
+        load_reactive_range: tuple[float, float] = (0.0, 0.1),
+        generator_ref_p_spec: LognormalSpec = LognormalSpec(10.0, 10.0),
+        generator_len_p_spec: LognormalSpec = LognormalSpec(0.5, 1.2),
+        generator_reactive_range: tuple[float, float] = (0.0, 0.1),
+        base_cost: float = 1.0,
         cost_a_spec: LognormalSpec | None = None,
         cost_b_spec: LognormalSpec | None = None,
         cost_c_spec: LognormalSpec | None = None,
         voltage_range: tuple[float, float] = (0.95, 1.05),
         angle_range: tuple[float, float] = (-math.pi, math.pi),
         base_resistance: float = 0.01,
-        min_edge_length_factor: float = 0.01,
-        reactive_factor_range: tuple[float, float] = (0.95, 0.999),
-        negative_reactance_probability: float = 0.0,
-        capacity_spec: LognormalSpec | None = None,
-        extension: str = "json",
+        min_edge_length: float = 0.01,
+        line_reactive_range: tuple[float, float] = (0.95, 0.999),
+        negative_reactance_prob: float = 0.0,
+        capacity_spec: LognormalSpec | None = None
     ) -> list[Path]:
         """Generate and persist random instances as graph files.
 
@@ -68,42 +67,43 @@ class RandomPowerFlowProblemGenerator:
         self._validate_positive("num_instances", num_instances)
         self._validate_positive("generator_density", generator_density)
         self._validate_non_negative("average_node_degree", average_node_degree)
-        self._validate_range("load_rpf_range", load_rpf_range)
-        self._validate_range("generator_rpf_range", generator_rpf_range)
-        self._validate_range("reactive_factor_range", reactive_factor_range)
-        self._validate_probability("negative_reactance_probability", negative_reactance_probability)
-        self._validate_probability("beta", beta, include_one=True)
-        self._validate_probability("central_probability", self.central_probability)
+        self._validate_range("load_reactive_range", load_reactive_range)
+        self._validate_range("generator_reactive_range)", generator_reactive_range)
+        self._validate_range("line_reactive_range", line_reactive_range)
+        self._validate_probability("negative_reactance_prob", negative_reactance_prob)
+        self._validate_probability("degree_bias", degree_bias, include_one=True)
+        self._validate_probability("spread_ref", self.spread_ref)
 
         num_nodes = max(1, int(math.ceil(num_generators / generator_density)))
         output_path = Path(output_folder)
         output_path.mkdir(parents=True, exist_ok=True)
 
         cost_specs = self._resolve_cost_specs(
-            generator_reference_p_spec.mean,
+            generator_ref_p_spec.mean,
+            base_cost,
             cost_a_spec,
             cost_b_spec,
             cost_c_spec,
         )
         capacity_distribution = capacity_spec or LognormalSpec(
-            self._get_default_capacity_mean(average_node_degree, load_p_spec.mean, load_rpf_range),
+            self._get_default_capacity_mean(average_node_degree, load_p_spec.mean, load_reactive_range),
             2.0,
         )
 
         generated_paths: list[Path] = []
-        normalized_extension = extension.lstrip(".")
+        normalized_extension = "json".lstrip(".")
 
         for index in range(num_instances):
             graph = self._generate_graph(num_nodes, average_node_degree)
             self._annotate_nodes(
                 graph,
                 num_generators,
-                beta,
+                degree_bias,
                 load_p_spec,
-                load_rpf_range,
-                generator_reference_p_spec,
-                generator_plfv_spec,
-                generator_rpf_range,
+                load_reactive_range,
+                generator_ref_p_spec,
+                generator_len_p_spec,
+                generator_reactive_range,
                 cost_specs,
                 voltage_range,
                 angle_range,
@@ -112,9 +112,9 @@ class RandomPowerFlowProblemGenerator:
                 graph,
                 capacity_distribution,
                 base_resistance,
-                min_edge_length_factor,
-                reactive_factor_range,
-                negative_reactance_probability,
+                min_edge_length,
+                line_reactive_range,
+                negative_reactance_prob,
             )
 
             file_path = output_path / f"{index}.{normalized_extension}"
@@ -253,7 +253,7 @@ class RandomPowerFlowProblemGenerator:
         if spread_factor == 1.0:
             return math.log(mean), 0.0
 
-        quantile_probability = 0.5 * (1.0 + self.central_probability)
+        quantile_probability = 0.5 * (1.0 + self.spread_ref)
         z_value = float(norm.ppf(quantile_probability))
         log_spread = math.log(spread_factor)
 
@@ -283,6 +283,7 @@ class RandomPowerFlowProblemGenerator:
     def _resolve_cost_specs(
         self,
         reference_p_mean: float,
+        base_cost: float,
         cost_a_spec: LognormalSpec | None,
         cost_b_spec: LognormalSpec | None,
         cost_c_spec: LognormalSpec | None,
@@ -291,9 +292,9 @@ class RandomPowerFlowProblemGenerator:
         if cost_a_spec is not None and cost_b_spec is not None and cost_c_spec is not None:
             return cost_a_spec, cost_b_spec, cost_c_spec
 
-        default_a = LognormalSpec(self.base_cost_multiplier / (reference_p_mean**2), 2.0)
-        default_b = LognormalSpec(self.base_cost_multiplier / reference_p_mean, 1.5)
-        default_c = LognormalSpec(self.base_cost_multiplier, 2.0)
+        default_a = LognormalSpec(base_cost / reference_p_mean ** 2, 2.0)
+        default_b = LognormalSpec(base_cost / reference_p_mean, 1.5)
+        default_c = LognormalSpec(base_cost, 2.0)
 
         return (
             cost_a_spec or default_a,
@@ -305,10 +306,10 @@ class RandomPowerFlowProblemGenerator:
         self,
         average_node_degree: float,
         load_p_mean: float,
-        load_rpf_range: tuple[float, float],
+        load_reactive_range: tuple[float, float],
     ) -> float:
         """Calculate default line-capacity mean from degree and expected apparent load."""
-        a, b = load_rpf_range
+        a, b = load_reactive_range
         if a == b:
             apparent_mean = load_p_mean / math.sqrt(1.0 - a**2)
         else:
