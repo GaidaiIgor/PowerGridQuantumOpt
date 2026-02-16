@@ -1,3 +1,5 @@
+"""Data structures and constraint/cost evaluation for AC power-flow optimization."""
+
 from contextlib import redirect_stdout
 from dataclasses import dataclass, field
 from io import StringIO

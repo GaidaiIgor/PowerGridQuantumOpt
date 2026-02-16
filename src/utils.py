@@ -1,3 +1,5 @@
+"""Shared utility helpers for expectations, resource estimates, and formatting."""
+
 from typing import Callable, Mapping, Any
 
 import numpy as np
@@ -13,6 +15,7 @@ def get_cost_expectation(cost_function: Callable[[str], float], probabilities: d
 
 
 def get_job_cost(circuit: QuantumCircuit, nfev: int) -> tuple[int, int, int, float]:
+    """Estimate IonQ hardware execution cost from transpiled one/two-qubit gate counts."""
     native_backend = IonQProvider().get_backend("qpu.forte-1", gateset="native")
     circuit_transpiled = qiskit.transpile(circuit, native_backend)
     num_one_qubit_gates = sum(1 for instruction in circuit_transpiled.data if instruction.operation.num_qubits == 1)
@@ -21,6 +24,7 @@ def get_job_cost(circuit: QuantumCircuit, nfev: int) -> tuple[int, int, int, flo
 
 
 def my_format(obj: Any, sig: int = 3, *, _top: bool = True) -> str:
+    """Format nested objects compactly with configurable significant digits for floats."""
     if isinstance(obj, np.generic):
         obj = obj.item()
     elif isinstance(obj, np.ndarray):
