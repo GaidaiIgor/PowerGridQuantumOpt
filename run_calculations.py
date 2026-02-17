@@ -3,6 +3,7 @@ import time
 import numpy as np
 from networkx import Graph
 
+from src import RandomPowerFlowProblemGenerator
 from src.CircuitLayer import AllToAllEntangler, ZXMixer
 from src.ContinuousPowerOptimizer import ContinuousPowerOptimizer
 from src.Generator import Generator
@@ -11,6 +12,11 @@ from src.PowerFlowSolver import ClassicalSolver, HybridSolver
 from src.Sampler import ExactSampler
 from src.VariationalQuantumProgram import VariationalQuantumProgram
 from src.utils import my_format
+
+
+def generate_dataset():
+    problem_generator = RandomPowerFlowProblemGenerator()
+    problem_generator.generate_instances(5, num_instances=100, output_folder="data/5")
 
 
 def get_power_flow_ac_problem() -> PowerFlowProblem:
@@ -53,7 +59,7 @@ def get_hybrid_solver(num_generators: int) -> HybridSolver:
     return HybridSolver(vqp, inner_optimizer_factory, seed)
 
 
-def main():
+def run_calculations():
     problem = get_power_flow_ac_problem()
 
     # solver = ClassicalSolver()
@@ -76,6 +82,7 @@ def main():
 
 if __name__ == "__main__":
     t1 = time.perf_counter()
-    main()
+    generate_dataset()
+    # run_calculations()
     t2 = time.perf_counter()
     print(f"Elapsed time {t2 - t1} seconds")
