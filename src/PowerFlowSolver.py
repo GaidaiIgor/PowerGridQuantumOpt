@@ -30,10 +30,32 @@ class PowerFlowSolver(ABC):
 class ClassicalSolver(PowerFlowSolver):
     """ Uses SCIP library to solve power grid problems classically. """
 
-    @staticmethod
-    def build_model_power_flow(problem: PowerFlowProblem) -> tuple[Model, dict[str, list]]:
-        """ Builds model based on problem description. """
+    def __init__(self, *, silent: bool = False) -> None:
+        """Initialize solver configuration.
+
+        Parameters
+        ----------
+        silent:
+            Whether to suppress SCIP output while solving.
+        """
+        self.silent = silent
+
+    def build_model_power_flow(self, problem: PowerFlowProblem) -> tuple[Model, dict[str, list]]:
+        """Build model based on problem description.
+
+        Parameters
+        ----------
+        problem:
+            Optimization problem to encode.
+
+        Returns
+        -------
+        tuple[Model, dict[str, list]]
+            Configured model and grouped variable containers.
+        """
         model = Model("PowerFlowAC")
+        if self.silent:
+            model.hideOutput()
         cost_terms = []
         variables = defaultdict(lambda: [[] for _ in range(len(problem.graph))])
         for node_label, node_data in problem.graph.nodes(data=True):
@@ -97,7 +119,7 @@ class ClassicalSolver(PowerFlowSolver):
     def solve(self, problem: PowerFlowProblem) -> PowerFlowSolution:
         """ Solves given problem and returns its solution. """
         t1 = time.perf_counter()
-        model, variables = ClassicalSolver.build_model_power_flow(problem)
+        model, variables = self.build_model_power_flow(problem)
         model.optimize()
         solution = ClassicalSolver.extract_solution(model, variables)
         solution.classical_time = time.perf_counter() - t1

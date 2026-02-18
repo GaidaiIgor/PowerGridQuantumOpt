@@ -104,7 +104,7 @@ def run_parallel():
     folder = Path("data/5")
     instance_indices = list(range(100))
 
-    solver = ClassicalSolver()
+    solver = ClassicalSolver(silent=True)
     # solver = get_hybrid_solver(5)
 
     workers = os.cpu_count() or 1
