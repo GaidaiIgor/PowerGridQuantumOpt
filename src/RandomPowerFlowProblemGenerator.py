@@ -22,13 +22,11 @@ class LognormalSpec:
     Parameters
     ----------
     mean:
-        Target arithmetic mean of the sampled lognormal random variable.
-        Must be strictly positive.
+        Target arithmetic mean of the sampled lognormal random variable. Must be positive.
     spread_factor:
-        Multiplicative spread control around the reference quantile.
         spread_ref fraction of samples will land in a range [mean / spread_factor, mean * spread_factor]
     spread_ref:
-        Reference central mass for spread_factor.
+        Reference factor for spread_factor.
     """
 
     mean: float
