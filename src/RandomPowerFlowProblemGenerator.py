@@ -50,6 +50,7 @@ class LognormalSpec:
             sigma = 0.0
         else:
             log_spread = math.log(self.spread_factor)
+
             def interval_mass(sigma: float) -> float:
                 z_hi = 0.5 * sigma + log_spread / sigma
                 z_low = 0.5 * sigma - log_spread / sigma
@@ -58,8 +59,7 @@ class LognormalSpec:
             low, high = 0.0, 1.0
             while interval_mass(high) > self.spread_ref:
                 high *= 2.0
-
-            for _ in range(80):
+            for _ in range(100):
                 sigma = 0.5 * (low + high)
                 if interval_mass(sigma) > self.spread_ref:
                     low = sigma
@@ -111,7 +111,7 @@ class RandomPowerFlowProblemGenerator:
         min_edge_length: float = 0.01,
         line_reactive_range: tuple[float, float] = (0.95, 0.999),
         negative_reactance_prob: float = 0.0,
-        capacity_spec: LognormalSpec | None = None
+        capacity_spec: LognormalSpec | None = None,
     ) -> list[Path]:
         """Generate and persist random power-flow graph instances.
 
@@ -180,44 +180,21 @@ class RandomPowerFlowProblemGenerator:
         load_p_spec = load_p_spec or LognormalSpec(10.0, 10.0)
         generator_ref_p_spec = generator_ref_p_spec or load_p_spec
         generator_len_p_spec = generator_len_p_spec or LognormalSpec(0.5, 1.2)
-
         num_nodes = max(1, int(math.ceil(num_generators / generator_density)))
         output_path = Path(output_folder)
         output_path.mkdir(parents=True, exist_ok=True)
-
-        cost_specs = self._resolve_cost_specs(
-            generator_ref_p_spec.mean,
-            cost_a_spec,
-            cost_b_spec,
-            cost_c_spec,
-        )
-        capacity_distribution = capacity_spec or LognormalSpec(
-            self._get_default_capacity_mean(average_node_degree, load_p_spec.mean, load_reactive_range),
-            2.0,
-        )
+        cost_specs = self._resolve_cost_specs(generator_ref_p_spec.mean, cost_a_spec, cost_b_spec, cost_c_spec)
+        capacity_distribution = capacity_spec or LognormalSpec(self._get_default_capacity_mean(average_node_degree, load_p_spec.mean, load_reactive_range), 2.0)
 
         generated_paths: list[Path] = []
         for index in range(num_instances):
             graph = self._generate_graph(num_nodes, average_node_degree)
-            self._annotate_nodes(
-                graph,
-                num_generators,
-                degree_bias,
-                load_p_spec,
-                load_reactive_range,
-                generator_ref_p_spec,
-                generator_len_p_spec,
-                generator_reactive_range,
-                cost_specs,
-                voltage_range,
-                angle_range,
-            )
+            self._annotate_nodes(graph, num_generators, degree_bias, load_p_spec, load_reactive_range, generator_ref_p_spec, generator_len_p_spec,
+                                 generator_reactive_range, cost_specs, voltage_range, angle_range)
             self._annotate_edges(graph, capacity_distribution, base_resistance, min_edge_length, line_reactive_range, negative_reactance_prob)
-
             file_path = output_path / f"{index}.gml"
             nx.write_gml(graph, file_path, stringizer=repr)
             generated_paths.append(file_path)
-
         return generated_paths
 
     def _generate_graph(self, num_nodes: int, average_node_degree: float) -> Graph:
@@ -229,20 +206,15 @@ class RandomPowerFlowProblemGenerator:
 
         radius = math.sqrt(average_node_degree / ((num_nodes - 1) * math.pi))
         graph = nx.random_geometric_graph(num_nodes, radius, seed=int(self._rng.integers(0, 2**31 - 1)))
-
         positions = nx.get_node_attributes(graph, "pos")
         for u, v in graph.edges:
             graph.edges[u, v]["length"] = self._distance(positions[u], positions[v])
-
         self._connect_components(graph, positions)
         return graph
 
     def _connect_components(self, graph: Graph, positions: dict[int, tuple[float, float]]) -> None:
         """Connect disconnected components with nearest-node bridging edges."""
         components = [set(component) for component in nx.connected_components(graph)]
-        if not components:
-            return
-
         base_component = components[0]
         for component in components[1:]:
             u, v, length = self._closest_nodes(base_component, component, positions)
@@ -273,17 +245,7 @@ class RandomPowerFlowProblemGenerator:
             load_p = self._sample_lognormal(load_p_spec)
             load_reactive_frac = float(self._rng.uniform(*load_reactive_range))
             load_q = load_p * load_reactive_frac / math.sqrt(1.0 - load_reactive_frac ** 2)
-
-            generators = [
-                self._sample_generator(
-                    generator_ref_p_spec,
-                    generator_len_p_spec,
-                    generator_reactive_range,
-                    cost_specs,
-                )
-                for _ in range(int(count))
-            ]
-
+            generators = [self._sample_generator(generator_ref_p_spec, generator_len_p_spec, generator_reactive_range, cost_specs) for _ in range(int(count))]
             graph.nodes[node]["generators"] = generators
             graph.nodes[node]["load"] = complex(load_p, load_q)
             graph.nodes[node]["voltage_range"] = tuple(voltage_range)
@@ -306,12 +268,10 @@ class RandomPowerFlowProblemGenerator:
         for _, _, edge_data in graph.edges(data=True):
             length = max(float(edge_data["length"]), length_floor)
             resistance = base_resistance * length / median_length
-
             reactive_factor = float(self._rng.uniform(*reactive_factor_range))
             reactance = resistance * reactive_factor / math.sqrt(1.0 - reactive_factor ** 2)
             if self._rng.random() < negative_reactance_probability:
                 reactance = -reactance
-
             edge_data["admittance"] = 1.0 / complex(resistance, reactance)
             edge_data["capacity"] = self._sample_lognormal(capacity_spec)
 
@@ -325,22 +285,14 @@ class RandomPowerFlowProblemGenerator:
         """Sample one generator with active/reactive ranges and quadratic cost terms."""
         reference_p = self._sample_lognormal(ref_p_spec)
         length_mult = 1.0 + self._sample_lognormal(len_p_spec)
-
         p_min = reference_p / length_mult
         p_max = reference_p * length_mult
-
         reactive_factor = float(self._rng.uniform(*reactive_range))
         q_limit = p_max * reactive_factor / math.sqrt(1.0 - reactive_factor ** 2)
-
         a = self._sample_lognormal(cost_specs[0])
         b = self._sample_lognormal(cost_specs[1])
         c = self._sample_lognormal(cost_specs[2])
-
-        return Generator(
-            power_range=(p_min, p_max),
-            reactive_power_range=(-q_limit, q_limit),
-            cost_terms=(a, b, c),
-        )
+        return Generator(power_range=(p_min, p_max), reactive_power_range=(-q_limit, q_limit), cost_terms=(a, b, c))
 
     def _sample_lognormal(self, spec: LognormalSpec) -> float:
         """Draw one lognormal sample from precompiled normal-space parameters."""
@@ -350,34 +302,23 @@ class RandomPowerFlowProblemGenerator:
         """Compute degree-biased node probabilities for generator placement."""
         if len(degrees) == 0:
             raise ValueError("Graph has no nodes.")
-
         max_degree = float(np.max(degrees))
         if beta == 1.0:
             mask = (degrees == max_degree).astype(float)
             return mask / np.sum(mask)
-
         k = beta / (1.0 - beta)
         weights = np.exp(k * (degrees - max_degree))
         return weights / np.sum(weights)
 
     def _resolve_cost_specs(
-        self,
-        reference_p_mean: float,
-        cost_a_spec: LognormalSpec | None,
-        cost_b_spec: LognormalSpec | None,
-        cost_c_spec: LognormalSpec | None,
+        self, reference_p_mean: float, cost_a_spec: LognormalSpec | None, cost_b_spec: LognormalSpec | None, cost_c_spec: LognormalSpec | None
     ) -> tuple[LognormalSpec, LognormalSpec, LognormalSpec]:
         """Resolve generator cost distribution specs, filling unspecified values with defaults."""
         base_cost = 1.0
         default_a = LognormalSpec(base_cost / reference_p_mean ** 2, 2.0)
         default_b = LognormalSpec(base_cost / reference_p_mean, 1.5)
         default_c = LognormalSpec(base_cost, 2.0)
-
-        return (
-            cost_a_spec or default_a,
-            cost_b_spec or default_b,
-            cost_c_spec or default_c,
-        )
+        return cost_a_spec or default_a, cost_b_spec or default_b, cost_c_spec or default_c
 
     def _get_default_capacity_mean(self, average_node_degree: float, load_p_mean: float, load_reactive_range: tuple[float, float]) -> float:
         """Calculate default line-capacity mean from degree and expected apparent load."""
