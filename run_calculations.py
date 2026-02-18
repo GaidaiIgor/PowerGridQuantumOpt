@@ -1,14 +1,21 @@
 import time
+from concurrent.futures import as_completed
+import os
+from pathlib import Path
 
+import networkx as nx
 import numpy as np
+import pandas as pd
 from networkx import Graph
+from pebble import ProcessPool
+from tqdm import tqdm
 
 from src import RandomPowerFlowProblemGenerator
 from src.CircuitLayer import AllToAllEntangler, ZXMixer
 from src.ContinuousPowerOptimizer import ContinuousPowerOptimizer
 from src.Generator import Generator
 from src.PowerFlowProblem import PowerFlowProblem
-from src.PowerFlowSolver import ClassicalSolver, HybridSolver
+from src.PowerFlowSolver import ClassicalSolver, HybridSolver, PowerFlowSolver
 from src.Sampler import ExactSampler
 from src.VariationalQuantumProgram import VariationalQuantumProgram
 from src.utils import my_format
@@ -80,9 +87,56 @@ def run_single():
         print(f"Penalty: {solution.extra["opt_result"].penalty}")
 
 
+def _load_problem_from_gml(problem_path: Path) -> PowerFlowProblem:
+    """Load one .gml instance and restore typed node/edge attributes."""
+    graph = nx.read_gml(problem_path)
+    for _, data in graph.nodes(data=True):
+        data["generators"] = [eval(gen, {"__builtins__": {}}, {"Generator": Generator}) for gen in data["generators"]]
+        data["load"] = complex(data["load"])
+        data["voltage_range"] = tuple(data["voltage_range"])
+        data["angle_range"] = tuple(data["angle_range"])
+    for _, _, data in graph.edges(data=True):
+        data["admittance"] = complex(data["admittance"])
+    return PowerFlowProblem(graph)
+
+
+def _run_instance(folder: str, index: int, solver: PowerFlowSolver) -> tuple[int, list[float] | None, float, float, str | None]:
+    """Solve one indexed instance and return parameters, objective, timing, and optional error."""
+    try:
+        problem = _load_problem_from_gml(Path(folder) / f"{index}.gml")
+        solution = solver.solve(problem)
+        params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
+        return index, params, solution.cost, solution.classical_time, None
+    except Exception as ex:
+        return index, None, np.nan, np.nan, f"{type(ex).__name__}: {ex}"
+
+
+def run_parallel():
+    """Run selected instances in parallel and save aggregated results as solutions.csv."""
+    folder = Path("data/5")
+    instance_indices = list(range(100))
+
+    solver = ClassicalSolver()
+    # solver = get_hybrid_solver(5)
+
+    workers = os.cpu_count() or 1
+
+    rows = {}
+    with ProcessPool(max_workers=workers) as pool:
+        futures = [pool.schedule(_run_instance, args=(str(folder), index, solver)) for index in instance_indices]
+        for future in tqdm(as_completed(futures), total=len(futures), smoothing=0.0):
+            index, params, cost, classical_time, error = future.result()
+            rows[index] = {"optimized_parameters": params, "cost": cost, "classical_time": classical_time, "error": error}
+
+    df = pd.DataFrame.from_dict(rows, orient="index").sort_index()
+    df.index.name = "instance_index"
+    df.to_csv(folder / "solutions.csv")
+
+
 if __name__ == "__main__":
     t1 = time.perf_counter()
     # generate_dataset()
+    # run_parallel()
     run_single()
     t2 = time.perf_counter()
     print(f"Elapsed time {t2 - t1} seconds")
