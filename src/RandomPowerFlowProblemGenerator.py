@@ -37,27 +37,37 @@ class LognormalSpec:
 
     def __post_init__(self) -> None:
         """Validate and precompute normal-space parameters used for sampling."""
-        assert self.mean > 0, f"lognormal.mean must be positive, got {self.mean}."
-        assert self.spread_factor >= 1, f"lognormal spread_factor must be >= 1, got {self.spread_factor}."
-        assert 0 <= self.spread_ref < 1, f"lognormal.spread_ref must satisfy 0 <= spread_ref < 1, got {self.spread_ref}."
+        if self.mean <= 0:
+            raise ValueError(f"lognormal.mean must be positive, got {self.mean}.")
+        if self.spread_factor < 1:
+            raise ValueError(f"lognormal spread_factor must be >= 1, got {self.spread_factor}.")
+        if not (0 < self.spread_ref <= 1):
+            raise ValueError(f"lognormal.spread_ref must satisfy 0 < spread_ref <= 1, got {self.spread_ref}.")
+        if self.spread_factor == 1.0 and self.spread_ref != 1.0:
+            raise ValueError(f"lognormal.spread_ref must be 1 when spread_factor is 1, got {self.spread_ref}.")
 
         if self.spread_factor == 1.0:
-            mu = math.log(self.mean)
             sigma = 0.0
         else:
-            quantile_probability = 0.5 * (1.0 + self.spread_ref)
-            z_value = float(norm.ppf(quantile_probability))
             log_spread = math.log(self.spread_factor)
+            def interval_mass(sigma: float) -> float:
+                z_hi = 0.5 * sigma + log_spread / sigma
+                z_low = 0.5 * sigma - log_spread / sigma
+                return float(norm.cdf(z_hi) - norm.cdf(z_low))
 
-            discriminant = z_value**2 - 2.0 * log_spread
-            if discriminant <= 0:
-                sigma = log_spread / z_value
-            else:
-                sigma = z_value - math.sqrt(discriminant)
+            low, high = 0.0, 1.0
+            while interval_mass(high) > self.spread_ref:
+                high *= 2.0
 
-            mu = math.log(self.mean) - 0.5 * sigma**2
+            for _ in range(80):
+                sigma = 0.5 * (low + high)
+                if interval_mass(sigma) > self.spread_ref:
+                    low = sigma
+                else:
+                    high = sigma
+            sigma = 0.5 * (low + high)
 
-        self._mu = mu
+        self._mu = math.log(self.mean) - 0.5 * sigma ** 2
         self._sigma = sigma
 
     @property
