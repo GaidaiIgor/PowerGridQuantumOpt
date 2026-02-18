@@ -205,7 +205,7 @@ class RandomPowerFlowProblemGenerator:
             return graph
 
         radius = math.sqrt(average_node_degree / ((num_nodes - 1) * math.pi))
-        graph = nx.random_geometric_graph(num_nodes, radius, seed=int(self._rng.integers(0, 2**31 - 1)))
+        graph = nx.random_geometric_graph(num_nodes, radius, seed=int(self._rng.integers(0, 2 ** 31 - 1)))
         positions = nx.get_node_attributes(graph, "pos")
         for u, v in graph.edges:
             graph.edges[u, v]["length"] = self._distance(positions[u], positions[v])

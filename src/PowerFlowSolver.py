@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
+import time
 from typing import Callable
 
 import numpy as np
@@ -95,9 +96,11 @@ class ClassicalSolver(PowerFlowSolver):
 
     def solve(self, problem: PowerFlowProblem) -> PowerFlowSolution:
         """ Solves given problem and returns its solution. """
+        t1 = time.perf_counter()
         model, variables = ClassicalSolver.build_model_power_flow(problem)
         model.optimize()
         solution = ClassicalSolver.extract_solution(model, variables)
+        solution.classical_time = time.perf_counter() - t1
         return solution
 
 
@@ -118,12 +121,11 @@ class HybridSolver(PowerFlowSolver):
 
         best_sample = min(inner_optimizer.cache.items(), key=lambda pair: pair[1].total)
         active_powers, reactive_powers, voltages, angles = inner_optimizer.split_params(best_sample[1].x)
-        solution = PowerFlowSolution(best_sample[0], active_powers, reactive_powers, voltages, angles, best_sample[1].fun)
-        solution.extra["opt_result"] = best_sample[1]
+        solution = PowerFlowSolution(best_sample[0], active_powers, reactive_powers, voltages, angles, best_sample[1].fun, result.classical_time)
 
+        solution.extra["opt_result"] = best_sample[1]
         exact_sampler = ExactSampler()
         solution.extra["final_probs"] = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
         solution.extra["cost_expectation"] = utils.get_cost_expectation(inner_optimizer.get_optimized_cost, solution.extra["final_probs"])
         solution.extra["num_jobs"] = result.nfev
-        solution.extra["classical_eval_time_s"] = getattr(result, "classical_eval_time", None)
         return solution

@@ -89,6 +89,7 @@ class PowerFlowSolution:
     voltages: NDArray[float]
     angles: NDArray[float]
     cost: float
+    classical_time: float | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
     def __str__(self):
@@ -101,4 +102,5 @@ class PowerFlowSolution:
             print(f"Voltages          : {my_format(self.voltages)}")
             print(f"Phase angles      : {my_format(self.angles)}")
             print(f"Optimized cost    : {my_format(self.cost)}")
+            print(f"Classical time    : {my_format(self.classical_time)}")
         return buf.getvalue()

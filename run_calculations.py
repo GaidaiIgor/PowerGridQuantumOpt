@@ -26,7 +26,7 @@ def get_power_flow_ac_problem() -> PowerFlowProblem:
 
     graph.add_node(0, generators=[Generator((0, 100), (-100, 100), (0, 1, 1))], load=0, voltage_range=voltage_range, angle_range=angle_range)
     graph.add_node(1, generators=[], load=10, voltage_range=voltage_range, angle_range=angle_range)
-    graph.add_edge(0, 1, capacity=100, admittance=1+1j)
+    graph.add_edge(0, 1, capacity=100, admittance=1 + 1j)
 
     # graph.add_node(0, generators=[Generator((0, 30), (0, 0), (0, 10, 1))], load=0, voltage_range=voltage_range, angle_range=angle_range)
     # graph.add_node(1, generators=[Generator((0, 10), (0, 0), (0, 20, 1))], load=10, voltage_range=voltage_range, angle_range=angle_range)
@@ -59,7 +59,7 @@ def get_hybrid_solver(num_generators: int) -> HybridSolver:
     return HybridSolver(vqp, inner_optimizer_factory, seed)
 
 
-def run_calculations():
+def run_single():
     problem = get_power_flow_ac_problem()
 
     # solver = ClassicalSolver()
@@ -73,7 +73,7 @@ def run_calculations():
         print(f"Optimized probabilities: {my_format(solution.extra["final_probs"])}")
         print(f"Optimized expectation: {solution.extra["cost_expectation"]}")
         print(f"Number of jobs: {solution.extra["num_jobs"]}")
-        print(f"Total classical time: {solution.extra["classical_eval_time_s"]}")
+        print(f"Total classical time: {solution.classical_time}")
 
         print("=== Best sample ===")
         print(f"Inner optimization successful: {solution.extra["opt_result"].success}")
@@ -82,7 +82,7 @@ def run_calculations():
 
 if __name__ == "__main__":
     t1 = time.perf_counter()
-    generate_dataset()
-    # run_calculations()
+    # generate_dataset()
+    run_single()
     t2 = time.perf_counter()
     print(f"Elapsed time {t2 - t1} seconds")
