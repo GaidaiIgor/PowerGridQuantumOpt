@@ -1,9 +1,9 @@
 import time
 from concurrent.futures import as_completed
 import os
+import pickle
 from pathlib import Path
 
-import networkx as nx
 import numpy as np
 import pandas as pd
 from networkx import Graph
@@ -87,23 +87,11 @@ def run_single():
         print(f"Penalty: {solution.extra["opt_result"].penalty}")
 
 
-def _load_problem_from_gml(problem_path: Path) -> PowerFlowProblem:
-    """Load one .gml instance and restore typed node/edge attributes."""
-    graph = nx.read_gml(problem_path)
-    for _, data in graph.nodes(data=True):
-        data["generators"] = [eval(gen, {"__builtins__": {}}, {"Generator": Generator}) for gen in data["generators"]]
-        data["load"] = complex(data["load"])
-        data["voltage_range"] = tuple(data["voltage_range"])
-        data["angle_range"] = tuple(data["angle_range"])
-    for _, _, data in graph.edges(data=True):
-        data["admittance"] = complex(data["admittance"])
-    return PowerFlowProblem(graph)
-
-
 def _run_instance(folder: str, index: int, solver: PowerFlowSolver) -> tuple[int, list[float] | None, float, float, str | None]:
     """Solve one indexed instance and return parameters, objective, timing, and optional error."""
     try:
-        problem = _load_problem_from_gml(Path(folder) / f"{index}.gml")
+        with (Path(folder) / f"{index}.pkl").open("rb") as file:
+            problem = PowerFlowProblem(pickle.load(file))
         solution = solver.solve(problem)
         params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
         return index, params, solution.cost, solution.classical_time, None
@@ -135,8 +123,10 @@ def run_parallel():
 
 if __name__ == "__main__":
     t1 = time.perf_counter()
-    # generate_dataset()
+
+    generate_dataset()
+    # run_single()
     # run_parallel()
-    run_single()
+
     t2 = time.perf_counter()
     print(f"Elapsed time {t2 - t1} seconds")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import pickle
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -192,8 +193,9 @@ class RandomPowerFlowProblemGenerator:
             self._annotate_nodes(graph, num_generators, degree_bias, load_p_spec, load_reactive_range, generator_ref_p_spec, generator_len_p_spec,
                                  generator_reactive_range, cost_specs, voltage_range, angle_range)
             self._annotate_edges(graph, capacity_distribution, base_resistance, min_edge_length, line_reactive_range, negative_reactance_prob)
-            file_path = output_path / f"{index}.gml"
-            nx.write_gml(graph, file_path, stringizer=repr)
+            file_path = output_path / f"{index}.pkl"
+            with file_path.open("wb") as file:
+                pickle.dump(graph, file)
             generated_paths.append(file_path)
         return generated_paths
 
