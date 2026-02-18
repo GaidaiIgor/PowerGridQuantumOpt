@@ -118,7 +118,7 @@ def run_parallel():
 
     df = pd.DataFrame.from_dict(rows, orient="index").sort_index()
     df.index.name = "instance_index"
-    df.to_csv(folder / "_solutions.csv")
+    df.to_csv(folder / ".solutions.csv")
 
 
 if __name__ == "__main__":
