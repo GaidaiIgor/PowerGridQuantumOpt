@@ -70,7 +70,7 @@ def get_hybrid_solver(num_generators: int) -> HybridSolver:
 
 def run_single():
     # problem = get_power_flow_ac_problem()
-    with Path("data/5/0.pkl").open("rb") as file:
+    with Path("data/5/1.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file))
 
     solver = ClassicalSolver()
@@ -103,11 +103,12 @@ def run_instance(folder: str, index: int, solver: PowerFlowSolver) -> tuple[int,
         return index, None, None, np.nan, np.nan, f"{type(ex).__name__}: {ex}"
 
 
-def run_parallel():
+def run_parallel() -> None:
     """Runs selected instances in parallel and persists each completed result to CSV immediately."""
     folder = Path("data/5")
     output_path = folder / ".solutions.csv"
     instance_indices = list(range(100))
+    absent_only = True
     timeout_s = 300
 
     solver = ClassicalSolver(silent=True)
@@ -121,8 +122,22 @@ def run_parallel():
         existing_df = existing_df.reindex(columns=columns)
     else:
         existing_df = pd.DataFrame(columns=columns)
+
+    if absent_only:
+        existing_index_set = set(existing_df.index.tolist())
+        if existing_df.empty:
+            failed_index_set = set()
+        else:
+            error_mask = existing_df["error"].notna()
+            failed_index_set = set(existing_df.index[error_mask].tolist())
+        instance_indices = [index for index in instance_indices if index not in existing_index_set or index in failed_index_set]
+
+    if len(instance_indices) == 0:
+        print("No instance indices selected for run_parallel.")
+        return
+
     rows = existing_df.to_dict(orient="index")
-    with ProcessPool(max_workers=workers) as pool:
+    with ProcessPool(max_workers=min(workers, len(instance_indices))) as pool:
         future_to_index = {pool.schedule(run_instance, args=(str(folder), index, solver), timeout=timeout_s): index for index in instance_indices}
         for future in tqdm(as_completed(future_to_index), total=len(future_to_index), smoothing=0.0):
             index = future_to_index[future]
@@ -146,8 +161,8 @@ if __name__ == "__main__":
     t1 = time.perf_counter()
 
     # generate_dataset()
-    # run_single()
-    run_parallel()
+    run_single()
+    # run_parallel()
 
     t2 = time.perf_counter()
     print(f"Elapsed time {t2 - t1} seconds")
