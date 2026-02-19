@@ -81,6 +81,22 @@ class LognormalSpec:
         """Return precomputed normal-space ``sigma`` used for lognormal sampling."""
         return self._sigma
 
+    def sample(self, rng: np.random.Generator | None = None) -> float:
+        """Sample one lognormal value from this configuration.
+
+        Parameters
+        ----------
+        rng:
+            NumPy random generator used to draw the sample. If omitted, a new default generator is used.
+
+        Returns
+        -------
+        float
+            One sampled lognormal value.
+        """
+        rng = rng or np.random.default_rng()
+        return float(rng.lognormal(self.mu, self.sigma))
+
 
 class PowerFlowProblemGenerator:
     """Factory for random AC power-flow problem instances."""
@@ -238,7 +254,7 @@ class PowerFlowProblemGenerator:
         generators_per_node = self._rng.multinomial(num_generators, probabilities)
 
         for node, count in zip(nodes, generators_per_node, strict=True):
-            load_p = self._sample_lognormal(load_p_spec)
+            load_p = load_p_spec.sample(self._rng)
             load_reactive_frac = float(self._rng.uniform(*load_reactive_range))
             load_q = load_p * load_reactive_frac / math.sqrt(1.0 - load_reactive_frac ** 2)
             generators = [self._sample_generator(generator_ref_p_spec, generator_len_p_spec, generator_reactive_range, cost_specs) for _ in range(int(count))]
@@ -269,7 +285,7 @@ class PowerFlowProblemGenerator:
             if self._rng.random() < negative_reactance_probability:
                 reactance = -reactance
             edge_data["admittance"] = 1.0 / complex(resistance, reactance)
-            edge_data["capacity"] = self._sample_lognormal(capacity_spec)
+            edge_data["capacity"] = capacity_spec.sample(self._rng)
 
     def _sample_generator(
         self,
@@ -279,20 +295,16 @@ class PowerFlowProblemGenerator:
         cost_specs: tuple[LognormalSpec, LognormalSpec, LognormalSpec],
     ) -> Generator:
         """Sample one generator with active/reactive ranges and quadratic cost terms."""
-        reference_p = self._sample_lognormal(ref_p_spec)
-        length_mult = 1.0 + self._sample_lognormal(len_p_spec)
+        reference_p = ref_p_spec.sample(self._rng)
+        length_mult = 1.0 + len_p_spec.sample(self._rng)
         p_min = reference_p / length_mult
         p_max = reference_p * length_mult
         reactive_factor = float(self._rng.uniform(*reactive_range))
         q_limit = p_max * reactive_factor / math.sqrt(1.0 - reactive_factor ** 2)
-        a = self._sample_lognormal(cost_specs[0])
-        b = self._sample_lognormal(cost_specs[1])
-        c = self._sample_lognormal(cost_specs[2])
+        a = cost_specs[0].sample(self._rng)
+        b = cost_specs[1].sample(self._rng)
+        c = cost_specs[2].sample(self._rng)
         return Generator(power_range=(p_min, p_max), reactive_power_range=(-q_limit, q_limit), cost_terms=(a, b, c))
-
-    def _sample_lognormal(self, spec: LognormalSpec) -> float:
-        """Draw one lognormal sample from precompiled normal-space parameters."""
-        return float(self._rng.lognormal(spec.mu, spec.sigma))
 
     def _generator_placement_probabilities(self, degrees: np.ndarray, beta: float) -> np.ndarray:
         """Compute degree-biased node probabilities for generator placement."""
