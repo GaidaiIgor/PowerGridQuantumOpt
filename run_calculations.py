@@ -137,6 +137,7 @@ def run_parallel() -> None:
     workers = min(max(1, (os.cpu_count() or 1) // 2), len(instance_indices))
     print(f"Using {workers} worker(s).")
     rows = existing_df.to_dict(orient="index")
+    failed_count = 0
     with ProcessPool(max_workers=workers) as pool:
         future_to_index = {pool.schedule(run_instance, args=(str(folder), index, solver), timeout=timeout_s): index for index in instance_indices}
         for future in tqdm(as_completed(future_to_index), total=len(future_to_index), smoothing=0.0):
@@ -154,7 +155,9 @@ def run_parallel() -> None:
                 "classical_time": classical_time,
                 "error": error,
             }
+            failed_count += int(error is not None)
             pd.DataFrame.from_dict(rows, orient="index").sort_index().to_csv(output_path, index_label="index")
+    print(f"Run complete: {failed_count}/{len(instance_indices)} instance(s) failed.")
 
 
 if __name__ == "__main__":
