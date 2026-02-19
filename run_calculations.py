@@ -1,5 +1,5 @@
 import time
-from concurrent.futures import as_completed
+from concurrent.futures import TimeoutError as FutureTimeoutError, as_completed
 import os
 import pickle
 from pathlib import Path
@@ -108,6 +108,7 @@ def run_parallel():
     folder = Path("data/5")
     output_path = folder / ".solutions.csv"
     instance_indices = list(range(100))
+    timeout_s = 300
 
     solver = ClassicalSolver(silent=True)
     # solver = get_hybrid_solver(5)
@@ -122,9 +123,15 @@ def run_parallel():
         existing_df = pd.DataFrame(columns=columns)
     rows = existing_df.to_dict(orient="index")
     with ProcessPool(max_workers=workers) as pool:
-        futures = [pool.schedule(run_instance, args=(str(folder), index, solver)) for index in instance_indices]
-        for future in tqdm(as_completed(futures), total=len(futures), smoothing=0.0):
-            index, generator_assignments, continuous_params, cost, classical_time, error = future.result()
+        future_to_index = {pool.schedule(run_instance, args=(str(folder), index, solver), timeout=timeout_s): index for index in instance_indices}
+        for future in tqdm(as_completed(future_to_index), total=len(future_to_index), smoothing=0.0):
+            index = future_to_index[future]
+            try:
+                _, generator_assignments, continuous_params, cost, classical_time, error = future.result()
+            except FutureTimeoutError:
+                generator_assignments, continuous_params, cost, classical_time, error = None, None, np.nan, np.nan, f"Timeout after {timeout_s}s"
+            except Exception as ex:
+                generator_assignments, continuous_params, cost, classical_time, error = None, None, np.nan, np.nan, f"{type(ex).__name__}: {ex}"
             rows[index] = {
                 "generator_assignments": generator_assignments,
                 "continuous_parameters": continuous_params,
