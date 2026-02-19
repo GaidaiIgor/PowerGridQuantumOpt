@@ -114,8 +114,6 @@ def run_parallel() -> None:
     solver = ClassicalSolver(silent=True)
     # solver = get_hybrid_solver(5)
 
-    workers = os.cpu_count() or 1
-
     columns = ["generator_assignments", "continuous_parameters", "cost", "classical_time", "error"]
     if output_path.exists():
         existing_df = pd.read_csv(output_path, index_col="index")
@@ -136,8 +134,9 @@ def run_parallel() -> None:
         print("No instance indices selected for run_parallel.")
         return
 
+    workers = min(max(1, (os.cpu_count() or 1) // 2), len(instance_indices))
     rows = existing_df.to_dict(orient="index")
-    with ProcessPool(max_workers=min(workers, len(instance_indices))) as pool:
+    with ProcessPool(max_workers=workers) as pool:
         future_to_index = {pool.schedule(run_instance, args=(str(folder), index, solver), timeout=timeout_s): index for index in instance_indices}
         for future in tqdm(as_completed(future_to_index), total=len(future_to_index), smoothing=0.0):
             index = future_to_index[future]
