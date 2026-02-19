@@ -135,6 +135,7 @@ def run_parallel() -> None:
         return
 
     workers = min(max(1, (os.cpu_count() or 1) // 2), len(instance_indices))
+    print(f"Using {workers} worker(s).")
     rows = existing_df.to_dict(orient="index")
     with ProcessPool(max_workers=workers) as pool:
         future_to_index = {pool.schedule(run_instance, args=(str(folder), index, solver), timeout=timeout_s): index for index in instance_indices}
