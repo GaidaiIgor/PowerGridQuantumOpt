@@ -91,16 +91,16 @@ def run_single():
         print(f"Penalty: {solution.extra["opt_result"].penalty}")
 
 
-def run_instance(folder: str, index: int, solver: PowerFlowSolver) -> tuple[int, list[float] | None, float, float, str | None]:
-    """Solve one indexed instance and return parameters, objective, timing, and optional error."""
+def run_instance(folder: str, index: int, solver: PowerFlowSolver) -> tuple[int, str | None, list[float] | None, float, float, str | None]:
+    """Solve one indexed instance and return generator assignments, continuous parameters, objective, timing, and optional error."""
     try:
         with (Path(folder) / f"{index}.pkl").open("rb") as file:
             problem = PowerFlowProblem(pickle.load(file))
         solution = solver.solve(problem)
-        params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
-        return index, params, solution.cost, solution.classical_time, None
+        continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
+        return index, solution.generator_statuses, continuous_params, solution.cost, solution.classical_time, None
     except Exception as ex:
-        return index, None, np.nan, np.nan, f"{type(ex).__name__}: {ex}"
+        return index, None, None, np.nan, np.nan, f"{type(ex).__name__}: {ex}"
 
 
 def run_parallel():
@@ -117,8 +117,14 @@ def run_parallel():
     with ProcessPool(max_workers=workers) as pool:
         futures = [pool.schedule(run_instance, args=(str(folder), index, solver)) for index in instance_indices]
         for future in tqdm(as_completed(futures), total=len(futures), smoothing=0.0):
-            index, params, cost, classical_time, error = future.result()
-            rows[index] = {"optimized_parameters": params, "cost": cost, "classical_time": classical_time, "error": error}
+            index, generator_assignments, continuous_params, cost, classical_time, error = future.result()
+            rows[index] = {
+                "generator_assignments": generator_assignments,
+                "continuous_parameters": continuous_params,
+                "cost": cost,
+                "classical_time": classical_time,
+                "error": error,
+            }
 
     df = pd.DataFrame.from_dict(rows, orient="index").sort_index()
     df.index.name = "instance_index"
