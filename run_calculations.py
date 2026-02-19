@@ -10,7 +10,7 @@ from networkx import Graph
 from pebble import ProcessPool
 from tqdm import tqdm
 
-from src import RandomPowerFlowProblemGenerator
+from src import PowerFlowProblemGenerator, LognormalSpec
 from src.CircuitLayer import AllToAllEntangler, ZXMixer
 from src.ContinuousPowerOptimizer import ContinuousPowerOptimizer
 from src.Generator import Generator
@@ -19,11 +19,6 @@ from src.PowerFlowSolver import ClassicalSolver, HybridSolver, PowerFlowSolver
 from src.Sampler import ExactSampler
 from src.VariationalQuantumProgram import VariationalQuantumProgram
 from src.utils import my_format
-
-
-def generate_dataset():
-    problem_generator = RandomPowerFlowProblemGenerator()
-    problem_generator.generate_instances(5, num_instances=100, output_folder="data/5")
 
 
 def get_power_flow_ac_problem() -> PowerFlowProblem:
@@ -43,6 +38,13 @@ def get_power_flow_ac_problem() -> PowerFlowProblem:
     # graph.add_edge(1, 2, capacity=10, admittance=1)
 
     return PowerFlowProblem(graph)
+
+
+def generate_dataset():
+    problem_generator = PowerFlowProblemGenerator()
+    # problem_generator.generate_instances(5, num_instances=100, output_folder="data/5")
+    problem_generator.generate_instances(5, num_instances=100, output_folder="data/5", generator_ref_p_spec=LognormalSpec(100, 2),
+                                         generator_reactive_range=(0.8, 0.9), capacity_spec=LognormalSpec(100, 2), voltage_range=(0, 100))
 
 
 def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgram:
@@ -67,10 +69,12 @@ def get_hybrid_solver(num_generators: int) -> HybridSolver:
 
 
 def run_single():
-    problem = get_power_flow_ac_problem()
+    # problem = get_power_flow_ac_problem()
+    with Path("data/5/0.pkl").open("rb") as file:
+        problem = PowerFlowProblem(pickle.load(file))
 
-    # solver = ClassicalSolver()
-    solver = get_hybrid_solver(len(problem.generators))
+    solver = ClassicalSolver()
+    # solver = get_hybrid_solver(len(problem.generators))
 
     solution = solver.solve(problem)
     print("\nSolution:")
@@ -87,7 +91,7 @@ def run_single():
         print(f"Penalty: {solution.extra["opt_result"].penalty}")
 
 
-def _run_instance(folder: str, index: int, solver: PowerFlowSolver) -> tuple[int, list[float] | None, float, float, str | None]:
+def run_instance(folder: str, index: int, solver: PowerFlowSolver) -> tuple[int, list[float] | None, float, float, str | None]:
     """Solve one indexed instance and return parameters, objective, timing, and optional error."""
     try:
         with (Path(folder) / f"{index}.pkl").open("rb") as file:
@@ -111,7 +115,7 @@ def run_parallel():
 
     rows = {}
     with ProcessPool(max_workers=workers) as pool:
-        futures = [pool.schedule(_run_instance, args=(str(folder), index, solver)) for index in instance_indices]
+        futures = [pool.schedule(run_instance, args=(str(folder), index, solver)) for index in instance_indices]
         for future in tqdm(as_completed(futures), total=len(futures), smoothing=0.0):
             index, params, cost, classical_time, error = future.result()
             rows[index] = {"optimized_parameters": params, "cost": cost, "classical_time": classical_time, "error": error}

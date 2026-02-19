@@ -82,7 +82,7 @@ class LognormalSpec:
         return self._sigma
 
 
-class RandomPowerFlowProblemGenerator:
+class PowerFlowProblemGenerator:
     """Factory for random AC power-flow problem instances."""
 
     def __init__(self, *, random_seed: int | None = None):
@@ -167,7 +167,6 @@ class RandomPowerFlowProblemGenerator:
         list[Path]
             Output file paths in generation order.
         """
-
         assert num_generators > 0, f"num_generators must be positive, got {num_generators}."
         assert num_instances > 0, f"num_instances must be positive, got {num_instances}."
         assert generator_density > 0, f"generator_density must be positive, got {generator_density}."
@@ -201,11 +200,6 @@ class RandomPowerFlowProblemGenerator:
 
     def _generate_graph(self, num_nodes: int, average_node_degree: float) -> Graph:
         """Create a geometric graph and ensure edge lengths and connectivity are set."""
-        if num_nodes == 1:
-            graph = nx.Graph()
-            graph.add_node(0, pos=(0.5, 0.5))
-            return graph
-
         radius = math.sqrt(average_node_degree / ((num_nodes - 1) * math.pi))
         graph = nx.random_geometric_graph(num_nodes, radius, seed=int(self._rng.integers(0, 2 ** 31 - 1)))
         positions = nx.get_node_attributes(graph, "pos")
@@ -338,7 +332,7 @@ class RandomPowerFlowProblemGenerator:
         best_distance = math.inf
         for first_node in first_component:
             for second_node in second_component:
-                distance = RandomPowerFlowProblemGenerator._distance(positions[first_node], positions[second_node])
+                distance = PowerFlowProblemGenerator._distance(positions[first_node], positions[second_node])
                 if distance < best_distance:
                     best_distance = distance
                     best_pair = (first_node, second_node)

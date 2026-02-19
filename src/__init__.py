@@ -2,12 +2,12 @@
 
 from .Generator import Generator
 from .PowerFlowProblem import PowerFlowProblem, PowerFlowSolution
-from .RandomPowerFlowProblemGenerator import LognormalSpec, RandomPowerFlowProblemGenerator
+from .PowerFlowProblemGenerator import LognormalSpec, PowerFlowProblemGenerator
 
 __all__ = [
     "Generator",
     "PowerFlowProblem",
     "PowerFlowSolution",
     "LognormalSpec",
-    "RandomPowerFlowProblemGenerator",
+    "PowerFlowProblemGenerator",
 ]
