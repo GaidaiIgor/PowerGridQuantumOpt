@@ -104,8 +104,9 @@ def run_instance(folder: str, index: int, solver: PowerFlowSolver) -> tuple[int,
 
 
 def run_parallel():
-    """Run selected instances in parallel and save aggregated results as solutions.csv."""
+    """Runs selected instances in parallel and persists each completed result to CSV immediately."""
     folder = Path("data/5")
+    output_path = folder / ".solutions.csv"
     instance_indices = list(range(100))
 
     solver = ClassicalSolver(silent=True)
@@ -113,7 +114,13 @@ def run_parallel():
 
     workers = os.cpu_count() or 1
 
-    rows = {}
+    columns = ["generator_assignments", "continuous_parameters", "cost", "classical_time", "error"]
+    if output_path.exists():
+        existing_df = pd.read_csv(output_path, index_col="index")
+        existing_df = existing_df.reindex(columns=columns)
+    else:
+        existing_df = pd.DataFrame(columns=columns)
+    rows = existing_df.to_dict(orient="index")
     with ProcessPool(max_workers=workers) as pool:
         futures = [pool.schedule(run_instance, args=(str(folder), index, solver)) for index in instance_indices]
         for future in tqdm(as_completed(futures), total=len(futures), smoothing=0.0):
@@ -125,10 +132,7 @@ def run_parallel():
                 "classical_time": classical_time,
                 "error": error,
             }
-
-    df = pd.DataFrame.from_dict(rows, orient="index").sort_index()
-    df.index.name = "instance_index"
-    df.to_csv(folder / ".solutions.csv")
+            pd.DataFrame.from_dict(rows, orient="index").sort_index().to_csv(output_path, index_label="index")
 
 
 if __name__ == "__main__":
