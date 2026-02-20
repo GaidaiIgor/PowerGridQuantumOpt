@@ -8,7 +8,7 @@ from typing import Callable
 
 import numpy as np
 from numpy import random
-from pyscipopt import Model, sin, cos, quicksum
+from pyscipopt import Eventhdlr, Model, SCIP_EVENTTYPE, sin, cos, quicksum
 from pyscipopt.recipes.nonlinear import set_nonlinear_objective
 
 from . import utils
@@ -25,6 +25,42 @@ class PowerFlowSolver(ABC):
     def solve(self, problem: PowerFlowProblem) -> PowerFlowSolution:
         """ Solves a given power grid optimization problem and returns its solution. """
         pass
+
+
+class HistoryEventHandler(Eventhdlr):
+    """Records primal and dual bounds each time a new incumbent solution is found.
+
+    Fields
+    ------
+    history:
+        Mutable list that stores dictionaries with keys ``time``, ``primal_bound``, and ``dual_bound``.
+    """
+
+    def __init__(self) -> None:
+        """Initializes event handler state."""
+        super().__init__()
+        self.history: list[dict[str, float]] = []
+
+    def eventinit(self) -> None:
+        """Registers event subscription for incumbent updates."""
+        self.model.catchEvent(SCIP_EVENTTYPE.BESTSOLFOUND, self)
+
+    def eventexit(self) -> None:
+        """Removes event subscription for incumbent updates."""
+        self.model.dropEvent(SCIP_EVENTTYPE.BESTSOLFOUND, self)
+
+    def eventexec(self, event: object) -> None:
+        """Appends current time, primal bound, and dual bound for each incumbent event.
+
+        Parameters
+        ----------
+        event:
+            Event payload provided by SCIP.
+        """
+        primal_bound = float(self.model.getPrimalbound())
+        if self.model.isInfinity(abs(primal_bound)):
+            return
+        self.history.append({"time": float(self.model.getSolvingTime()), "primal_bound": primal_bound, "dual_bound": float(self.model.getDualbound())})
 
 
 class ClassicalSolver(PowerFlowSolver):
@@ -120,9 +156,12 @@ class ClassicalSolver(PowerFlowSolver):
         """ Solves given problem and returns its solution. """
         t1 = time.perf_counter()
         model, variables = self.build_model_power_flow(problem)
+        history_handler = HistoryEventHandler()
+        model.includeEventhdlr(history_handler, "incumbent_history", "Records incumbent primal/dual bound history.")
         model.optimize()
         solution = ClassicalSolver.extract_solution(model, variables)
         solution.classical_time = time.perf_counter() - t1
+        solution.extra["bound_history"] = history_handler.history
         return solution
 
 

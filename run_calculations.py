@@ -43,8 +43,8 @@ def get_power_flow_ac_problem() -> PowerFlowProblem:
 def generate_dataset():
     problem_generator = PowerFlowProblemGenerator()
     # problem_generator.generate_instances(5, num_instances=100, output_folder="data/5")
-    problem_generator.generate_instances(5, num_instances=100, output_folder="data/5", generator_ref_p_spec=LognormalSpec(100, 2),
-                                         generator_reactive_range=(0.8, 0.9), capacity_spec=LognormalSpec(100, 2), voltage_range=(0, 100))
+    problem_generator.generate_instances(5, num_instances=100, output_folder="data/5", generator_reactive_range=(0.8, 0.9), capacity_spec=LognormalSpec(100, 2),
+                                         voltage_range=(0, 100))
 
 
 def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgram:
@@ -70,7 +70,7 @@ def get_hybrid_solver(num_generators: int) -> HybridSolver:
 
 def run_single():
     # problem = get_power_flow_ac_problem()
-    with Path("data/5/1.pkl").open("rb") as file:
+    with Path("data/5/0.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file))
 
     solver = ClassicalSolver()
@@ -107,7 +107,7 @@ def run_parallel() -> None:
     """Runs selected instances in parallel and persists each completed result to CSV immediately."""
     folder = Path("data/5")
     output_path = folder / ".solutions.csv"
-    instance_indices = list(range(100))
+    instance_indices = list(range(10))
     absent_only = True
     timeout_s = 300
 
