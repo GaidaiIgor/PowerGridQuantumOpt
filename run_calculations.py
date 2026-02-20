@@ -116,7 +116,7 @@ def run_parallel() -> None:
 
     columns = ["generator_assignments", "continuous_parameters", "cost", "classical_time", "error"]
     if output_path.exists():
-        existing_df = pd.read_csv(output_path, index_col="index")
+        existing_df = pd.read_csv(output_path, index_col="index", dtype={"generator_assignments": "string"})
         existing_df = existing_df.reindex(columns=columns)
     else:
         existing_df = pd.DataFrame(columns=columns)
