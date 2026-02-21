@@ -13,10 +13,15 @@ from .utils import my_format
 
 
 class PowerFlowProblem:
-    """ AC-OPF-UC problem. """
+    """Represents an AC-OPF-UC instance on a graph.
+    :var graph: NetworkX graph with node and edge electrical metadata.
+    :var generators: Flat list of generator objects collected from all nodes.
+    """
 
     def __init__(self, graph: Graph):
-        """ Graph nodes should have the following properties:
+        """Constructs power flow problem from graph.
+        :param graph: Graph whose nodes contain generator/load/voltage/angle data and edges contain capacity/admittance data.
+        Graph nodes should have the following properties:
         1) generators: list[Generator]. List of generator instances located at a given node.
         2) load: complex. Total load at a given node.
         3) voltage_range: tuple[float, float]. Range of allowed voltage magnitudes at this node.
@@ -35,7 +40,10 @@ class PowerFlowProblem:
             self.generators += data["generators"]
 
     def get_bounds(self, generator_status: str) -> list[NDArray[float]]:
-        """ Returns list of NDArray of 2 elements: [min, max], i.e. bounds on each continuous parameter for a given set of generator statuses. """
+        """Returns list of NDArray of 2 elements: [min, max], i.e. bounds on each continuous parameter for a given set of generator statuses.
+        :param generator_status: Binary on/off string for all generators.
+        :return: Bounds for active/reactive generation, voltages, and angles.
+        """
         bounds_active = [np.array(gen.power_range) * int(generator_status[i]) for i, gen in enumerate(self.generators)]
         bounds_reactive = [np.array(gen.reactive_power_range) * int(generator_status[i]) for i, gen in enumerate(self.generators)]
         bounds_voltage = [0] * len(self.graph)
@@ -51,7 +59,11 @@ class PowerFlowProblem:
         """
         Evaluates all constraints other than bounds, i.e. power balance at each node (generated params + incoming - outgoing - load == 0)
         and line capacities (|I_ij| <= max capacity).
-        Returns a list with constraint values. First equality constraints (len = 2 * len(voltages) + 1), then inequality constraints (>= 0 is feasible for all).
+        :param active_powers: Active generation values for all generators.
+        :param reactive_powers: Reactive generation values for all generators.
+        :param voltages: Voltage magnitudes for all nodes.
+        :param angles: Voltage phase angles for all nodes.
+        :return: Constraint values. First equality constraints (len = 2 * len(voltages) + 1), then inequality constraints (>= 0 is feasible for all).
         """
         complex_powers = active_powers + 1j * reactive_powers
         voltage_phasors = voltages * np.exp(1j * angles)
@@ -76,13 +88,26 @@ class PowerFlowProblem:
         return equality_constraints + inequality_constraints
 
     def get_generation_cost(self, generator_statuses: str, active_powers: Sequence[float]) -> float:
-        """ Returns the total cost of generation for a given set of enabled generators at given power outputs. """
+        """Returns the total cost of generation for a given set of enabled generators at given power outputs.
+        :param generator_statuses: Binary on/off string for all generators.
+        :param active_powers: Active power outputs for all generators.
+        :return: Total generation cost.
+        """
         return sum(int(status) * gen.generation_cost(power) for status, gen, power in zip(generator_statuses, self.generators, active_powers))
 
 
 @dataclass
 class PowerFlowSolution:
-    """ Represents solution to a power grid network. """
+    """Represents solution to a power grid network.
+    :var generator_statuses: Binary on/off string for all generators.
+    :var active_powers: Active power outputs for all generators.
+    :var reactive_powers: Reactive power outputs for all generators.
+    :var voltages: Voltage magnitudes for all nodes.
+    :var angles: Voltage phase angles for all nodes.
+    :var cost: Objective value of the solution.
+    :var classical_time: Solve time in seconds, when available.
+    :var extra: Additional solver-specific metadata.
+    """
     generator_statuses: str
     active_powers: NDArray[float]
     reactive_powers: NDArray[float]
@@ -92,8 +117,10 @@ class PowerFlowSolution:
     classical_time: float | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 
-    def __str__(self):
-        """ Prints solution. """
+    def __str__(self) -> str:
+        """Returns a formatted multi-line representation of the solution.
+        :return: Human-readable summary string.
+        """
         buf = StringIO()
         with redirect_stdout(buf):
             print(f"Generator statuses: {self.generator_statuses}")

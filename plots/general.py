@@ -22,7 +22,15 @@ styles = ['-', '--', '-.']
 
 @dataclass
 class Line:
-    """ Class that represents a line in a 2D plot. """
+    """Class that represents a line in a 2D plot.
+    :var xs: X-axis coordinates of the plotted points.
+    :var ys: Y-axis coordinates of the plotted points.
+    :var error_margins: Optional y-axis error bars for each point.
+    :var color: Matplotlib color or index into predefined color list.
+    :var marker: Matplotlib marker or index into predefined marker list.
+    :var style: Matplotlib line style or index into predefined style list.
+    :var label: Legend label, or ``'_nolabel_'`` to omit from legend.
+    """
     xs: Sequence
     ys: Sequence
     error_margins: Sequence = None
@@ -31,12 +39,12 @@ class Line:
     style: str | int = '-'
     label: str = '_nolabel_'
 
-    def set_color(self, color: tuple | int):
+    def set_color(self, color: tuple | int) -> None:
         self.color = color
         if isinstance(color, int):
             self.color = colors[color]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if isinstance(self.color, int):
             self.color = colors[self.color]
         if isinstance(self.marker, int):
@@ -47,10 +55,15 @@ class Line:
 
 @dataclass
 class AnnotationManager:
+    """Manager of interactive point annotations in Matplotlib plots.
+    :var annotations: Mapping from point coordinates to active annotation artists.
+    """
     annotations: dict[(float, float), Annotation] = field(default_factory=dict)
 
-    def pick_event_handler(self, event):
-        """ Pick event handler that shows coordinates of a data point which was clicked. """
+    def pick_event_handler(self, event) -> None:
+        """Picks event handler that shows coordinates of a data point which was clicked.
+        :param event: Matplotlib pick event produced after clicking near a plotted point.
+        """
         if not isinstance(event.artist, Line2D):
             return
 
@@ -79,12 +92,11 @@ class AnnotationManager:
 
 
 def data_matrix_to_lines(data: ndarray, line_labels: list[str] = None, colors: list[int] = None, **kwargs) -> list[Line]:
-    """
-    Converts a given data matrix to a set of lines (each line is a row).
+    """Converts a given data matrix to a set of lines (each line is a row).
     :param data: 3D data matrix of size 2 x num_lines x num_points. 1st dim - (x, y); 2nd - lines; 3rd - data points.
-    Trailing zeros in each row are ignored and have to be consistent for x and y dimensions.
     :param line_labels: Line labels.
     :param colors: Line colors.
+    :param kwargs: Unused compatibility arguments accepted for call-site convenience.
     :return: List of lines.
     """
     lines = []
@@ -100,9 +112,8 @@ def data_matrix_to_lines(data: ndarray, line_labels: list[str] = None, colors: l
 
 
 def plot_general(lines: list[Line], axis_labels: tuple[str | None, str | None] = None, tick_multiples: tuple[float | None, float | None] = None,
-                 boundaries: tuple[float | None, float | None, float | None, float | None] = None, font_size: int = 20, legend_loc: str = 'best', figure_id: int = None, **kwargs):
-    """
-    Plots specified list of lines.
+                 boundaries: tuple[float | None, float | None, float | None, float | None] = None, font_size: int = 20, legend_loc: str = 'best', figure_id: int = None, **kwargs) -> None:
+    """Plots specified list of lines.
     :param lines: List of lines.
     :param axis_labels: Labels for x and y axes.
     :param tick_multiples: Base multiples for ticks along x and y axes.
@@ -110,7 +121,7 @@ def plot_general(lines: list[Line], axis_labels: tuple[str | None, str | None] =
     :param font_size: Font size.
     :param legend_loc: Location of legend.
     :param figure_id: ID of the figure where the results should be plotted or None to create new figure.
-    :return: None.
+    :param kwargs: Extra plotting arguments reserved for future extensions.
     """
     if figure_id is None:
         new_figure = True
@@ -159,11 +170,9 @@ def plot_general(lines: list[Line], axis_labels: tuple[str | None, str | None] =
         plt.tight_layout(pad=0.5)
 
 
-def save_figure(file_name: str = None):
-    """
-    Saves figure to a file.
+def save_figure(file_name: str = None) -> None:
+    """Saves figure to a file.
     :param file_name: Name of the file or None to use caller's name (without plot_).
-    :return: None.
     """
     file_name = inspect.currentframe().f_back.f_code.co_name[5:] if file_name is None else file_name
     plt.savefig(f'out/{file_name}.jpg', dpi=300, bbox_inches='tight')

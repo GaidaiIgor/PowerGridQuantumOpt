@@ -14,7 +14,15 @@ def validate_bounds(
     include_max: bool = False,
     require_ordered: bool = True,
 ) -> None:
-    """Validate scalar values or numeric sequences against configurable bounds."""
+    """Validates scalar values or numeric sequences against configurable bounds.
+    :param name: Field name used in validation error messages.
+    :param value: Scalar value or numeric sequence to validate.
+    :param min_value: Optional lower bound.
+    :param max_value: Optional upper bound.
+    :param include_min: Whether the lower bound comparison is inclusive.
+    :param include_max: Whether the upper bound comparison is inclusive.
+    :param require_ordered: Whether sequence inputs must be non-decreasing.
+    """
     lower_cmp = ">=" if include_min else ">"
     upper_cmp = "<=" if include_max else "<"
 

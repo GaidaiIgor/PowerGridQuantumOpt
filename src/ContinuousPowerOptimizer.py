@@ -13,27 +13,40 @@ from .PowerFlowProblem import PowerFlowProblem
 
 @dataclass
 class ContinuousPowerOptimizer:
-    """ Optimizes continuous part of the given power flow problem for a fixed state of binary variables. """
+    """Optimizes continuous part of the given power flow problem for a fixed state of binary variables.
+    :var problem: Power-flow instance that provides constraints, bounds, and generation costs.
+    :var penalty_mult: Multiplier applied to summed squared constraint violations.
+    :var cache: Map from generator-status bitstring to cached optimization result.
+    """
     problem: PowerFlowProblem
     penalty_mult: float
     cache: dict[str, OptimizeResult] = field(default_factory=dict)
 
     @staticmethod
     def get_initial_point(bounds: list[NDArray[float]]) -> list[float]:
-        """ Returns initial point for the optimization. """
+        """Returns initial point for the optimization.
+        :param bounds: Per-variable lower and upper bounds.
+        :return: Midpoint of each bound interval as initial parameter values.
+        """
         initial_point = [np.average(bound) for bound in bounds]
         return initial_point
 
     @staticmethod
     def convert_bounds_to_constraints(bounds: list[NDArray[float]]) -> LinearConstraint:
-        """ Converts bounds to a linear constraint object. """
+        """Converts bounds to a linear constraint object.
+        :param bounds: Per-variable lower and upper bounds.
+        :return: Linear constraint equivalent to box bounds.
+        """
         eye = np.eye(len(bounds))
         bounds_matrix = np.array(bounds)
         constraint = LinearConstraint(eye, bounds_matrix[:, 0], bounds_matrix[:, 1])
         return constraint
 
     def split_params(self, params: list[float]) -> tuple[NDArray[float], NDArray[float], NDArray[float], NDArray[float]]:
-        """ Splits overall parameter list into list of active powers, reactive power, voltages and angles. """
+        """Splits overall parameter list into list of active powers, reactive power, voltages and angles.
+        :param params: Full continuous optimization vector.
+        :return: Active powers, reactive powers, voltage magnitudes, and phase angles.
+        """
         active_powers = np.array(params[:len(self.problem.generators)])
         reactive_powers = np.array(params[len(self.problem.generators):2 * len(self.problem.generators)])
         voltage_magnitudes = np.array(params[2 * len(self.problem.generators):2 * len(self.problem.generators) + len(self.problem.graph)])
@@ -41,27 +54,44 @@ class ContinuousPowerOptimizer:
         return active_powers, reactive_powers, voltage_magnitudes, phase_angles
 
     def evaluate_constraints(self, params: list[float]) -> list[float]:
-        """ Evaluates all constraints. Feasible constraints are >= 0. """
+        """Evaluates all constraints. Feasible constraints are >= 0.
+        :param params: Full continuous optimization vector.
+        :return: Constraint values ordered as equality first, then inequality values.
+        """
         active_powers, reactive_powers, voltage_magnitudes, phase_angles = self.split_params(params)
         return self.problem.evaluate_constraints(active_powers, reactive_powers, voltage_magnitudes, phase_angles)
 
     def evaluate_equality_constraints(self, params: list[float]) -> list[float]:
-        """ Returns equality constraints only. """
+        """Returns equality constraints only.
+        :param params: Full continuous optimization vector.
+        :return: Equality-constraint values.
+        """
         all_constraints = self.evaluate_constraints(params)
         return all_constraints[:2 * len(self.problem.graph) + 1]
 
     def evaluate_inequality_constraints(self, params: list[float]) -> list[float]:
-        """ Returns inequality constraints only. """
+        """Returns inequality constraints only.
+        :param params: Full continuous optimization vector.
+        :return: Inequality-constraint values that are feasible when nonnegative.
+        """
         all_constraints = self.evaluate_constraints(params)
         return all_constraints[2 * len(self.problem.graph) + 1:]
 
     def get_generation_cost(self, generator_statuses: str, params: list[float]) -> float:
-        """ Returns the total cost of generation for a given set of enabled generators at given optimization parameters. """
+        """Returns the total cost of generation for a given set of enabled generators at given optimization parameters.
+        :param generator_statuses: Binary generator on/off bitstring.
+        :param params: Full continuous optimization vector.
+        :return: Total generation cost for active generators.
+        """
         active_powers = self.split_params(params)[0]
         return self.problem.get_generation_cost(generator_statuses, active_powers)
 
     def get_penalty(self, params: list[float], constraints: list[LinearConstraint | NonlinearConstraint]) -> float:
-        """ Evaluates penalty term for a given optimization parameter vector and list of constraints. """
+        """Evaluates penalty term for a given optimization parameter vector and list of constraints.
+        :param params: Full continuous optimization vector.
+        :param constraints: Constraint objects used to compute violations.
+        :return: Penalty value for violated constraints.
+        """
         penalty = 0
         for constraint in constraints:
             if isinstance(constraint, LinearConstraint):
@@ -74,8 +104,10 @@ class ContinuousPowerOptimizer:
         return penalty
 
     def _optimize(self, generator_statuses: str) -> OptimizeResult:
-        """ Finds optimal continuous variables for a given set of enabled generators.
-        Returns optimization result with extra fields: penalty and total (fun + penalty). """
+        """Finds optimal continuous variables for a given set of enabled generators.
+        :param generator_statuses: Binary generator on/off bitstring.
+        :return: Raw optimizer result augmented with penalty and total fields.
+        """
         bounds = self.problem.get_bounds(generator_statuses)
         initial_point = self.get_initial_point(bounds)
         constraints = [NonlinearConstraint(self.evaluate_equality_constraints, 0, 0), NonlinearConstraint(self.evaluate_inequality_constraints, 0, np.inf)]
@@ -87,11 +119,17 @@ class ContinuousPowerOptimizer:
         return result
 
     def optimize(self, generator_statuses: str) -> OptimizeResult:
-        """ Cache wrapper around _optimize. """
+        """Cache wrapper around _optimize.
+        :param generator_statuses: Binary generator on/off bitstring.
+        :return: Cached or newly computed optimizer result for the status pattern.
+        """
         if generator_statuses not in self.cache:
             self.cache[generator_statuses] = self._optimize(generator_statuses)
         return self.cache[generator_statuses]
 
     def get_optimized_cost(self, generator_statuses: str) -> float:
-        """ Returns the value of the cost function (with penalties) after optimization. """
+        """Returns the value of the cost function (with penalties) after optimization.
+        :param generator_statuses: Binary generator on/off bitstring.
+        :return: Objective plus penalty for the optimized continuous variables.
+        """
         return self.optimize(generator_statuses).total

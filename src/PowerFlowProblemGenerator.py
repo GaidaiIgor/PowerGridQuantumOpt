@@ -19,15 +19,11 @@ from .validation import validate_bounds
 @dataclass
 class LognormalSpec:
     """Lognormal sampling configuration.
-
-    Parameters
-    ----------
-    mean:
-        Target arithmetic mean of the sampled lognormal random variable. Must be positive.
-    spread_factor:
-        spread_ref fraction of samples will land in a range [mean / spread_factor, mean * spread_factor]
-    spread_ref:
-        Reference factor for spread_factor.
+    :var mean: Target mean of the lognormal distribution.
+    :var spread_factor: Multiplicative half-width around mean used for spread calibration.
+    :var spread_ref: Probability mass inside ``[mean / spread_factor, mean * spread_factor]``.
+    :var _mu: Precomputed normal-space mean parameter.
+    :var _sigma: Precomputed normal-space standard deviation parameter.
     """
 
     mean: float
@@ -37,7 +33,7 @@ class LognormalSpec:
     _sigma: float = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        """Validate and precompute normal-space parameters used for sampling."""
+        """Validates and precomputes normal-space parameters used for sampling."""
         if self.mean <= 0:
             raise ValueError(f"lognormal.mean must be positive, got {self.mean}.")
         if self.spread_factor < 1:
@@ -73,26 +69,22 @@ class LognormalSpec:
 
     @property
     def mu(self) -> float:
-        """Return precomputed normal-space ``mu`` used for lognormal sampling."""
+        """Returns precomputed normal-space ``mu`` used for lognormal sampling.
+        :return: Normal-space mean parameter.
+        """
         return self._mu
 
     @property
     def sigma(self) -> float:
-        """Return precomputed normal-space ``sigma`` used for lognormal sampling."""
+        """Returns precomputed normal-space ``sigma`` used for lognormal sampling.
+        :return: Normal-space standard deviation parameter.
+        """
         return self._sigma
 
     def sample(self, rng: np.random.Generator | None = None) -> float:
-        """Sample one lognormal value from this configuration.
-
-        Parameters
-        ----------
-        rng:
-            NumPy random generator used to draw the sample. If omitted, a new default generator is used.
-
-        Returns
-        -------
-        float
-            One sampled lognormal value.
+        """Samples one lognormal value from this configuration.
+        :param rng: Optional random generator; default generator is used when omitted.
+        :return: One sampled positive value.
         """
         rng = rng or np.random.default_rng()
         return float(rng.lognormal(self.mu, self.sigma))
@@ -102,7 +94,9 @@ class PowerFlowProblemGenerator:
     """Factory for random AC power-flow problem instances."""
 
     def __init__(self, *, random_seed: int | None = None):
-        """Initialize a reproducible random number stream."""
+        """Initializes a reproducible random number stream.
+        :param random_seed: Optional seed for deterministic generation.
+        """
         self._rng = np.random.default_rng(random_seed)
 
     def generate_instances(
@@ -130,58 +124,29 @@ class PowerFlowProblemGenerator:
         negative_reactance_prob: float = 0.0,
         capacity_spec: LognormalSpec | None = None,
     ) -> list[Path]:
-        """Generate and persist random power-flow graph instances.
-
-        Parameters
-        ----------
-        num_generators:
-            Total number of generators to place in each generated graph.
-        num_instances:
-            Number of independent instances to generate.
-        output_folder:
-            Destination directory where graph files are written.
-        generator_density:
-            Target generators-per-node ratio.
-        average_node_degree:
-            Target mean node degree.
-        degree_bias:
-            Bias in generator placement probability by node degree.
-            ``0`` means no bias (all generators distributed uniformly); ``1`` means maximum bias (only max-degree have generators).
-        load_p_spec:
-            Lognormal spec for active-power demand at each node.
-        load_reactive_range:
-            Uniform sampling interval for load reactive-power factor (Q / |S|).
-        generator_ref_p_spec:
-            Lognormal spec for generator reference active power (geometric mean of power range).
-        generator_len_p_spec:
-            1 + (sample from generator_len_p_spec) will define multiplicative power range half-length around mean.
-        generator_reactive_range:
-            Uniform sampling interval for generator reactive-power factor (Q / |S|).
-        cost_a_spec:
-            Lognormal spec for quadratic cost term ``a``.
-        cost_b_spec:
-            Lognormal spec for linear cost term ``b``.
-        cost_c_spec:
-            Lognormal spec for constant cost term ``c``.
-        voltage_range:
-            Allowed node-voltage magnitude range.
-        angle_range:
-            Allowed node-voltage angle range (radians).
-        base_resistance:
-            Base line resistance (scaled with line length).
-        min_edge_length:
-            Fraction of median edge length used as a floor for effective length when scaling base_resistance.
-        line_reactive_range:
-            Uniform interval for edge reactive factor (|X| / |Z|).
-        negative_reactance_prob:
-            Probability that sampled line reactance sign is flipped.
-        capacity_spec:
-            Lognormal spec for edge capacity. If omitted, a default is derived from expected apparent load and graph degree.
-
-        Returns
-        -------
-        list[Path]
-            Output file paths in generation order.
+        """Generates and persists random power-flow graph instances.
+        :param num_generators: Total number of generators to place across all nodes.
+        :param num_instances: Number of independent graph instances to generate.
+        :param output_folder: Destination directory for serialized graph files.
+        :param generator_density: Target ratio of generators per node used to infer node count.
+        :param average_node_degree: Target average degree for geometric graph radius selection.
+        :param degree_bias: Bias strength toward high-degree nodes during generator placement.
+        :param load_p_spec: Distribution spec for active load on each node.
+        :param load_reactive_range: Fraction range used to derive reactive load from active load.
+        :param generator_ref_p_spec: Distribution spec for generator reference active power.
+        :param generator_len_p_spec: Distribution spec for multiplicative active-power range length.
+        :param generator_reactive_range: Fraction range used to derive reactive limits from active max.
+        :param cost_a_spec: Distribution spec for quadratic cost coefficient ``a``.
+        :param cost_b_spec: Distribution spec for linear cost coefficient ``b``.
+        :param cost_c_spec: Distribution spec for constant cost coefficient ``c``.
+        :param voltage_range: Allowed voltage magnitude range for every node.
+        :param angle_range: Allowed voltage phase-angle range for every node.
+        :param base_resistance: Reference line resistance used before distance scaling.
+        :param min_edge_length: Minimum relative edge-length floor factor.
+        :param line_reactive_range: Fraction range used to derive line reactance from resistance.
+        :param negative_reactance_prob: Probability of sampling negative reactance for an edge.
+        :param capacity_spec: Distribution spec for line current capacities.
+        :return: Paths to serialized generated graph files.
         """
         assert num_generators > 0, f"num_generators must be positive, got {num_generators}."
         assert num_instances > 0, f"num_instances must be positive, got {num_instances}."
@@ -215,7 +180,11 @@ class PowerFlowProblemGenerator:
         return generated_paths
 
     def _generate_graph(self, num_nodes: int, average_node_degree: float) -> Graph:
-        """Create a geometric graph and ensure edge lengths and connectivity are set."""
+        """Creates a geometric graph and ensure edge lengths and connectivity are set.
+        :param num_nodes: Number of nodes to place in the geometric graph.
+        :param average_node_degree: Target average node degree for radius computation.
+        :return: Connected graph with edge-length attributes.
+        """
         radius = math.sqrt(average_node_degree / ((num_nodes - 1) * math.pi))
         graph = nx.random_geometric_graph(num_nodes, radius, seed=int(self._rng.integers(0, 2 ** 31 - 1)))
         positions = nx.get_node_attributes(graph, "pos")
@@ -225,7 +194,10 @@ class PowerFlowProblemGenerator:
         return graph
 
     def _connect_components(self, graph: Graph, positions: dict[int, tuple[float, float]]) -> None:
-        """Connect disconnected components with nearest-node bridging edges."""
+        """Connects disconnected components with nearest-node bridging edges.
+        :param graph: Graph to modify in place.
+        :param positions: Node-position mapping used for nearest-distance checks.
+        """
         components = [set(component) for component in nx.connected_components(graph)]
         base_component = components[0]
         for component in components[1:]:
@@ -247,7 +219,19 @@ class PowerFlowProblemGenerator:
         voltage_range: tuple[float, float],
         angle_range: tuple[float, float],
     ) -> None:
-        """Annotate graph nodes with load, limits and sampled generators."""
+        """Annotates graph nodes with load, limits and sampled generators.
+        :param graph: Graph whose nodes are updated in place.
+        :param num_generators: Total number of generators to distribute over nodes.
+        :param beta: Degree-bias coefficient used in placement probabilities.
+        :param load_p_spec: Distribution spec for node active load.
+        :param load_reactive_range: Fraction range for reactive load derivation.
+        :param generator_ref_p_spec: Distribution spec for generator reference active power.
+        :param generator_len_p_spec: Distribution spec for active-power range length multiplier.
+        :param generator_reactive_range: Fraction range for reactive capability derivation.
+        :param cost_specs: Triplet of distribution specs for quadratic cost coefficients.
+        :param voltage_range: Voltage magnitude bounds assigned to each node.
+        :param angle_range: Voltage phase-angle bounds assigned to each node.
+        """
         nodes = sorted(graph.nodes)
         degrees = np.array([graph.degree[node] for node in nodes], dtype=float)
         probabilities = self._generator_placement_probabilities(degrees, beta)
@@ -272,7 +256,14 @@ class PowerFlowProblemGenerator:
         reactive_factor_range: tuple[float, float],
         negative_reactance_probability: float,
     ) -> None:
-        """Annotate graph edges with admittance and current capacity attributes."""
+        """Annotates graph edges with admittance and current capacity attributes.
+        :param graph: Graph whose edges are updated in place.
+        :param capacity_spec: Distribution spec for edge current capacity.
+        :param base_resistance: Reference resistance used before length scaling.
+        :param min_edge_length_factor: Floor factor applied to median edge length.
+        :param reactive_factor_range: Fraction range for reactance derivation from resistance.
+        :param negative_reactance_probability: Probability of flipping reactance sign.
+        """
         lengths = [edge_data["length"] for _, _, edge_data in graph.edges(data=True)]
         median_length = float(np.median(lengths))
         length_floor = median_length * min_edge_length_factor
@@ -294,7 +285,13 @@ class PowerFlowProblemGenerator:
         reactive_range: tuple[float, float],
         cost_specs: tuple[LognormalSpec, LognormalSpec, LognormalSpec],
     ) -> Generator:
-        """Sample one generator with active/reactive ranges and quadratic cost terms."""
+        """Samples one generator with active/reactive ranges and quadratic cost terms.
+        :param ref_p_spec: Distribution spec for reference active power.
+        :param len_p_spec: Distribution spec for multiplicative range length.
+        :param reactive_range: Fraction range for reactive capability derivation.
+        :param cost_specs: Triplet of distribution specs for quadratic cost coefficients.
+        :return: Sampled generator object.
+        """
         reference_p = ref_p_spec.sample(self._rng)
         length_mult = 1.0 + len_p_spec.sample(self._rng)
         p_min = reference_p / length_mult
@@ -307,7 +304,11 @@ class PowerFlowProblemGenerator:
         return Generator(power_range=(p_min, p_max), reactive_power_range=(-q_limit, q_limit), cost_terms=(a, b, c))
 
     def _generator_placement_probabilities(self, degrees: np.ndarray, beta: float) -> np.ndarray:
-        """Compute degree-biased node probabilities for generator placement."""
+        """Computes degree-biased node probabilities for generator placement.
+        :param degrees: Node degree array aligned with node ordering.
+        :param beta: Bias coefficient in ``[0, 1]`` controlling preference for high-degree nodes.
+        :return: Normalized placement probability vector.
+        """
         if len(degrees) == 0:
             raise ValueError("Graph has no nodes.")
         max_degree = float(np.max(degrees))
@@ -321,7 +322,13 @@ class PowerFlowProblemGenerator:
     def _resolve_cost_specs(
         self, reference_p_mean: float, cost_a_spec: LognormalSpec | None, cost_b_spec: LognormalSpec | None, cost_c_spec: LognormalSpec | None
     ) -> tuple[LognormalSpec, LognormalSpec, LognormalSpec]:
-        """Resolve generator cost distribution specs, filling unspecified values with defaults."""
+        """Resolves generator cost distribution specs, filling unspecified values with defaults.
+        :param reference_p_mean: Mean reference active power used to scale defaults.
+        :param cost_a_spec: Optional override for quadratic coefficient distribution.
+        :param cost_b_spec: Optional override for linear coefficient distribution.
+        :param cost_c_spec: Optional override for constant coefficient distribution.
+        :return: Fully resolved ``(a, b, c)`` distribution specs.
+        """
         base_cost = 1.0
         default_a = LognormalSpec(base_cost / reference_p_mean ** 2, 2.0)
         default_b = LognormalSpec(base_cost / reference_p_mean, 1.5)
@@ -329,7 +336,12 @@ class PowerFlowProblemGenerator:
         return cost_a_spec or default_a, cost_b_spec or default_b, cost_c_spec or default_c
 
     def _get_default_capacity_mean(self, average_node_degree: float, load_p_mean: float, load_reactive_range: tuple[float, float]) -> float:
-        """Calculate default line-capacity mean from degree and expected apparent load."""
+        """Calculates default line-capacity mean from degree and expected apparent load.
+        :param average_node_degree: Target average node degree.
+        :param load_p_mean: Mean active load used in expectation calculation.
+        :param load_reactive_range: Fraction range used to derive apparent-load expectation.
+        :return: Default mean capacity value.
+        """
         a, b = load_reactive_range
         if a == b:
             apparent_load_mean = load_p_mean / math.sqrt(1.0 - a ** 2)
@@ -339,7 +351,12 @@ class PowerFlowProblemGenerator:
 
     @staticmethod
     def _closest_nodes(first_component: set[int], second_component: set[int], positions: dict[int, tuple[float, float]]) -> tuple[int, int, float]:
-        """Find the closest pair of nodes between two components."""
+        """Finds the closest pair of nodes between two components.
+        :param first_component: Node set of the first connected component.
+        :param second_component: Node set of the second connected component.
+        :param positions: Node-position mapping.
+        :return: Closest node pair and their Euclidean distance.
+        """
         best_pair: tuple[int, int] | None = None
         best_distance = math.inf
         for first_node in first_component:
@@ -354,5 +371,9 @@ class PowerFlowProblemGenerator:
 
     @staticmethod
     def _distance(point1: tuple[float, float], point2: tuple[float, float]) -> float:
-        """Compute Euclidean distance between two points."""
+        """Computes Euclidean distance between two points.
+        :param point1: First 2D point.
+        :param point2: Second 2D point.
+        :return: Euclidean distance between points.
+        """
         return float(math.dist(point1, point2))

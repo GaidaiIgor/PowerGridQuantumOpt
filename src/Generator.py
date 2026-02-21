@@ -5,8 +5,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Generator:
-    """
-    Describes a generator.
+    """Describes a generator.
     :var power_range: (min, max) values of active power (p) for this generator.
     :var reactive_power_range: (min, max) values of reactive power for this generator.
     :var cost_terms: (a, b, c) terms of quadratic generation cost function (ap^2 + bp + c).
@@ -16,5 +15,8 @@ class Generator:
     cost_terms: tuple[float, float, float]
 
     def generation_cost(self, power: float) -> float:
-        """Evaluate quadratic generation cost at the provided active power."""
+        """Evaluates quadratic generation cost at the provided active power.
+        :param power: Active power output used in the cost polynomial.
+        :return: Generation cost value for the provided active power.
+        """
         return self.cost_terms[0] * power ** 2 + self.cost_terms[1] * power + self.cost_terms[2]
