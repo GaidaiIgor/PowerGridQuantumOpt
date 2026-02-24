@@ -1,9 +1,12 @@
 """Classical and hybrid solvers for ``PowerFlowProblem`` instances."""
 
+import os
+import pickle
+import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
-import time
+from pathlib import Path
 from typing import Callable
 
 import numpy as np
@@ -18,28 +21,39 @@ from .Sampler import ExactSampler
 from .VariationalQuantumProgram import VariationalQuantumProgram
 
 
-class PowerFlowSolver(ABC):
-    """ Base class for power grid problem solvers. """
-
-    @abstractmethod
-    def solve(self, problem: PowerFlowProblem) -> PowerFlowSolution:
-        """ Solves a given power grid optimization problem and returns its solution. """
-        pass
-
-
 class HistoryEventHandler(Eventhdlr):
-    """Records primal and dual bounds each time a new incumbent solution is found.
+    """Records primal and dual bounds each time a new incumbent solution is found."""
 
-    Fields
-    ------
-    history:
-        Mutable list that stores dictionaries with keys ``time``, ``primal_bound``, and ``dual_bound``.
-    """
-
-    def __init__(self) -> None:
-        """Initializes event handler state."""
+    def __init__(self, variables: dict[str, list], progress_path: Path, start_time: float) -> None:
+        """Initializes event handler state.
+        :param variables: Structured variable container returned by model builder.
+        :param progress_path: Path for persisting incumbent data and full history.
+        :param start_time: Wall-clock reference from ``time.perf_counter()`` at solve start.
+        """
         super().__init__()
+        self.variables = variables
+        self.progress_path = progress_path
+        self.start_time = start_time
         self.history: list[dict[str, float]] = []
+
+    def _save_progress(self, generator_statuses: str, continuous_parameters: list[float]) -> None:
+        """Persists current incumbent snapshot and bound history to disk.
+        :param generator_statuses: Binary generator-on/off string of incumbent solution.
+        :param continuous_parameters: Incumbent continuous variables in concatenated order.
+        """
+        payload = {
+            "history": self.history,
+            "incumbent": {
+                "generator_assignments": generator_statuses,
+                "continuous_parameters": continuous_parameters,
+            },
+        }
+        temp_path = self.progress_path.with_suffix(".tmp")
+        with temp_path.open("wb") as file:
+            pickle.dump(payload, file)
+            file.flush()
+            os.fsync(file.fileno())
+        temp_path.replace(self.progress_path)
 
     def eventinit(self) -> None:
         """Registers event subscription for incumbent updates."""
@@ -51,43 +65,40 @@ class HistoryEventHandler(Eventhdlr):
 
     def eventexec(self, event: object) -> None:
         """Appends current time, primal bound, and dual bound for each incumbent event.
-
-        Parameters
-        ----------
-        event:
-            Event payload provided by SCIP.
+        :param event: Event payload provided by SCIP.
         """
-        primal_bound = float(self.model.getPrimalbound())
-        if self.model.isInfinity(abs(primal_bound)):
-            return
-        self.history.append({"time": float(self.model.getSolvingTime()), "primal_bound": primal_bound, "dual_bound": float(self.model.getDualbound())})
+        current_time = time.perf_counter() - self.start_time
+        solution = ClassicalSolver.extract_solution(self.model, self.variables)
+        self.history.append({"time": current_time, "objective": solution.cost, "dual_bound": float(self.model.getDualbound())})
+        continuous_parameters = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
+        self._save_progress(solution.generator_statuses, continuous_parameters)
+
+
+class PowerFlowSolver(ABC):
+    """Base class for power grid problem solvers."""
+
+    @abstractmethod
+    def solve(self, problem: PowerFlowProblem) -> PowerFlowSolution:
+        """Solves a given power grid optimization problem and returns its solution.
+        :param problem: Power-flow optimization problem to solve.
+        :return: Solution object produced by the solver.
+        """
+        pass
 
 
 class ClassicalSolver(PowerFlowSolver):
-    """ Uses SCIP library to solve power grid problems classically. """
+    """Uses SCIP library to solve power grid problems classically."""
 
     def __init__(self, *, silent: bool = False) -> None:
-        """Initialize solver configuration.
-
-        Parameters
-        ----------
-        silent:
-            Whether to suppress SCIP output while solving.
+        """Initializes solver configuration.
+        :param silent: Whether to suppress SCIP output while solving.
         """
         self.silent = silent
 
     def build_model_power_flow(self, problem: PowerFlowProblem) -> tuple[Model, dict[str, list]]:
-        """Build model based on problem description.
-
-        Parameters
-        ----------
-        problem:
-            Optimization problem to encode.
-
-        Returns
-        -------
-        tuple[Model, dict[str, list]]
-            Configured model and grouped variable containers.
+        """Builds model based on problem description.
+        :param problem: Optimization problem to encode in SCIP.
+        :return: SCIP model and grouped variable containers.
         """
         model = Model("PowerFlowAC")
         if self.silent:
@@ -139,7 +150,11 @@ class ClassicalSolver(PowerFlowSolver):
 
     @staticmethod
     def extract_solution(model: Model, variables: dict[str, list]) -> PowerFlowSolution:
-        """ Extracts optimized variables from model and fills out solution instance. """
+        """Extracts optimized variables from model and fills out solution instance.
+        :param model: Solved SCIP model with at least one solution.
+        :param variables: Grouped variable containers returned by model builder.
+        :return: Extracted power-flow solution.
+        """
         assert model.getNSols() > 0, "Failed to find a feasible solution"
         all_u = sum(variables["u"], [])
         generator_statuses = "".join([str(int(model.getVal(var))) for var in all_u])
@@ -152,28 +167,43 @@ class ClassicalSolver(PowerFlowSolver):
         cost = model.getObjVal()
         return PowerFlowSolution(generator_statuses, active_powers, reactive_powers, voltages, angles, cost)
 
-    def solve(self, problem: PowerFlowProblem) -> PowerFlowSolution:
-        """ Solves given problem and returns its solution. """
+    def solve(self, problem: PowerFlowProblem, progress_path: Path | None = None) -> PowerFlowSolution:
+        """Solves given problem and returns its solution.
+        :param problem: Power-flow optimization problem to solve.
+        :param progress_path: Optional path for persisting incumbent progress snapshots.
+        :return: Final solution with bound-history metadata.
+        """
         t1 = time.perf_counter()
         model, variables = self.build_model_power_flow(problem)
-        history_handler = HistoryEventHandler()
-        model.includeEventhdlr(history_handler, "incumbent_history", "Records incumbent primal/dual bound history.")
+        if progress_path is not None:
+            history_handler = HistoryEventHandler(variables, progress_path, t1)
+            model.includeEventhdlr(history_handler, "incumbent_history", "Records incumbent primal/dual bound history.")
         model.optimize()
         solution = ClassicalSolver.extract_solution(model, variables)
-        solution.classical_time = time.perf_counter() - t1
-        solution.extra["bound_history"] = history_handler.history
+        if progress_path is not None:
+            assert np.isclose(history_handler.history[-1]["objective"], solution.cost), \
+                f"Latest recorded incumbent cost {history_handler.history[-1]['objective']} does not match final cost {solution.cost}."
+            solution.history = history_handler.history
+        solution.extra["solve_status"] = str(model.getStatus())
         return solution
 
 
 @dataclass
 class HybridSolver(PowerFlowSolver):
-    """ Optimizes binary variables on a quantum computer. Continuous variables are optimized classically by the problem. """
+    """Optimizes binary variables on a quantum computer. Continuous variables are optimized classically by the problem.
+    :var vqp: Variational quantum program used for binary-variable search.
+    :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
+    :var seed: Optional random seed for initial quantum-parameter sampling.
+    """
     vqp: VariationalQuantumProgram
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
     seed: int = None
 
     def solve(self, problem: PowerFlowProblem) -> PowerFlowSolution:
-        """Optimize quantum parameters and return the best cached continuous solution."""
+        """Optimizes quantum parameters and return the best cached continuous solution.
+        :param problem: Power-flow optimization problem to solve.
+        :return: Best solution obtained from sampled binary and optimized continuous parameters.
+        """
         inner_optimizer = self.inner_optimizer_factory(problem)
         rng = random.default_rng(self.seed)
         initial_angles = rng.uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))

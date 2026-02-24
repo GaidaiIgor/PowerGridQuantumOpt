@@ -1,7 +1,7 @@
 """Variational quantum program for optimizing generator commitment distributions."""
 
-from typing import Callable, Sequence
 import time
+from typing import Callable, Sequence
 
 import noisyopt
 import numpy as np

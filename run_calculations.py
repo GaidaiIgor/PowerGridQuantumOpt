@@ -70,13 +70,16 @@ def get_hybrid_solver(num_generators: int) -> HybridSolver:
 
 def run_single():
     # problem = get_power_flow_ac_problem()
-    with Path("data/5/0.pkl").open("rb") as file:
+    data_path = Path("data/5")
+    with (data_path / "0.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file))
 
     solver = ClassicalSolver()
     # solver = get_hybrid_solver(len(problem.generators))
-
-    solution = solver.solve(problem)
+    progress_folder = Path("data/5/.progress")
+    progress_folder.mkdir(exist_ok=True)
+    progress_path = progress_folder / "single.pkl"
+    solution = solver.solve(problem, progress_path=progress_path)
     print("\nSolution:")
     print(solution)
 
@@ -91,22 +94,41 @@ def run_single():
         print(f"Penalty: {solution.extra["opt_result"].penalty}")
 
 
-def run_instance(folder: str, index: int, solver: PowerFlowSolver) -> tuple[int, str | None, list[float] | None, float, float, str | None]:
-    """Solve one indexed instance and return generator assignments, continuous parameters, objective, timing, and optional error."""
-    try:
-        with (Path(folder) / f"{index}.pkl").open("rb") as file:
-            problem = PowerFlowProblem(pickle.load(file))
+def run_instance(folder: Path, index: int, solver: PowerFlowSolver) \
+    -> tuple[int, str, list[float], float, float | None, list[dict[str, float]]]:
+    """Solves one instance and returns a serialized result row.
+    :param folder: Path to the dataset folder.
+    :param index: Instance index to solve.
+    :param solver: Solver used for the instance.
+    :return: Tuple ``(index, generator_assignments, continuous_parameters, cost, classical_time, history)``.
+    """
+    with (folder / f"{index}.pkl").open("rb") as file:
+        problem = PowerFlowProblem(pickle.load(file))
+    if isinstance(solver, ClassicalSolver):
+        progress_path = folder / ".progress" / f"{index}.pkl"
+        solution = solver.solve(problem, progress_path=progress_path)
+    else:
         solution = solver.solve(problem)
-        continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
-        return index, solution.generator_statuses, continuous_params, solution.cost, solution.classical_time, None
-    except Exception as ex:
-        return index, None, None, np.nan, np.nan, f"{type(ex).__name__}: {ex}"
+    continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
+    return index, solution.generator_statuses, continuous_params, solution.cost, solution.classical_time, solution.history
+
+
+def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float] | None, float, list[dict[str, float]] | None]:
+    """Loads persisted worker progress for one instance.
+    :param progress_path: Path to pickle snapshot written by a worker process.
+    :return: Tuple ``(generator_assignments, continuous_parameters, cost, history)`` recovered from the snapshot.
+    """
+    if not progress_path.exists():
+        return None, None, np.nan, None
+    with progress_path.open("rb") as file:
+        payload = pickle.load(file)
+    return payload["incumbent"]["generator_assignments"], payload["incumbent"]["continuous_parameters"], payload["history"][-1]["objective"], payload["history"]
 
 
 def run_parallel() -> None:
-    """Runs selected instances in parallel and persists each completed result to CSV immediately."""
-    folder = Path("data/5")
-    output_path = folder / ".solutions.csv"
+    """Runs selected instances in parallel and persists each completed result to CSV."""
+    data_folder = Path("data/5")
+    solutions_path = data_folder / ".solutions.csv"
     instance_indices = list(range(10))
     absent_only = True
     timeout_s = 300
@@ -114,9 +136,9 @@ def run_parallel() -> None:
     solver = ClassicalSolver(silent=True)
     # solver = get_hybrid_solver(5)
 
-    columns = ["generator_assignments", "continuous_parameters", "cost", "classical_time", "error"]
-    if output_path.exists():
-        existing_df = pd.read_csv(output_path, index_col="index", dtype={"generator_assignments": "string"})
+    columns = ["generator_assignments", "continuous_parameters", "cost", "classical_time", "history", "error"]
+    if solutions_path.exists():
+        existing_df = pd.read_csv(solutions_path, index_col="index", dtype={"generator_assignments": "string"})
         existing_df = existing_df.reindex(columns=columns)
     else:
         existing_df = pd.DataFrame(columns=columns)
@@ -136,27 +158,32 @@ def run_parallel() -> None:
 
     workers = min(max(1, (os.cpu_count() or 1) // 2), len(instance_indices))
     print(f"Using {workers} worker(s).")
+    progress_folder = data_folder / ".progress"
+    progress_folder.mkdir(exist_ok=True)
     rows = existing_df.to_dict(orient="index")
     failed_count = 0
     with ProcessPool(max_workers=workers) as pool:
-        future_to_index = {pool.schedule(run_instance, args=(str(folder), index, solver), timeout=timeout_s): index for index in instance_indices}
-        for future in tqdm(as_completed(future_to_index), total=len(future_to_index), smoothing=0.0):
-            index = future_to_index[future]
+        future_to_metadata = {pool.schedule(run_instance, args=(data_folder, index, solver), timeout=timeout_s): index for index in instance_indices}
+        for future in tqdm(as_completed(future_to_metadata), total=len(future_to_metadata), smoothing=0.0):
+            index = future_to_metadata[future]
+            progress_path = progress_folder / f"{index}.pkl"
             try:
-                _, generator_assignments, continuous_params, cost, classical_time, error = future.result()
-            except FutureTimeoutError:
-                generator_assignments, continuous_params, cost, classical_time, error = None, None, np.nan, np.nan, f"Timeout after {timeout_s}s"
+                _, generator_assignments, continuous_params, cost, classical_time, history = future.result()
+                error = None
             except Exception as ex:
-                generator_assignments, continuous_params, cost, classical_time, error = None, None, np.nan, np.nan, f"{type(ex).__name__}: {ex}"
+                generator_assignments, continuous_params, cost, history = load_progress_snapshot(progress_path)
+                classical_time = np.nan
+                error = f"Timeout after {timeout_s}s" if isinstance(ex, FutureTimeoutError) else f"{type(ex).__name__}: {ex}"
             rows[index] = {
                 "generator_assignments": generator_assignments,
                 "continuous_parameters": continuous_params,
                 "cost": cost,
                 "classical_time": classical_time,
+                "history": history,
                 "error": error,
             }
             failed_count += int(error is not None)
-            pd.DataFrame.from_dict(rows, orient="index").sort_index().to_csv(output_path, index_label="index")
+            pd.DataFrame.from_dict(rows, orient="index").sort_index().to_csv(solutions_path, index_label="index")
     print(f"Run complete: {failed_count}/{len(instance_indices)} instance(s) failed.")
 
 

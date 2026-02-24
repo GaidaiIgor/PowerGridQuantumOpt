@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+
 def validate_bounds(
     name: str,
     value: float | Sequence[float],
