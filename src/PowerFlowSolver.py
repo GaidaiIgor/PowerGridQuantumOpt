@@ -160,15 +160,16 @@ class ClassicalSolver(PowerFlowSolver):
         :return: Extracted power-flow solution.
         """
         assert model.getNSols() > 0, "Failed to find a feasible solution"
+        best_solution = model.getBestSol()
         all_u = sum(variables["u"], [])
-        generator_statuses = "".join([str(int(model.getVal(var))) for var in all_u])
+        generator_statuses = "".join([str(int(model.getSolVal(best_solution, var))) for var in all_u])
         all_p = sum(variables["p"], [])
-        active_powers = np.array([model.getVal(var) for var in all_p])
+        active_powers = np.array([model.getSolVal(best_solution, var) for var in all_p])
         all_q = sum(variables["q"], [])
-        reactive_powers = np.array([model.getVal(var) for var in all_q])
-        voltages = np.array([model.getVal(var) for var in variables["v"]])
-        angles = np.array([model.getVal(var) for var in variables["d"]])
-        cost = model.getObjVal()
+        reactive_powers = np.array([model.getSolVal(best_solution, var) for var in all_q])
+        voltages = np.array([model.getSolVal(best_solution, var) for var in variables["v"]])
+        angles = np.array([model.getSolVal(best_solution, var) for var in variables["d"]])
+        cost = model.getSolObjVal(best_solution)
         return PowerFlowSolution(generator_statuses, active_powers, reactive_powers, voltages, angles, cost)
 
     def solve(self, problem: PowerFlowProblem, progress_path: Path | None = None) -> PowerFlowSolution:
