@@ -105,8 +105,7 @@ class PowerFlowSolution:
     :var voltages: Voltage magnitudes for all nodes.
     :var angles: Voltage phase angles for all nodes.
     :var cost: Objective value of the solution.
-    :var classical_time: Solve time in seconds, when available.
-    :var history: Incumbent history entries with time, primal bound, and dual bound.
+    :var history: Incumbent history entries with ``time`` and ``objective`` plus solver-specific metadata.
     :var extra: Additional solver-specific metadata.
     """
     generator_statuses: str
@@ -115,8 +114,7 @@ class PowerFlowSolution:
     voltages: NDArray[float]
     angles: NDArray[float]
     cost: float
-    classical_time: float | None = None
-    history: list[dict[str, float]] = field(default_factory=list)
+    history: list[dict[str, float | int]] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
     def __str__(self) -> str:
@@ -131,5 +129,4 @@ class PowerFlowSolution:
             print(f"Voltages          : {my_format(self.voltages)}")
             print(f"Phase angles      : {my_format(self.angles)}")
             print(f"Optimized cost    : {my_format(self.cost)}")
-            print(f"Classical time    : {my_format(self.classical_time)}")
         return buf.getvalue()

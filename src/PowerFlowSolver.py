@@ -204,15 +204,26 @@ class HybridSolver(PowerFlowSolver):
         :param problem: Power-flow optimization problem to solve.
         :return: Best solution obtained from sampled binary and optimized continuous parameters.
         """
+        def get_assignment_cost_tracked(generator_statuses: str) -> float:
+            nonlocal best_objective
+            objective = inner_optimizer.get_optimized_cost(generator_statuses)
+            if objective < best_objective:
+                best_objective = objective
+                history.append({"time": self.vqp.get_current_classical_time(), "objective": objective, "num_jobs": self.vqp.num_jobs})
+            return objective
+
         inner_optimizer = self.inner_optimizer_factory(problem)
         rng = random.default_rng(self.seed)
         initial_angles = rng.uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
-        result = self.vqp.optimize_parameters(inner_optimizer.get_optimized_cost, initial_angles)
+        history = []
+        best_objective = np.inf
+        result = self.vqp.optimize_parameters(get_assignment_cost_tracked, initial_angles)
         assert result.success, f"Angle optimization failed: {result.message}"
 
         best_sample = min(inner_optimizer.cache.items(), key=lambda pair: pair[1].total)
         active_powers, reactive_powers, voltages, angles = inner_optimizer.split_params(best_sample[1].x)
-        solution = PowerFlowSolution(best_sample[0], active_powers, reactive_powers, voltages, angles, best_sample[1].fun, result.classical_time)
+        solution = PowerFlowSolution(best_sample[0], active_powers, reactive_powers, voltages, angles, best_sample[1].fun)
+        solution.history = history
 
         solution.extra["opt_result"] = best_sample[1]
         exact_sampler = ExactSampler()

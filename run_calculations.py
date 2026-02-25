@@ -87,20 +87,18 @@ def run_single():
         print(f"Optimized probabilities: {my_format(solution.extra["final_probs"])}")
         print(f"Optimized expectation: {solution.extra["cost_expectation"]}")
         print(f"Number of jobs: {solution.extra["num_jobs"]}")
-        print(f"Total classical time: {solution.classical_time}")
 
         print("=== Best sample ===")
         print(f"Inner optimization successful: {solution.extra["opt_result"].success}")
         print(f"Penalty: {solution.extra["opt_result"].penalty}")
 
 
-def run_instance(folder: Path, index: int, solver: PowerFlowSolver) \
-    -> tuple[int, str, list[float], float, float | None, list[dict[str, float]]]:
+def run_instance(folder: Path, index: int, solver: PowerFlowSolver) -> tuple[int, str, list[float], float, list[dict[str, float | int]]]:
     """Solves one instance and returns a serialized result row.
     :param folder: Path to the dataset folder.
     :param index: Instance index to solve.
     :param solver: Solver used for the instance.
-    :return: Tuple ``(index, generator_assignments, continuous_parameters, cost, classical_time, history)``.
+    :return: Tuple ``(index, generator_assignments, continuous_parameters, cost, history)``.
     """
     with (folder / f"{index}.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file))
@@ -110,10 +108,10 @@ def run_instance(folder: Path, index: int, solver: PowerFlowSolver) \
     else:
         solution = solver.solve(problem)
     continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
-    return index, solution.generator_statuses, continuous_params, solution.cost, solution.classical_time, solution.history
+    return index, solution.generator_statuses, continuous_params, solution.cost, solution.history
 
 
-def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float] | None, float, list[dict[str, float]] | None]:
+def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float] | None, float, list[dict[str, float | int]] | None]:
     """Loads persisted worker progress for one instance.
     :param progress_path: Path to pickle snapshot written by a worker process.
     :return: Tuple ``(generator_assignments, continuous_parameters, cost, history)`` recovered from the snapshot.
@@ -136,7 +134,7 @@ def run_parallel() -> None:
     solver = ClassicalSolver(silent=True)
     # solver = get_hybrid_solver(5)
 
-    columns = ["generator_assignments", "continuous_parameters", "cost", "classical_time", "history", "error"]
+    columns = ["generator_assignments", "continuous_parameters", "cost", "history", "error"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, index_col="index", dtype={"generator_assignments": "string"})
         existing_df = existing_df.reindex(columns=columns)
@@ -168,17 +166,15 @@ def run_parallel() -> None:
             index = future_to_metadata[future]
             progress_path = progress_folder / f"{index}.pkl"
             try:
-                _, generator_assignments, continuous_params, cost, classical_time, history = future.result()
+                _, generator_assignments, continuous_params, cost, history = future.result()
                 error = None
             except Exception as ex:
                 generator_assignments, continuous_params, cost, history = load_progress_snapshot(progress_path)
-                classical_time = np.nan
                 error = f"Timeout after {timeout_s}s" if isinstance(ex, FutureTimeoutError) else f"{type(ex).__name__}: {ex}"
             rows[index] = {
                 "generator_assignments": generator_assignments,
                 "continuous_parameters": continuous_params,
                 "cost": cost,
-                "classical_time": classical_time,
                 "history": history,
                 "error": error,
             }
