@@ -133,7 +133,7 @@ def run_parallel() -> None:
 
     columns = ["generator_assignments", "continuous_parameters", "cost", "history", "error"]
     if solutions_path.exists():
-        existing_df = pd.read_csv(solutions_path, index_col="index", dtype={"generator_assignments": "string"})
+        existing_df = pd.read_csv(solutions_path, index_col=0, dtype={"generator_assignments": "string"})
         existing_df = existing_df.reindex(columns=columns)
     else:
         existing_df = pd.DataFrame(columns=columns)
@@ -177,7 +177,7 @@ def run_parallel() -> None:
                 "history": history,
                 "error": error,
             }
-            pd.DataFrame.from_dict(rows, orient="index").sort_index().to_csv(solutions_path, index_label="index")
+            pd.DataFrame.from_dict(rows, orient="index").sort_index().to_csv(solutions_path)
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
 
 
