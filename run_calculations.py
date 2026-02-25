@@ -156,7 +156,8 @@ def run_parallel() -> None:
     progress_folder = data_folder / ".progress"
     progress_folder.mkdir(exist_ok=True)
     rows = existing_df.to_dict(orient="index")
-    failed_count = 0
+    timeout_count = 0
+    error_count = 0
     with ProcessPool(max_workers=workers) as pool:
         future_to_metadata = {pool.schedule(run_instance, args=(data_folder, index, solver), timeout=timeout_s): index for index in instance_indices}
         for future in tqdm(as_completed(future_to_metadata), total=len(future_to_metadata), smoothing=0.0):
@@ -167,7 +168,12 @@ def run_parallel() -> None:
                 error = None
             except Exception as ex:
                 generator_assignments, continuous_params, cost, history = load_progress_snapshot(progress_path)
-                error = f"Timeout after {timeout_s}s" if isinstance(ex, FutureTimeoutError) else f"{type(ex).__name__}: {ex}"
+                if isinstance(ex, FutureTimeoutError):
+                    timeout_count += 1
+                    error = f"Timeout after {timeout_s}s"
+                else:
+                    error_count += 1
+                    error = f"{type(ex).__name__}: {ex}"
             rows[index] = {
                 "generator_assignments": generator_assignments,
                 "continuous_parameters": continuous_params,
@@ -175,9 +181,8 @@ def run_parallel() -> None:
                 "history": history,
                 "error": error,
             }
-            failed_count += int(error is not None)
             pd.DataFrame.from_dict(rows, orient="index").sort_index().to_csv(solutions_path, index_label="index")
-    print(f"Run complete: {failed_count}/{len(instance_indices)} instance(s) failed.")
+    print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
 
 
 if __name__ == "__main__":
