@@ -102,11 +102,8 @@ def run_instance(folder: Path, index: int, solver: PowerFlowSolver) -> tuple[int
     """
     with (folder / f"{index}.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file))
-    if isinstance(solver, ClassicalSolver):
-        progress_path = folder / ".progress" / f"{index}.pkl"
-        solution = solver.solve(problem, progress_path=progress_path)
-    else:
-        solution = solver.solve(problem)
+    progress_path = folder / ".progress" / f"{index}.pkl"
+    solution = solver.solve(problem, progress_path=progress_path)
     continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
     return index, solution.generator_statuses, continuous_params, solution.cost, solution.history
 

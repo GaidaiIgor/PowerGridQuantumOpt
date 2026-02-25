@@ -21,6 +21,28 @@ from .Sampler import ExactSampler
 from .VariationalQuantumProgram import VariationalQuantumProgram
 
 
+def save_progress_snapshot(progress_path: Path, history: list[dict[str, float]], generator_statuses: str, continuous_parameters: list[float]) -> None:
+    """Persists incumbent snapshot and history to disk.
+    :param progress_path: Path where progress snapshot should be stored.
+    :param history: Full incumbent history accumulated so far.
+    :param generator_statuses: Binary generator-on/off string of incumbent solution.
+    :param continuous_parameters: Incumbent continuous variables in concatenated order.
+    """
+    payload = {
+        "history": history,
+        "incumbent": {
+            "generator_assignments": generator_statuses,
+            "continuous_parameters": continuous_parameters,
+        },
+    }
+    temp_path = progress_path.with_suffix(".tmp")
+    with temp_path.open("wb") as file:
+        pickle.dump(payload, file)
+        file.flush()
+        os.fsync(file.fileno())
+    temp_path.replace(progress_path)
+
+
 class HistoryEventHandler(Eventhdlr):
     """Records primal and dual bounds each time a new incumbent solution is found."""
 
@@ -35,25 +57,6 @@ class HistoryEventHandler(Eventhdlr):
         self.progress_path = progress_path
         self.start_time = start_time
         self.history: list[dict[str, float]] = []
-
-    def _save_progress(self, generator_statuses: str, continuous_parameters: list[float]) -> None:
-        """Persists current incumbent snapshot and bound history to disk.
-        :param generator_statuses: Binary generator-on/off string of incumbent solution.
-        :param continuous_parameters: Incumbent continuous variables in concatenated order.
-        """
-        payload = {
-            "history": self.history,
-            "incumbent": {
-                "generator_assignments": generator_statuses,
-                "continuous_parameters": continuous_parameters,
-            },
-        }
-        temp_path = self.progress_path.with_suffix(".tmp")
-        with temp_path.open("wb") as file:
-            pickle.dump(payload, file)
-            file.flush()
-            os.fsync(file.fileno())
-        temp_path.replace(self.progress_path)
 
     def eventinit(self) -> None:
         """Registers event subscription for incumbent updates."""
@@ -71,16 +74,17 @@ class HistoryEventHandler(Eventhdlr):
         solution = ClassicalSolver.extract_solution(self.model, self.variables)
         self.history.append({"time": current_time, "objective": solution.cost, "dual_bound": float(self.model.getDualbound())})
         continuous_parameters = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
-        self._save_progress(solution.generator_statuses, continuous_parameters)
+        save_progress_snapshot(self.progress_path, self.history, solution.generator_statuses, continuous_parameters)
 
 
 class PowerFlowSolver(ABC):
     """Base class for power grid problem solvers."""
 
     @abstractmethod
-    def solve(self, problem: PowerFlowProblem) -> PowerFlowSolution:
+    def solve(self, problem: PowerFlowProblem, progress_path: Path | None = None) -> PowerFlowSolution:
         """Solves a given power grid optimization problem and returns its solution.
         :param problem: Power-flow optimization problem to solve.
+        :param progress_path: Optional path for persisting incumbent progress snapshots.
         :return: Solution object produced by the solver.
         """
         pass
@@ -199,9 +203,10 @@ class HybridSolver(PowerFlowSolver):
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
     seed: int = None
 
-    def solve(self, problem: PowerFlowProblem) -> PowerFlowSolution:
+    def solve(self, problem: PowerFlowProblem, progress_path: Path | None = None) -> PowerFlowSolution:
         """Optimizes quantum parameters and return the best cached continuous solution.
         :param problem: Power-flow optimization problem to solve.
+        :param progress_path: Optional path for persisting incumbent progress snapshots.
         :return: Best solution obtained from sampled binary and optimized continuous parameters.
         """
         def get_assignment_cost_tracked(generator_statuses: str) -> float:
@@ -210,6 +215,9 @@ class HybridSolver(PowerFlowSolver):
             if objective < best_objective:
                 best_objective = objective
                 history.append({"time": self.vqp.get_current_classical_time(), "objective": objective, "num_jobs": self.vqp.num_jobs})
+                optimized_params = inner_optimizer.cache[generator_statuses].x
+                if progress_path is not None:
+                    save_progress_snapshot(progress_path, history, generator_statuses, optimized_params.tolist())
             return objective
 
         inner_optimizer = self.inner_optimizer_factory(problem)
