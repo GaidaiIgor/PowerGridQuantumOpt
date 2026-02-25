@@ -139,13 +139,9 @@ def run_parallel() -> None:
         existing_df = pd.DataFrame(columns=columns)
 
     if absent_only:
-        existing_index_set = set(existing_df.index.tolist())
-        if existing_df.empty:
-            failed_index_set = set()
-        else:
-            error_mask = existing_df["error"].notna()
-            failed_index_set = set(existing_df.index[error_mask].tolist())
-        instance_indices = [index for index in instance_indices if index not in existing_index_set or index in failed_index_set]
+        filled_mask = existing_df["generator_assignments"].notna()
+        filled_index_set = set(existing_df.index[filled_mask].tolist())
+        instance_indices = [index for index in instance_indices if index not in filled_index_set]
 
     if len(instance_indices) == 0:
         print("No instance indices selected for run_parallel.")
