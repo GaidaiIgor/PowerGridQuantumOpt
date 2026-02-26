@@ -71,7 +71,7 @@ def get_hybrid_solver(num_generators: int) -> HybridSolver:
 def run_single():
     # problem = get_power_flow_ac_problem()
     data_path = Path("data/5")
-    with (data_path / "2.pkl").open("rb") as file:
+    with (data_path / "3.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file))
 
     solver = ClassicalSolver()
@@ -124,9 +124,9 @@ def run_parallel() -> None:
     """Runs selected instances in parallel and persists each completed result to CSV."""
     data_folder = Path("data/5")
     solutions_path = data_folder / ".solutions.csv"
-    instance_indices = list(range(10))
+    instance_indices = list(range(12))
     absent_only = True
-    timeout_s = 150
+    timeout_s = 120
 
     solver = ClassicalSolver(silent=True)
     # solver = get_hybrid_solver(5)

@@ -10,6 +10,7 @@ from pathlib import Path
 import networkx as nx
 import numpy as np
 from networkx import Graph
+from scipy.optimize import brentq
 from scipy.stats import norm
 
 from .Generator import Generator
@@ -41,11 +42,11 @@ class LognormalSpec:
             raise ValueError(f"lognormal spread_factor must be >= 1, got {self.spread_factor}.")
         if not (0 < self.spread_ref <= 1):
             raise ValueError(f"lognormal.spread_ref must satisfy 0 < spread_ref <= 1, got {self.spread_ref}.")
-        if self.spread_factor == 1.0 and self.spread_ref != 1.0:
+        if self.spread_factor == 1 and self.spread_ref != 1:
             raise ValueError(f"lognormal.spread_ref must be 1 when spread_factor is 1, got {self.spread_ref}.")
 
-        if self.spread_factor == 1.0:
-            sigma = 0.0
+        if self.spread_factor == 1:
+            sigma = 0
         else:
             log_spread = math.log(self.spread_factor)
 
@@ -54,9 +55,9 @@ class LognormalSpec:
                 z_low = 0.5 * sigma - log_spread / sigma
                 return float(norm.cdf(z_hi) - norm.cdf(z_low))
 
-            low, high = 0.0, 1.0
+            low, high = 0, 1
             while interval_mass(high) > self.spread_ref:
-                high *= 2.0
+                high *= 2
             for _ in range(100):
                 sigma = 0.5 * (low + high)
                 if interval_mass(sigma) > self.spread_ref:
@@ -106,14 +107,14 @@ class PowerFlowProblemGenerator:
         *,
         num_instances: int = 1,
         output_folder: str | Path = "data",
-        generator_density: float = 2.0,
-        average_node_degree: float = 3.0,
+        generator_density: float = 1,
+        average_node_degree: float = 3,
         degree_bias: float = 0.3,
         load_p_spec: LognormalSpec | None = None,
-        load_reactive_range: tuple[float, float] = (0.0, 0.1),
+        load_reactive_range: tuple[float, float] = (0, 0.1),
         generator_ref_p_spec: LognormalSpec | None = None,
         generator_len_p_spec: LognormalSpec | None = None,
-        generator_reactive_range: tuple[float, float] = (0.0, 0.1),
+        generator_reactive_range: tuple[float, float] = (0, 0.1),
         cost_a_spec: LognormalSpec | None = None,
         cost_b_spec: LognormalSpec | None = None,
         cost_c_spec: LognormalSpec | None = None,
@@ -122,7 +123,7 @@ class PowerFlowProblemGenerator:
         base_resistance: float = 0.01,
         min_edge_length: float = 0.01,
         line_reactive_range: tuple[float, float] = (0.95, 0.999),
-        negative_reactance_prob: float = 0.0,
+        negative_reactance_prob: float = 0,
         capacity_spec: LognormalSpec | None = None,
         check_basic_feasibility: bool = False,
     ) -> list[Path]:
@@ -155,20 +156,20 @@ class PowerFlowProblemGenerator:
         assert num_instances > 0, f"num_instances must be positive, got {num_instances}."
         assert generator_density > 0, f"generator_density must be positive, got {generator_density}."
         assert average_node_degree >= 0, f"average_node_degree must be non-negative, got {average_node_degree}."
-        validate_bounds("load_reactive_range", load_reactive_range, min_value=0.0, max_value=1.0)
-        validate_bounds("generator_reactive_range", generator_reactive_range, min_value=0.0, max_value=1.0)
-        validate_bounds("line_reactive_range", line_reactive_range, min_value=0.0, max_value=1.0, include_max=True)
-        validate_bounds("negative_reactance_prob", negative_reactance_prob, min_value=0.0, max_value=1.0, include_max=True)
-        validate_bounds("degree_bias", degree_bias, min_value=0.0, max_value=1.0, include_max=True)
+        validate_bounds("load_reactive_range", load_reactive_range, min_value=0, max_value=1)
+        validate_bounds("generator_reactive_range", generator_reactive_range, min_value=0, max_value=1)
+        validate_bounds("line_reactive_range", line_reactive_range, min_value=0, max_value=1, include_max=True)
+        validate_bounds("negative_reactance_prob", negative_reactance_prob, min_value=0, max_value=1, include_max=True)
+        validate_bounds("degree_bias", degree_bias, min_value=0, max_value=1, include_max=True)
 
-        load_p_spec = load_p_spec or LognormalSpec(10.0, 10.0)
+        load_p_spec = load_p_spec or LognormalSpec(10, 10)
         generator_ref_p_spec = generator_ref_p_spec or load_p_spec
         generator_len_p_spec = generator_len_p_spec or LognormalSpec(0.5, 1.2)
         num_nodes = max(1, int(math.ceil(num_generators / generator_density)))
         output_path = Path(output_folder)
         output_path.mkdir(parents=True, exist_ok=True)
         cost_specs = self._resolve_cost_specs(generator_ref_p_spec.mean, cost_a_spec, cost_b_spec, cost_c_spec)
-        capacity_distribution = capacity_spec or LognormalSpec(self._get_default_capacity_mean(average_node_degree, load_p_spec.mean, load_reactive_range), 2.0)
+        capacity_distribution = capacity_spec or LognormalSpec(self._get_default_capacity_mean(average_node_degree, load_p_spec.mean, load_reactive_range), 2)
 
         generated_paths: list[Path] = []
         while len(generated_paths) < num_instances:
@@ -192,13 +193,46 @@ class PowerFlowProblemGenerator:
         :param average_node_degree: Target average node degree for radius computation.
         :return: Connected graph with edge-length attributes.
         """
-        radius = math.sqrt(average_node_degree / ((num_nodes - 1) * math.pi))
+        radius = self._solve_radius_for_average_degree(num_nodes, average_node_degree)
         graph = nx.random_geometric_graph(num_nodes, radius, seed=int(self._rng.integers(0, 2 ** 31 - 1)))
         positions = nx.get_node_attributes(graph, "pos")
         for u, v in graph.edges:
             graph.edges[u, v]["length"] = self._distance(positions[u], positions[v])
         self._connect_components(graph, positions)
         return graph
+
+    @staticmethod
+    def _distance_cdf_unit_square(radius: float) -> float:
+        """Returns CDF ``D(r)`` of distance between two random points in the unit square.
+        Formula source: https://mathworld.wolfram.com/SquareLinePicking.html
+        :param radius: Distance threshold ``r``.
+        :return: Probability `P(||X - Y|| <= r)` for `X, Y ~ U([0, 1]^2)`.
+        """
+        if radius < 0:
+            return 0
+        if radius <= 1:
+            return 0.5 * radius ** 4 - 8 / 3 * radius ** 3 + math.pi * radius ** 2
+        if radius < math.sqrt(2):
+            root = math.sqrt(radius ** 2 - 1)
+            return -0.5 * radius ** 4 - 4 * radius ** 2 * math.atan(root) + 4 / 3 * (2 * radius ** 2 + 1) * root + (math.pi - 2) * radius ** 2 + 1 / 3
+        return 1
+
+    @staticmethod
+    def _solve_radius_for_average_degree(num_nodes: int, average_node_degree: float) -> float:
+        """Solves boundary-aware radius from target expected degree with a library root finder.
+        :param num_nodes: Number of nodes in the random geometric graph.
+        :param average_node_degree: Target expected node degree.
+        :return: Radius ``r`` such that geometric graph generated with that ``r`` has specified expected degree.
+        """
+        if num_nodes == 1:
+            assert average_node_degree == 0, f"average_node_degree must be 0 when num_nodes == 1, got {average_node_degree}."
+            return 0
+        max_node_degree = num_nodes - 1
+        assert average_node_degree <= max_node_degree, "average_node_degree must not exceed number of nodes - 1."
+
+        target_probability = average_node_degree / max_node_degree
+        equation = lambda radius: PowerFlowProblemGenerator._distance_cdf_unit_square(radius) - target_probability
+        return brentq(equation, 0, math.sqrt(2))
 
     def _connect_components(self, graph: Graph, positions: dict[int, tuple[float, float]]) -> None:
         """Connects disconnected components with nearest-node bridging edges.
@@ -247,7 +281,7 @@ class PowerFlowProblemGenerator:
         for node, count in zip(nodes, generators_per_node, strict=True):
             load_p = load_p_spec.sample(self._rng)
             load_reactive_frac = float(self._rng.uniform(*load_reactive_range))
-            load_q = load_p * load_reactive_frac / math.sqrt(1.0 - load_reactive_frac ** 2)
+            load_q = load_p * load_reactive_frac / math.sqrt(1 - load_reactive_frac ** 2)
             generators = [self._sample_generator(generator_ref_p_spec, generator_len_p_spec, generator_reactive_range, cost_specs) for _ in range(int(count))]
             graph.nodes[node]["generators"] = generators
             graph.nodes[node]["load"] = complex(load_p, load_q)
@@ -279,10 +313,10 @@ class PowerFlowProblemGenerator:
             length = max(float(edge_data["length"]), length_floor)
             resistance = base_resistance * length / median_length
             reactive_factor = float(self._rng.uniform(*reactive_factor_range))
-            reactance = resistance * reactive_factor / math.sqrt(1.0 - reactive_factor ** 2)
+            reactance = resistance * reactive_factor / math.sqrt(1 - reactive_factor ** 2)
             if self._rng.random() < negative_reactance_probability:
                 reactance = -reactance
-            edge_data["admittance"] = 1.0 / complex(resistance, reactance)
+            edge_data["admittance"] = 1 / complex(resistance, reactance)
             edge_data["capacity"] = capacity_spec.sample(self._rng)
 
     def _sample_generator(
@@ -300,11 +334,11 @@ class PowerFlowProblemGenerator:
         :return: Sampled generator object.
         """
         reference_p = ref_p_spec.sample(self._rng)
-        length_mult = 1.0 + len_p_spec.sample(self._rng)
+        length_mult = 1 + len_p_spec.sample(self._rng)
         p_min = reference_p / length_mult
         p_max = reference_p * length_mult
         reactive_factor = float(self._rng.uniform(*reactive_range))
-        q_limit = p_max * reactive_factor / math.sqrt(1.0 - reactive_factor ** 2)
+        q_limit = p_max * reactive_factor / math.sqrt(1 - reactive_factor ** 2)
         a = cost_specs[0].sample(self._rng)
         b = cost_specs[1].sample(self._rng)
         c = cost_specs[2].sample(self._rng)
@@ -319,10 +353,10 @@ class PowerFlowProblemGenerator:
         if len(degrees) == 0:
             raise ValueError("Graph has no nodes.")
         max_degree = float(np.max(degrees))
-        if beta == 1.0:
+        if beta == 1:
             mask = (degrees == max_degree).astype(float)
             return mask / np.sum(mask)
-        k = beta / (1.0 - beta)
+        k = beta / (1 - beta)
         weights = np.exp(k * (degrees - max_degree))
         return weights / np.sum(weights)
 
@@ -336,10 +370,10 @@ class PowerFlowProblemGenerator:
         :param cost_c_spec: Optional override for constant coefficient distribution.
         :return: Fully resolved ``(a, b, c)`` distribution specs.
         """
-        base_cost = 1.0
-        default_a = LognormalSpec(base_cost / reference_p_mean ** 2, 2.0)
+        base_cost = 1
+        default_a = LognormalSpec(base_cost / reference_p_mean ** 2, 2)
         default_b = LognormalSpec(base_cost / reference_p_mean, 1.5)
-        default_c = LognormalSpec(base_cost, 2.0)
+        default_c = LognormalSpec(base_cost, 2)
         return cost_a_spec or default_a, cost_b_spec or default_b, cost_c_spec or default_c
 
     def _get_default_capacity_mean(self, average_node_degree: float, load_p_mean: float, load_reactive_range: tuple[float, float]) -> float:
@@ -351,10 +385,10 @@ class PowerFlowProblemGenerator:
         """
         a, b = load_reactive_range
         if a == b:
-            apparent_load_mean = load_p_mean / math.sqrt(1.0 - a ** 2)
+            apparent_load_mean = load_p_mean / math.sqrt(1 - a ** 2)
         else:
             apparent_load_mean = load_p_mean * (math.asin(b) - math.asin(a)) / (b - a)
-        return 2.0 * apparent_load_mean / average_node_degree
+        return 2 * apparent_load_mean / average_node_degree
 
     @staticmethod
     def _closest_nodes(first_component: set[int], second_component: set[int], positions: dict[int, tuple[float, float]]) -> tuple[int, int, float]:
