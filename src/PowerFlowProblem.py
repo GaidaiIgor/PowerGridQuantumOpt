@@ -95,6 +95,32 @@ class PowerFlowProblem:
         """
         return sum(int(status) * gen.generation_cost(power) for status, gen, power in zip(generator_statuses, self.generators, active_powers))
 
+    @staticmethod
+    def check_infeasible(graph: Graph) -> str | None:
+        """Returns infeasibility reason detected by fast necessary-condition pre-checks on graph metadata.
+        :param graph: Graph whose node and generator bounds are inspected.
+        :return: Explanation string when pre-check detects infeasibility, otherwise ``None``.
+        """
+        total_load_p = sum(node_data["load"].real for _, node_data in graph.nodes(data=True))
+        total_load_q = sum(node_data["load"].imag for _, node_data in graph.nodes(data=True))
+        generators = [gen for _, node_data in graph.nodes(data=True) for gen in node_data["generators"]]
+        min_gen_p_min = min(gen.power_range[0] for gen in generators)
+        total_gen_p_max = sum(gen.power_range[1] for gen in generators)
+        min_gen_q_min = min(gen.reactive_power_range[0] for gen in generators)
+        total_gen_q_max = sum(gen.reactive_power_range[1] for gen in generators)
+        reasons = []
+
+        if total_gen_p_max < total_load_p:
+            reasons.append(f"Active generation upper bound ({total_gen_p_max:.6g}) is below total active load ({total_load_p:.6g}).")
+        if min_gen_p_min > total_load_p:
+            reasons.append(f"Smallest generator minimum ({min_gen_p_min:.6g}) is above total active load ({total_load_p:.6g}).")
+        if total_gen_q_max < total_load_q:
+            reasons.append(f"Reactive generation upper bound ({total_gen_q_max:.6g}) is below total reactive load ({total_load_q:.6g}).")
+        if min_gen_q_min > total_load_q:
+            reasons.append(f"Reactive generation lower bound ({min_gen_q_min:.6g}) is above total reactive load ({total_load_q:.6g}).")
+
+        return " ".join(reasons) if len(reasons) > 0 else None
+
 
 @dataclass
 class PowerFlowSolution:

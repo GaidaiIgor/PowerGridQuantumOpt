@@ -13,6 +13,7 @@ from networkx import Graph
 from scipy.stats import norm
 
 from .Generator import Generator
+from .PowerFlowProblem import PowerFlowProblem
 from .validation import validate_bounds
 
 
@@ -123,6 +124,7 @@ class PowerFlowProblemGenerator:
         line_reactive_range: tuple[float, float] = (0.95, 0.999),
         negative_reactance_prob: float = 0.0,
         capacity_spec: LognormalSpec | None = None,
+        check_basic_feasibility: bool = False,
     ) -> list[Path]:
         """Generates and persists random power-flow graph instances.
         :param num_generators: Total number of generators to place across all nodes.
@@ -146,6 +148,7 @@ class PowerFlowProblemGenerator:
         :param line_reactive_range: Fraction range used to derive line reactance from resistance.
         :param negative_reactance_prob: Probability of sampling negative reactance for an edge.
         :param capacity_spec: Distribution spec for line current capacities.
+        :param check_basic_feasibility: Whether to skip generated instances that fail the fast aggregate feasibility pre-check.
         :return: Paths to serialized generated graph files.
         """
         assert num_generators > 0, f"num_generators must be positive, got {num_generators}."
@@ -168,11 +171,15 @@ class PowerFlowProblemGenerator:
         capacity_distribution = capacity_spec or LognormalSpec(self._get_default_capacity_mean(average_node_degree, load_p_spec.mean, load_reactive_range), 2.0)
 
         generated_paths: list[Path] = []
-        for index in range(num_instances):
+        while len(generated_paths) < num_instances:
             graph = self._generate_graph(num_nodes, average_node_degree)
             self._annotate_nodes(graph, num_generators, degree_bias, load_p_spec, load_reactive_range, generator_ref_p_spec, generator_len_p_spec,
                                  generator_reactive_range, cost_specs, voltage_range, angle_range)
             self._annotate_edges(graph, capacity_distribution, base_resistance, min_edge_length, line_reactive_range, negative_reactance_prob)
+            if check_basic_feasibility and PowerFlowProblem.check_infeasible(graph) is not None:
+                print("Skipping infeasible instance")
+                continue
+            index = len(generated_paths)
             file_path = output_path / f"{index}.pkl"
             with file_path.open("wb") as file:
                 pickle.dump(graph, file)
