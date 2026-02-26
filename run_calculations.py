@@ -70,15 +70,16 @@ def get_hybrid_solver(num_generators: int) -> HybridSolver:
 
 def run_single():
     # problem = get_power_flow_ac_problem()
-    data_path = Path("data/5")
-    with (data_path / "3.pkl").open("rb") as file:
+    index = 3
+    data_path = Path(f"data/5")
+    with (data_path / f"{index}.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file))
 
     solver = ClassicalSolver()
     # solver = get_hybrid_solver(len(problem.generators))
-    progress_folder = Path("data/5/.progress")
+    progress_folder = data_path / ".progress"
     progress_folder.mkdir(exist_ok=True)
-    progress_path = progress_folder / "single.pkl"
+    progress_path = progress_folder / f"{index}.pkl"
     solution = solver.solve(problem, progress_path=progress_path)
     print("\nSolution:")
     print(solution)
@@ -133,7 +134,7 @@ def run_parallel() -> None:
 
     columns = ["generator_assignments", "continuous_parameters", "cost", "history", "error"]
     if solutions_path.exists():
-        existing_df = pd.read_csv(solutions_path, index_col=0, dtype={"generator_assignments": "string"})
+        existing_df = pd.read_csv(solutions_path, dtype={"generator_assignments": "string"})
         existing_df = existing_df.reindex(columns=columns)
     else:
         existing_df = pd.DataFrame(columns=columns)
@@ -177,7 +178,8 @@ def run_parallel() -> None:
                 "history": history,
                 "error": error,
             }
-            pd.DataFrame.from_dict(rows, orient="index").sort_index().to_csv(solutions_path)
+            max_index = max(rows.keys())
+            pd.DataFrame.from_dict(rows, orient="index").sort_index().reindex(range(max_index + 1)).to_csv(solutions_path, index=False)
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
 
 
@@ -185,8 +187,8 @@ if __name__ == "__main__":
     t1 = time.perf_counter()
 
     # generate_dataset()
-    run_single()
-    # run_parallel()
+    # run_single()
+    run_parallel()
 
     t2 = time.perf_counter()
     print(f"Elapsed time {t2 - t1} seconds")
