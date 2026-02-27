@@ -170,19 +170,21 @@ class PowerFlowProblemGenerator:
         capacity_distribution = capacity_spec or LognormalSpec(4 * load_s_spec.mean / average_node_degree, 2)
 
         generated_paths = []
+        skipped_infeasible = 0
         while len(generated_paths) < num_instances:
             graph = self._generate_graph(num_nodes, average_node_degree)
             self._annotate_nodes(graph, num_generators, degree_bias, load_s_spec, load_react_frac_range, generator_s_range_ref_spec, generator_s_range_len_spec,
                                  generator_react_frac_range, cost_specs, voltage_range, angle_range, symmetric_q_range)
             self._annotate_edges(graph, capacity_distribution, impedance_distribution, line_react_frac_range, scale_lines)
             if check_basic_feasibility and PowerFlowProblem.check_infeasible(graph) is not None:
-                print("Skipping infeasible instance")
+                skipped_infeasible += 1
                 continue
             index = len(generated_paths)
             file_path = output_path / f"{index}.pkl"
             with file_path.open("wb") as file:
                 pickle.dump(graph, file)
             generated_paths.append(file_path)
+        print(f"Generation complete. {skipped_infeasible} infeasible instances skipped.")
         return generated_paths
 
     @staticmethod
