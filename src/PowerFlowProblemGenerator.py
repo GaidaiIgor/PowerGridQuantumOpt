@@ -109,7 +109,7 @@ class PowerFlowProblemGenerator:
         generator_density: float = 1,
         generator_s_range_ref_spec: LognormalSpec | None = None,
         generator_s_range_len_spec: LognormalSpec | None = None,
-        generator_react_frac_range: tuple[float, float] = (0, 0.2),
+        generator_react_frac_range: tuple[float, float] = (0, 0.1),
         symmetric_q_range: bool = True,
         cost_a_spec: LognormalSpec | None = None,
         cost_b_spec: LognormalSpec | None = None,
@@ -413,10 +413,10 @@ class PowerFlowProblemGenerator:
 
         for _, _, edge_data in graph.edges(data=True):
             impedance = impedance_spec.sample(self._rng)
+            if scale_lines:
+                impedance *= edge_data["length"] / median_length
             react_frac = self._rng.uniform(*line_react_frac_range)
             resistance = impedance * math.sqrt(1 - react_frac ** 2)
             reactance = impedance * react_frac
-            if scale_lines:
-                resistance *= edge_data["length"] / median_length
             edge_data["admittance"] = 1 / complex(resistance, reactance)
             edge_data["capacity"] = capacity_spec.sample(self._rng)
