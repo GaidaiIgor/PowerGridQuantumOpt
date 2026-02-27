@@ -2,6 +2,7 @@ import time
 from concurrent.futures import TimeoutError as FutureTimeoutError, as_completed
 import os
 import pickle
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -42,9 +43,7 @@ def get_power_flow_ac_problem() -> PowerFlowProblem:
 
 def generate_dataset():
     problem_generator = PowerFlowProblemGenerator()
-    # problem_generator.generate_instances(5, num_instances=100, output_folder="data/5")
-    problem_generator.generate_instances(5, num_instances=100, output_folder="data/5", capacity_spec=LognormalSpec(100, 2),
-                                         check_basic_feasibility=True)
+    problem_generator.generate_instances(5, 100, output_folder="data/5")
 
 
 def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgram:
@@ -127,7 +126,7 @@ def run_parallel() -> None:
     solutions_path = data_folder / ".solutions.csv"
     instance_indices = list(range(12))
     absent_only = True
-    timeout_s = 300
+    timeout_s = 150
 
     solver = ClassicalSolver(silent=True)
     # solver = get_hybrid_solver(5)
@@ -148,10 +147,12 @@ def run_parallel() -> None:
         print("No instance indices selected for run_parallel.")
         return
 
+    progress_folder = data_folder / ".progress"
+    shutil.rmtree(progress_folder, ignore_errors=True)
+    progress_folder.mkdir()
+
     workers = min(max(1, (os.cpu_count() or 1) // 2), len(instance_indices))
     print(f"Using {workers} worker(s).")
-    progress_folder = data_folder / ".progress"
-    progress_folder.mkdir(exist_ok=True)
     rows = existing_df.to_dict(orient="index")
     timeout_count = 0
     error_count = 0
