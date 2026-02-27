@@ -43,8 +43,8 @@ def get_power_flow_ac_problem() -> PowerFlowProblem:
 def generate_dataset():
     problem_generator = PowerFlowProblemGenerator()
     # problem_generator.generate_instances(5, num_instances=100, output_folder="data/5")
-    problem_generator.generate_instances(5, num_instances=100, output_folder="data/5", generator_reactive_range=(0.8, 0.9), capacity_spec=LognormalSpec(100, 2),
-                                         voltage_range=(0, 100), check_basic_feasibility=True)
+    problem_generator.generate_instances(5, num_instances=100, output_folder="data/5", capacity_spec=LognormalSpec(100, 2),
+                                         check_basic_feasibility=True)
 
 
 def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgram:
@@ -127,7 +127,7 @@ def run_parallel() -> None:
     solutions_path = data_folder / ".solutions.csv"
     instance_indices = list(range(12))
     absent_only = True
-    timeout_s = 120
+    timeout_s = 300
 
     solver = ClassicalSolver(silent=True)
     # solver = get_hybrid_solver(5)
