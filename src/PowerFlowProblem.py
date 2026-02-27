@@ -1,5 +1,6 @@
 """Data structures and constraint/cost evaluation for AC power-flow optimization."""
 
+import math
 from contextlib import redirect_stdout
 from dataclasses import dataclass, field
 from io import StringIO
@@ -118,7 +119,25 @@ class PowerFlowProblem:
             reasons.append(f"Reactive generation upper bound ({total_gen_q_max:.6g}) is below total reactive load ({total_load_q:.6g}).")
         if min_gen_q_min > total_load_q:
             reasons.append(f"Reactive generation lower bound ({min_gen_q_min:.6g}) is above total reactive load ({total_load_q:.6g}).")
-
+        for node_label, node_data in graph.nodes(data=True):
+            p_load = node_data["load"].real
+            q_load = node_data["load"].imag
+            local_p_max = sum(gen.power_range[1] for gen in node_data["generators"])
+            local_q_min = sum(gen.reactive_power_range[0] for gen in node_data["generators"])
+            local_q_max = sum(gen.reactive_power_range[1] for gen in node_data["generators"])
+            required_import_p = max(0, p_load - local_p_max)
+            if q_load > local_q_max:
+                required_import_q = q_load - local_q_max
+            elif q_load < local_q_min:
+                required_import_q = local_q_min - q_load
+            else:
+                required_import_q = 0
+            required_import_apparent = math.sqrt(required_import_p ** 2 + required_import_q ** 2)
+            max_node_voltage = node_data["voltage_range"][1]
+            min_import_current = required_import_apparent / max_node_voltage
+            adjacent_capacity = sum(line_data["capacity"] for _, _, line_data in graph.edges(node_label, data=True))
+            if adjacent_capacity < min_import_current:
+                reasons.append(f"Adjacent edge capacity sum at node {node_label} is below required import current ")
         return " ".join(reasons) if len(reasons) > 0 else None
 
 
