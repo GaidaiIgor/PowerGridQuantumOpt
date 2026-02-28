@@ -159,7 +159,6 @@ class ClassicalSolver(PowerFlowSolver):
         :param variables: Grouped variable containers returned by model builder.
         :return: Extracted power-flow solution.
         """
-        assert model.getNSols() > 0, "Failed to find a feasible solution"
         best_solution = model.getBestSol()
         all_u = sum(variables["u"], [])
         generator_statuses = "".join([str(int(model.getSolVal(best_solution, var))) for var in all_u])
@@ -172,10 +171,21 @@ class ClassicalSolver(PowerFlowSolver):
         cost = model.getSolObjVal(best_solution)
         return PowerFlowSolution(generator_statuses, active_powers, reactive_powers, voltages, angles, cost)
 
-    def solve(self, problem: PowerFlowProblem, progress_path: Path | None = None) -> PowerFlowSolution:
+    @staticmethod
+    def _print_infeasibility_reason(model: Model) -> None:
+        """Prints infeasibility diagnostics using SCIP IIS information.
+        :param model: Solved SCIP model in infeasible status.
+        """
+        iis = model.generateIIS()
+        iis_subscip = iis.getSubscip()
+        print(f"SCIP infeasibility reason (IIS constraints): {[constraint.name for constraint in iis_subscip.getConss()]}")
+        print(f"SCIP infeasibility reason (IIS variables): {[variable.name for variable in iis_subscip.getVars()]}")
+
+    def solve(self, problem: PowerFlowProblem, progress_path: Path | None = None, debug: bool = False) -> PowerFlowSolution:
         """Solves given problem and returns its solution.
         :param problem: Power-flow optimization problem to solve.
         :param progress_path: Optional path for persisting incumbent progress snapshots.
+        :param debug: Whether to print infeasibility diagnostics when no feasible solution exists.
         :return: Final solution with bound-history metadata.
         """
         t1 = time.perf_counter()
@@ -184,12 +194,19 @@ class ClassicalSolver(PowerFlowSolver):
             history_handler = HistoryEventHandler(variables, progress_path, t1)
             model.includeEventhdlr(history_handler, "incumbent_history", "Records incumbent primal/dual bound history.")
         model.optimize()
+
+        status = str(model.getStatus())
+        if status == "infeasible":
+            if debug:
+                ClassicalSolver._print_infeasibility_reason(model)
+            raise AssertionError("Infeasible instance")
+                
         solution = ClassicalSolver.extract_solution(model, variables)
         if progress_path is not None:
             assert np.isclose(history_handler.history[-1]["objective"], solution.cost), \
                 f"Latest recorded incumbent cost {history_handler.history[-1]['objective']} does not match final cost {solution.cost}."
             solution.history = history_handler.history
-        solution.extra["solve_status"] = str(model.getStatus())
+        solution.extra["solve_status"] = status
         return solution
 
 
