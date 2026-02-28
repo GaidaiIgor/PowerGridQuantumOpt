@@ -1,5 +1,6 @@
 import time
 from concurrent.futures import TimeoutError as FutureTimeoutError, as_completed
+import json
 import os
 import pickle
 import shutil
@@ -46,6 +47,57 @@ def generate_dataset():
     problem_generator.generate_instances(5, 100, output_folder="data/5")
 
 
+def save_instance_human_readable():
+    """Reads one serialized instance and saves it as a readable JSON file."""
+    def encode_complex(value: complex) -> dict[str, float]:
+        """Encodes complex value into JSON-serializable mapping.
+        :param value: Complex value to encode.
+        :return: Mapping with real and imaginary parts.
+        """
+        return {"real": value.real, "imag": value.imag}
+
+    source_path = Path("data/5/1.pkl")
+    destination_path = source_path.with_suffix(".json")
+    with source_path.open("rb") as file:
+        graph = pickle.load(file)
+    problem = PowerFlowProblem(graph)
+
+    nodes = [
+        {
+            "label": node_label,
+            "load": encode_complex(node_data["load"]),
+            "voltage_range": list(node_data["voltage_range"]),
+            "angle_range": list(node_data["angle_range"]),
+            "generators": [
+                {
+                    "power_range": list(generator.power_range),
+                    "reactive_power_range": list(generator.reactive_power_range),
+                    "cost_terms": list(generator.cost_terms),
+                }
+                for generator in node_data["generators"]
+            ],
+        }
+        for node_label, node_data in sorted(problem.graph.nodes(data=True))
+    ]
+    edges = [
+        {
+            "u": u,
+            "v": v,
+            "capacity": edge_data["capacity"],
+            "admittance": encode_complex(edge_data["admittance"]),
+        }
+        for u, v, edge_data in sorted(problem.graph.edges(data=True))
+    ]
+    payload = {
+        "num_nodes": problem.graph.number_of_nodes(),
+        "num_edges": problem.graph.number_of_edges(),
+        "num_generators": len(problem.generators),
+        "nodes": nodes,
+        "edges": edges,
+    }
+    destination_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
 def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgram:
     entangler = AllToAllEntangler(num_qubits)
     mixer = ZXMixer(num_qubits)
@@ -69,7 +121,7 @@ def get_hybrid_solver(num_generators: int) -> HybridSolver:
 
 def run_single():
     # problem = get_power_flow_ac_problem()
-    index = 3
+    index = 1
     data_path = Path(f"data/5")
     with (data_path / f"{index}.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file))
@@ -79,7 +131,7 @@ def run_single():
     progress_folder = data_path / ".progress"
     progress_folder.mkdir(exist_ok=True)
     progress_path = progress_folder / f"{index}.pkl"
-    solution = solver.solve(problem, progress_path=progress_path)
+    solution = solver.solve(problem, progress_path=progress_path, debug=True)
     print("\nSolution:")
     print(solution)
 
@@ -126,7 +178,7 @@ def run_parallel() -> None:
     solutions_path = data_folder / ".solutions.csv"
     instance_indices = list(range(12))
     absent_only = True
-    timeout_s = 150
+    timeout_s = 300
 
     solver = ClassicalSolver(silent=True)
     # solver = get_hybrid_solver(5)
@@ -188,8 +240,9 @@ if __name__ == "__main__":
     t1 = time.perf_counter()
 
     # generate_dataset()
+    save_instance_human_readable()
     # run_single()
-    run_parallel()
+    # run_parallel()
 
     t2 = time.perf_counter()
     print(f"Elapsed time {t2 - t1} seconds")
