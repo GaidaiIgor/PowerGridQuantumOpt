@@ -29,11 +29,9 @@ def save_instance_human_readable(instance_path: str | Path, output_path: str | P
     nodes = [
         {
             "label": node_label,
-            "node_ind": node_data["node_ind"],
             "load": encode_complex(node_data["load"]),
             "voltage_range": list(node_data["voltage_range"]),
             "angle_range": list(node_data["angle_range"]),
-            "gen_inds": list(node_data["gen_inds"]),
             "generators": [
                 {
                     "power_range": list(generator.power_range),
@@ -49,7 +47,6 @@ def save_instance_human_readable(instance_path: str | Path, output_path: str | P
         {
             "u": u,
             "v": v,
-            "length": edge_data["length"],
             "capacity": edge_data["capacity"],
             "admittance": encode_complex(edge_data["admittance"]),
         }
