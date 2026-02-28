@@ -105,7 +105,7 @@ class PowerFlowProblemGenerator:
         load_s_spec: LognormalSpec | None = None,
         load_react_frac_range: tuple[float, float] = (0, 0.1),
         # generator parameters
-        generator_density: float = 2,
+        generator_density: float = 1,
         generator_s_range_ref_spec: LognormalSpec | None = None,
         generator_s_range_len_spec: LognormalSpec | None = None,
         generator_react_frac_range: tuple[float, float] = (0, 0.1),
@@ -121,7 +121,7 @@ class PowerFlowProblemGenerator:
         # miscellaneous parameters
         output_folder: str | Path = "data",
         check_likely_feasible: bool = True,
-        feasibility_slack: float = 1,
+        strictness_factor: float = 1,
     ) -> list[Path]:
         """Generates and persists random power-flow graph instances.
         :param num_generators: Total number of generators to place across all nodes.
@@ -147,7 +147,7 @@ class PowerFlowProblemGenerator:
         :param capacity_spec: Distribution spec for line current capacities.
         :param output_folder: Destination directory for serialized graph files.
         :param check_likely_feasible: Whether to reject generated instances that fail the fast aggregate likely feasibility check.
-        :param feasibility_slack: Slack factor for feasibility check. With slack=1 only definitely infeasible instances are rejected (false positive rate = 0).
+        :param strictness_factor: Strictness factor for feasibility check. With strictness_factor=1 only definitely infeasible instances are rejected.
         Higher values further decrease probability of infeasible instances at the cost of higher false positive rate.
         :return: Paths to serialized generated graph files.
         """
@@ -161,7 +161,7 @@ class PowerFlowProblemGenerator:
         validate_bounds("degree_bias", degree_bias, min_value=0, max_value=1, include_min=True, include_max=True)
 
         load_s_spec = load_s_spec or LognormalSpec(1, 10)
-        generator_s_range_ref_spec = generator_s_range_ref_spec or LognormalSpec(load_s_spec.mean, load_s_spec.spread_factor)
+        generator_s_range_ref_spec = generator_s_range_ref_spec or LognormalSpec(load_s_spec.mean * 2, load_s_spec.spread_factor)
         generator_s_range_len_spec = generator_s_range_len_spec or LognormalSpec(0.5, 1.2)
         num_nodes = max(1, int(math.ceil(num_generators / generator_density)))
         output_path = Path(output_folder)
@@ -172,21 +172,21 @@ class PowerFlowProblemGenerator:
         capacity_distribution = capacity_spec or LognormalSpec(2 * load_s_spec.mean / average_node_degree, 2)
 
         generated_paths = []
-        skipped_infeasible = 0
+        rejected_infeasible = 0
         while len(generated_paths) < num_instances:
             graph = self._generate_graph(num_nodes, average_node_degree)
             self._annotate_nodes(graph, num_generators, degree_bias, load_s_spec, load_react_frac_range, generator_s_range_ref_spec, generator_s_range_len_spec,
                                  generator_react_frac_range, cost_specs, voltage_range, angle_range, symmetric_q_range)
             self._annotate_edges(graph, capacity_distribution, impedance_distribution, line_react_frac_range, scale_lines)
-            if check_likely_feasible and self.check_likely_infeasible(graph, feasibility_slack):
-                skipped_infeasible += 1
+            if check_likely_feasible and self.check_likely_infeasible(graph, strictness_factor):
+                rejected_infeasible += 1
                 continue
             index = len(generated_paths)
             file_path = output_path / f"{index}.pkl"
             with file_path.open("wb") as file:
                 pickle.dump(graph, file)
             generated_paths.append(file_path)
-        print(f"Generation complete. {skipped_infeasible} infeasible instances skipped.")
+        print(f"Generation complete. {rejected_infeasible} infeasible instances rejected.")
         return generated_paths
 
     @staticmethod
@@ -426,13 +426,13 @@ class PowerFlowProblemGenerator:
             edge_data["capacity"] = capacity_spec.sample(self._rng)
 
     @staticmethod
-    def check_likely_infeasible(graph: Graph, slack: float = 1) -> bool:
+    def check_likely_infeasible(graph: Graph, strictness_factor: float = 1) -> bool:
         """Returns whether fast necessary-condition pre-checks detect likely infeasibility.
         :param graph: Graph whose node and generator bounds are inspected.
-        :param slack: Multiplicative slack factor applied to feasibility right-hand sides.
+        :param strictness_factor: Multiplicative strictness factor applied to feasibility right-hand sides.
         :return: ``True`` when any pre-check detects likely infeasibility, otherwise ``False``.
         """
-        assert slack > 0, f"slack must be positive, got {slack}."
+        assert strictness_factor > 0, f"strictness_factor must be positive, got {strictness_factor}."
         total_load_p = sum(node_data["load"].real for _, node_data in graph.nodes(data=True))
         total_load_q = sum(node_data["load"].imag for _, node_data in graph.nodes(data=True))
         generators = [gen for _, node_data in graph.nodes(data=True) for gen in node_data["generators"]]
@@ -441,8 +441,8 @@ class PowerFlowProblemGenerator:
         min_gen_q_min = min(gen.reactive_power_range[0] for gen in generators)
         total_gen_q_max = sum(gen.reactive_power_range[1] for gen in generators)
 
-        if (total_gen_p_max < total_load_p * slack or min_gen_p_min > total_load_p / slack or total_gen_q_max < total_load_q * slack or
-            min_gen_q_min > total_load_q / slack):
+        if (total_gen_p_max < total_load_p * strictness_factor or min_gen_p_min > total_load_p / strictness_factor or
+            total_gen_q_max < total_load_q * strictness_factor or min_gen_q_min > total_load_q / strictness_factor):
             return True
         for node_label, node_data in graph.nodes(data=True):
             p_load = node_data["load"].real
@@ -456,6 +456,6 @@ class PowerFlowProblemGenerator:
             max_node_voltage = node_data["voltage_range"][1]
             min_import_current = required_import_apparent / max_node_voltage
             adjacent_capacity = sum(line_data["capacity"] for _, _, line_data in graph.edges(node_label, data=True))
-            if adjacent_capacity < min_import_current * slack:
+            if adjacent_capacity < min_import_current * strictness_factor:
                 return True
         return False

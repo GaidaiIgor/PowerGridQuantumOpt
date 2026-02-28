@@ -70,3 +70,22 @@ def set_all_edge_capacities(problem: PowerFlowProblem, capacity: float) -> None:
     """
     for _, _, edge_data in problem.graph.edges(data=True):
         edge_data["capacity"] = capacity
+
+
+def set_all_node_voltage_ranges(problem: PowerFlowProblem, voltage_range: tuple[float, float]) -> None:
+    """Sets voltage ranges for all nodes in a power-flow problem to the same range.
+    :param problem: Power-flow problem whose node voltage ranges are modified in place.
+    :param voltage_range: Voltage range assigned to each node.
+    """
+    for _, node_data in problem.graph.nodes(data=True):
+        node_data["voltage_range"] = voltage_range
+
+
+def set_all_generator_p_min(problem: PowerFlowProblem, p_min: float) -> None:
+    """Sets active-power lower bound for all generators in a power-flow problem.
+    :param problem: Power-flow problem whose generator active-power ranges are modified in place.
+    :param p_min: Lower bound assigned to active-power range of each generator.
+    """
+    for _, node_data in problem.graph.nodes(data=True):
+        for generator in node_data["generators"]:
+            generator.power_range = (p_min, generator.power_range[1])
