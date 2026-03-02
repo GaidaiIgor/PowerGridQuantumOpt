@@ -2,6 +2,7 @@ import os
 import pickle
 import shutil
 import time
+from functools import partial
 from concurrent.futures import TimeoutError as FutureTimeoutError, as_completed
 from pathlib import Path
 
@@ -63,7 +64,7 @@ def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgra
 def get_hybrid_solver(num_generators: int) -> HybridSolver:
     vqp = get_variational_quantum_program(num_generators)
     penalty_mult = 10
-    inner_optimizer_factory = lambda problem: ContinuousPowerOptimizer(problem, penalty_mult)
+    inner_optimizer_factory = partial(ContinuousPowerOptimizer, penalty_mult = penalty_mult)
     seed = 0
     return HybridSolver(vqp, inner_optimizer_factory, seed)
 
@@ -75,12 +76,13 @@ def run_single():
     with (data_path / f"{index}.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file))
 
-    debug.set_all_edge_capacities(problem, 100)
+    # debug.set_all_edge_capacities(problem, 100)
     # debug.set_all_node_voltage_ranges(problem, (0.5, 1.5))
     # debug.set_all_generator_p_min(problem, 0)
 
-    solver = ClassicalSolver()
-    # solver = get_hybrid_solver(len(problem.generators))
+    # solver = ClassicalSolver()
+    solver = get_hybrid_solver(len(problem.generators))
+
     progress_folder = data_path / ".progress"
     progress_folder.mkdir(exist_ok=True)
     progress_path = progress_folder / f"{index}.pkl"
@@ -202,3 +204,4 @@ if __name__ == "__main__":
 
     t2 = time.perf_counter()
     print(f"Elapsed time {t2 - t1} seconds")
+
