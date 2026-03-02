@@ -114,7 +114,7 @@ def run_instance(folder: Path, index: int, solver: PowerFlowSolver) -> tuple[int
     solution = solver.solve(problem, progress_path=progress_path)
     continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
     penalty = float(solution.extra["opt_result"].penalty) if isinstance(solver, HybridSolver) else 0
-    num_jobs = solution.extra["num_jobs"] if isinstance(solver, HybridSolver) else np.nan
+    num_jobs = solution.history[-1]["num_jobs"] if isinstance(solver, HybridSolver) and len(solution.history) > 0 else np.nan
     return index, solution.generator_statuses, continuous_params, solution.cost, penalty, num_jobs, solution.history
 
 

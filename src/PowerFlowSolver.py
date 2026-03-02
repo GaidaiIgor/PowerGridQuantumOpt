@@ -250,5 +250,4 @@ class HybridSolver(PowerFlowSolver):
         exact_sampler = ExactSampler()
         solution.extra["final_probs"] = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
         solution.extra["cost_expectation"] = utils.get_cost_expectation(inner_optimizer.get_optimal_penalized_cost, solution.extra["final_probs"])
-        solution.extra["num_jobs"] = self.vqp.num_jobs
         return solution
