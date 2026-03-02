@@ -120,7 +120,7 @@ class PowerFlowProblemGenerator:
         capacity_spec: LognormalSpec | None = None,
         # miscellaneous parameters
         output_folder: str | Path = "data",
-        check_likely_feasible: bool = True,
+        regenerate_bad: bool = True,
         strictness_factor: float = 1,
     ) -> list[Path]:
         """Generates and persists random power-flow graph instances.
@@ -146,9 +146,8 @@ class PowerFlowProblemGenerator:
         :param scale_lines: Whether to multiply sampled line resistance/reactance by ``line_length / median_length``.
         :param capacity_spec: Distribution spec for line current capacities.
         :param output_folder: Destination directory for serialized graph files.
-        :param check_likely_feasible: Whether to reject generated instances that fail the fast aggregate likely feasibility check.
-        :param strictness_factor: Strictness factor for feasibility check. With strictness_factor=1 only definitely infeasible instances are rejected.
-        Higher values further decrease probability of infeasible instances at the cost of higher false positive rate.
+        :param regenerate_bad: Whether to reject generated instances that fail the fast aggregate likely feasibility check.
+        :param strictness_factor: Multiplicative factor for badness checks. Higher values make badness checks stricter (higher rejection, better instances).
         :return: Paths to serialized generated graph files.
         """
         assert num_generators > 0, f"num_generators must be positive, got {num_generators}."
@@ -178,7 +177,7 @@ class PowerFlowProblemGenerator:
             self._annotate_nodes(graph, num_generators, degree_bias, load_s_spec, load_react_frac_range, generator_s_range_ref_spec, generator_s_range_len_spec,
                                  generator_react_frac_range, cost_specs, voltage_range, angle_range, symmetric_q_range)
             self._annotate_edges(graph, capacity_distribution, impedance_distribution, line_react_frac_range, scale_lines)
-            if check_likely_feasible and self.check_likely_infeasible(graph, strictness_factor):
+            if regenerate_bad and self.is_bad_instance(graph, strictness_factor):
                 rejected_infeasible += 1
                 continue
             index = len(generated_paths)
@@ -186,7 +185,8 @@ class PowerFlowProblemGenerator:
             with file_path.open("wb") as file:
                 pickle.dump(graph, file)
             generated_paths.append(file_path)
-        print(f"Generation complete. {rejected_infeasible} infeasible instances rejected.")
+        rejected_percent = 100 * rejected_infeasible / (rejected_infeasible + len(generated_paths))
+        print(f"Generation complete. {rejected_infeasible} infeasible instances rejected ({rejected_percent:.2f}%).")
         return generated_paths
 
     @staticmethod
@@ -426,23 +426,27 @@ class PowerFlowProblemGenerator:
             edge_data["capacity"] = capacity_spec.sample(self._rng)
 
     @staticmethod
-    def check_likely_infeasible(graph: Graph, strictness_factor: float = 1) -> bool:
-        """Returns whether fast necessary-condition pre-checks detect likely infeasibility.
-        :param graph: Graph whose node and generator bounds are inspected.
-        :param strictness_factor: Multiplicative strictness factor applied to feasibility right-hand sides.
-        :return: ``True`` when any pre-check detects likely infeasibility, otherwise ``False``.
+    def is_bad_instance(graph: Graph, strictness_factor: float = 1) -> bool:
+        """Evaluates generated instance and returns true if the instance is "bad", i.e. likely infeasible or at least 1 generator cannot be turned on.
+        :param graph: Problem graph.
+        :param strictness_factor: Higher -> stricter checks, higher rejection, but also better instances.
+        :return: ``True`` when instance is deemed bad, otherwise ``False``.
         """
         assert strictness_factor > 0, f"strictness_factor must be positive, got {strictness_factor}."
         total_load_p = sum(node_data["load"].real for _, node_data in graph.nodes(data=True))
-        total_load_q = sum(node_data["load"].imag for _, node_data in graph.nodes(data=True))
+        total_positive_load_q = sum(max(0, node_data["load"].imag) for _, node_data in graph.nodes(data=True))
+        total_negative_load_q = sum(max(0, -node_data["load"].imag) for _, node_data in graph.nodes(data=True))
         generators = [gen for _, node_data in graph.nodes(data=True) for gen in node_data["generators"]]
-        min_gen_p_min = min(gen.power_range[0] for gen in generators)
         total_gen_p_max = sum(gen.power_range[1] for gen in generators)
-        min_gen_q_min = min(gen.reactive_power_range[0] for gen in generators)
-        total_gen_q_max = sum(gen.reactive_power_range[1] for gen in generators)
+        total_positive_gen_q = sum(max(0, gen.reactive_power_range[1]) for gen in generators)
+        total_negative_gen_q = sum(max(0, -gen.reactive_power_range[0]) for gen in generators)
+        max_gen_p_min = max(gen.power_range[0] for gen in generators)
+        max_gen_positive_q_min = max(max(0, gen.reactive_power_range[0]) for gen in generators)
+        max_gen_negative_q_max = max(max(0, -gen.reactive_power_range[1]) for gen in generators)
 
-        if (total_gen_p_max < total_load_p * strictness_factor or min_gen_p_min > total_load_p / strictness_factor or
-            total_gen_q_max < total_load_q * strictness_factor or min_gen_q_min > total_load_q / strictness_factor):
+        if (total_gen_p_max < total_load_p * strictness_factor or total_positive_gen_q < total_positive_load_q * strictness_factor or
+            total_negative_gen_q < total_negative_load_q * strictness_factor or max_gen_p_min > total_load_p / strictness_factor or
+            max_gen_positive_q_min > total_positive_load_q / strictness_factor or max_gen_negative_q_max > total_negative_load_q / strictness_factor):
             return True
         for node_label, node_data in graph.nodes(data=True):
             p_load = node_data["load"].real
