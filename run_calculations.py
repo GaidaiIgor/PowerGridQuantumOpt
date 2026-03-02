@@ -72,7 +72,7 @@ def get_hybrid_solver(num_generators: int) -> HybridSolver:
 
 def run_single():
     # problem = get_power_flow_ac_problem()
-    index = 5
+    index = 1
     data_path = Path(f"data/5")
     with (data_path / f"{index}.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file))
@@ -127,9 +127,10 @@ def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float]
         return None, None, np.nan, np.nan, np.nan, None
     with progress_path.open("rb") as file:
         payload = pickle.load(file)
+    incumbent = payload["incumbent"]
     last_entry = payload["history"][-1]
-    return (payload["incumbent"]["generator_assignments"], payload["incumbent"]["continuous_parameters"],
-            last_entry["objective"], last_entry.get("penalty", np.nan), last_entry.get("num_jobs", np.nan), payload["history"])
+    return (incumbent["generator_assignments"], incumbent["continuous_parameters"], last_entry["objective"],
+            last_entry.get("penalty", np.nan), last_entry.get("num_jobs", np.nan), payload["history"])
 
 
 def run_parallel() -> None:
