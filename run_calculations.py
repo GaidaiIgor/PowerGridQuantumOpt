@@ -44,7 +44,7 @@ def get_power_flow_ac_problem() -> PowerFlowProblem:
 
 def generate_dataset():
     problem_generator = PowerFlowProblemGenerator()
-    problem_generator.generate_instances(5, 100, output_folder="data/5", strictness_factor=1.3)
+    problem_generator.generate_instances(5, 100, output_folder="data/5", strictness_factor=1.2)
 
 
 def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgram:
@@ -70,14 +70,14 @@ def get_hybrid_solver(num_generators: int) -> HybridSolver:
 
 def run_single():
     # problem = get_power_flow_ac_problem()
-    index = 3
+    index = 5
     data_path = Path(f"data/5")
     with (data_path / f"{index}.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file))
 
     debug.set_all_edge_capacities(problem, 100)
     # debug.set_all_node_voltage_ranges(problem, (0.5, 1.5))
-    debug.set_all_generator_p_min(problem, 0)
+    # debug.set_all_generator_p_min(problem, 0)
 
     solver = ClassicalSolver()
     # solver = get_hybrid_solver(len(problem.generators))
@@ -195,8 +195,8 @@ if __name__ == "__main__":
     # debug.save_instance_human_readable("data/5/5.pkl")
 
     # generate_dataset()
-    run_single()
-    # run_parallel()
+    # run_single()
+    run_parallel()
 
     t2 = time.perf_counter()
     print(f"Elapsed time {t2 - t1} seconds")
