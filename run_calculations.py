@@ -100,31 +100,35 @@ def run_single():
         print(f"Penalty: {solution.extra["opt_result"].penalty}")
 
 
-def run_instance(folder: Path, index: int, solver: PowerFlowSolver) -> tuple[int, str, list[float], float, list[dict[str, float | int]]]:
+def run_instance(folder: Path, index: int, solver: PowerFlowSolver) -> tuple[int, str, list[float], float, float, list[dict[str, float | int]]]:
     """Solves one instance and returns a serialized result row.
     :param folder: Path to the dataset folder.
     :param index: Instance index to solve.
     :param solver: Solver used for the instance.
-    :return: Tuple ``(index, generator_assignments, continuous_parameters, cost, history)``.
+    :return: Tuple ``(index, generator_assignments, continuous_parameters, cost, penalty, history)``.
     """
     with (folder / f"{index}.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file))
     progress_path = folder / ".progress" / f"{index}.pkl"
     solution = solver.solve(problem, progress_path=progress_path)
     continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
-    return index, solution.generator_statuses, continuous_params, solution.cost, solution.history
+    penalty = float(solution.extra["opt_result"].penalty) if isinstance(solver, HybridSolver) else 0
+    return index, solution.generator_statuses, continuous_params, solution.cost, penalty, solution.history
 
 
-def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float] | None, float, list[dict[str, float | int]] | None]:
+def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float] | None, float, float, list[dict[str, float | int]] | None]:
     """Loads persisted worker progress for one instance.
     :param progress_path: Path to pickle snapshot written by a worker process.
-    :return: Tuple ``(generator_assignments, continuous_parameters, cost, history)`` recovered from the snapshot.
+    :return: Tuple ``(generator_assignments, continuous_parameters, cost, penalty, history)`` recovered from the snapshot.
     """
     if not progress_path.exists():
-        return None, None, np.nan, None
+        return None, None, np.nan, np.nan, None
     with progress_path.open("rb") as file:
         payload = pickle.load(file)
-    return payload["incumbent"]["generator_assignments"], payload["incumbent"]["continuous_parameters"], payload["history"][-1]["objective"], payload["history"]
+    history = payload["history"]
+    last_entry = history[-1]
+    return (payload["incumbent"]["generator_assignments"], payload["incumbent"]["continuous_parameters"],
+            last_entry["objective"], last_entry.get("penalty", np.nan), history)
 
 
 def run_parallel() -> None:
@@ -140,7 +144,7 @@ def run_parallel() -> None:
 
     solver_name = type(solver).__name__.removesuffix("Solver").lower()
     solutions_path = data_folder / f".solutions_{solver_name}.csv"
-    columns = ["generator_assignments", "continuous_parameters", "cost", "history", "error"]
+    columns = ["generator_assignments", "continuous_parameters", "cost", "penalty", "history", "error"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"generator_assignments": "string"})
         existing_df = existing_df.reindex(columns=columns)
@@ -171,10 +175,10 @@ def run_parallel() -> None:
             index = future_to_metadata[future]
             progress_path = progress_folder / f"{index}.pkl"
             try:
-                _, generator_assignments, continuous_params, cost, history = future.result()
+                _, generator_assignments, continuous_params, cost, penalty, history = future.result()
                 error = None
             except Exception as ex:
-                generator_assignments, continuous_params, cost, history = load_progress_snapshot(progress_path)
+                generator_assignments, continuous_params, cost, penalty, history = load_progress_snapshot(progress_path)
                 if isinstance(ex, FutureTimeoutError):
                     timeout_count += 1
                     error = f"Timeout after {timeout_s}s"
@@ -185,6 +189,7 @@ def run_parallel() -> None:
                 "generator_assignments": generator_assignments,
                 "continuous_parameters": continuous_params,
                 "cost": cost,
+                "penalty": penalty,
                 "history": history,
                 "error": error,
             }
