@@ -1,4 +1,4 @@
-"""Classical and hybrid solvers for ``PowerFlowProblem`` instances."""
+﻿"""Classical and hybrid solvers for ``PowerFlowProblem`` instances."""
 
 import os
 import pickle
@@ -219,7 +219,7 @@ class HybridSolver(PowerFlowSolver):
             objective = inner_optimizer.get_optimized_cost(generator_statuses)
             if objective < best_objective:
                 best_objective = objective
-                history.append({"time": self.vqp.get_current_classical_time(), "objective": objective, "num_jobs": self.vqp.num_jobs})
+                history.append({"time": self.vqp.get_current_classical_time(), "objective": float(objective), "num_jobs": self.vqp.num_jobs})
                 optimized_params = inner_optimizer.cache[generator_statuses].x
                 if progress_path is not None:
                     save_progress_snapshot(progress_path, history, generator_statuses, optimized_params.tolist())
@@ -244,3 +244,4 @@ class HybridSolver(PowerFlowSolver):
         solution.extra["cost_expectation"] = utils.get_cost_expectation(inner_optimizer.get_optimized_cost, solution.extra["final_probs"])
         solution.extra["num_jobs"] = result.nfev
         return solution
+
