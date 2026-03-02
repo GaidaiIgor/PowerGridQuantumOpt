@@ -127,15 +127,17 @@ def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float]
 
 def run_parallel() -> None:
     """Runs selected instances in parallel and persists each completed result to CSV."""
-    data_folder = Path("data/5")
-    solutions_path = data_folder / ".solutions.csv"
+    num_generators = 5
+    data_folder = Path(f"data/{num_generators}")
     instance_indices = list(range(12))
     absent_only = True
     timeout_s = 300
 
-    solver = ClassicalSolver(silent=True)
-    # solver = get_hybrid_solver(5)
+    # solver = ClassicalSolver(silent=True)
+    solver = get_hybrid_solver(num_generators)
 
+    solver_name = type(solver).__name__.removesuffix("Solver").lower()
+    solutions_path = data_folder / f".solutions_{solver_name}.csv"
     columns = ["generator_assignments", "continuous_parameters", "cost", "history", "error"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"generator_assignments": "string"})
