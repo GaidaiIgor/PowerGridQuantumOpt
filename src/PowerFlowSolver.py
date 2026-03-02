@@ -203,10 +203,12 @@ class HybridSolver(PowerFlowSolver):
     :var vqp: Variational quantum program used for binary-variable search.
     :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
     :var seed: Optional random seed for initial quantum-parameter sampling.
+    :var tolerance: Feasibility tolerance; history stores only entries with penalty below this threshold.
     """
     vqp: VariationalQuantumProgram
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
     seed: int = None
+    tolerance: float = 1e-5
 
     def solve(self, problem: PowerFlowProblem, progress_path: Path | None = None) -> PowerFlowSolution:
         """Optimizes quantum parameters and return the best cached continuous solution.
@@ -217,9 +219,9 @@ class HybridSolver(PowerFlowSolver):
         def get_assignment_cost_tracked(generator_statuses: str) -> float:
             nonlocal best_objective
             objective = inner_optimizer.get_optimal_penalized_cost(generator_statuses)
-            if objective < best_objective:
+            optimized_result = inner_optimizer.cache[generator_statuses]
+            if objective < best_objective and optimized_result.penalty < self.tolerance:
                 best_objective = objective
-                optimized_result = inner_optimizer.cache[generator_statuses]
                 history.append({
                     "time": self.vqp.get_current_classical_time(),
                     "objective": float(optimized_result.fun),
