@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from networkx import Graph
 from pebble import ProcessPool
+from qiskit.primitives import StatevectorSampler
 from tqdm import tqdm
 
 import debug
@@ -19,7 +20,7 @@ from src.ContinuousPowerOptimizer import ContinuousPowerOptimizer
 from src.Generator import Generator
 from src.PowerFlowProblem import PowerFlowProblem
 from src.PowerFlowSolver import ClassicalSolver, HybridSolver, PowerFlowSolver
-from src.Sampler import ExactSampler
+from src.Sampler import ExactSampler, MySamplerV2
 from src.VariationalQuantumProgram import VariationalQuantumProgram
 from src.utils import my_format
 
@@ -53,8 +54,8 @@ def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgra
     mixer = ZXMixer(num_qubits)
     num_layers = 1
 
-    sampler = ExactSampler()
-    # sampler = MySamplerV2(StatevectorSampler(default_shots=1000))
+    # sampler = ExactSampler()
+    sampler = MySamplerV2(StatevectorSampler(default_shots=1000))
     # sampler = IonQSampler("simulator", 1000, None)
     # sampler = IonQSampler("qpu.forte-enterprise-1", 1000, None)
 
@@ -100,12 +101,12 @@ def run_single():
         print(f"Penalty: {solution.extra["opt_result"].penalty}")
 
 
-def run_instance(folder: Path, index: int, solver: PowerFlowSolver) -> tuple[int, str, list[float], float, float, list[dict[str, float | int]]]:
+def run_instance(folder: Path, index: int, solver: PowerFlowSolver) -> tuple[int, str, list[float], float, float, float | int, list[dict[str, float | int]]]:
     """Solves one instance and returns a serialized result row.
     :param folder: Path to the dataset folder.
     :param index: Instance index to solve.
     :param solver: Solver used for the instance.
-    :return: Tuple ``(index, generator_assignments, continuous_parameters, cost, penalty, history)``.
+    :return: Tuple ``(index, generator_assignments, continuous_parameters, cost, penalty, num_jobs, history)``.
     """
     with (folder / f"{index}.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file))
@@ -113,22 +114,22 @@ def run_instance(folder: Path, index: int, solver: PowerFlowSolver) -> tuple[int
     solution = solver.solve(problem, progress_path=progress_path)
     continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
     penalty = float(solution.extra["opt_result"].penalty) if isinstance(solver, HybridSolver) else 0
-    return index, solution.generator_statuses, continuous_params, solution.cost, penalty, solution.history
+    num_jobs = solution.extra["num_jobs"] if isinstance(solver, HybridSolver) else np.nan
+    return index, solution.generator_statuses, continuous_params, solution.cost, penalty, num_jobs, solution.history
 
 
-def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float] | None, float, float, list[dict[str, float | int]] | None]:
+def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float] | None, float, float, float | int, list[dict[str, float | int]] | None]:
     """Loads persisted worker progress for one instance.
     :param progress_path: Path to pickle snapshot written by a worker process.
-    :return: Tuple ``(generator_assignments, continuous_parameters, cost, penalty, history)`` recovered from the snapshot.
+    :return: Tuple ``(generator_assignments, continuous_parameters, cost, penalty, num_jobs, history)`` recovered from the snapshot.
     """
     if not progress_path.exists():
-        return None, None, np.nan, np.nan, None
+        return None, None, np.nan, np.nan, np.nan, None
     with progress_path.open("rb") as file:
         payload = pickle.load(file)
-    history = payload["history"]
-    last_entry = history[-1]
+    last_entry = payload["history"][-1]
     return (payload["incumbent"]["generator_assignments"], payload["incumbent"]["continuous_parameters"],
-            last_entry["objective"], last_entry.get("penalty", np.nan), history)
+            last_entry["objective"], last_entry.get("penalty", np.nan), last_entry.get("num_jobs", np.nan), payload["history"])
 
 
 def run_parallel() -> None:
@@ -144,7 +145,7 @@ def run_parallel() -> None:
 
     solver_name = type(solver).__name__.removesuffix("Solver").lower()
     solutions_path = data_folder / f".solutions_{solver_name}.csv"
-    columns = ["generator_assignments", "continuous_parameters", "cost", "penalty", "history", "error"]
+    columns = ["generator_assignments", "continuous_parameters", "cost", "penalty", "num_jobs", "history", "error"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"generator_assignments": "string"})
         existing_df = existing_df.reindex(columns=columns)
@@ -175,10 +176,10 @@ def run_parallel() -> None:
             index = future_to_metadata[future]
             progress_path = progress_folder / f"{index}.pkl"
             try:
-                _, generator_assignments, continuous_params, cost, penalty, history = future.result()
+                _, generator_assignments, continuous_params, cost, penalty, num_jobs, history = future.result()
                 error = None
             except Exception as ex:
-                generator_assignments, continuous_params, cost, penalty, history = load_progress_snapshot(progress_path)
+                generator_assignments, continuous_params, cost, penalty, num_jobs, history = load_progress_snapshot(progress_path)
                 if isinstance(ex, FutureTimeoutError):
                     timeout_count += 1
                     error = f"Timeout after {timeout_s}s"
@@ -190,6 +191,7 @@ def run_parallel() -> None:
                 "continuous_parameters": continuous_params,
                 "cost": cost,
                 "penalty": penalty,
+                "num_jobs": num_jobs,
                 "history": history,
                 "error": error,
             }
