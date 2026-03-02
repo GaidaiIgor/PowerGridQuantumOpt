@@ -146,7 +146,7 @@ def run_parallel() -> None:
 
     solver_name = type(solver).__name__.removesuffix("Solver").lower()
     solutions_path = data_folder / f".solutions_{solver_name}.csv"
-    columns = ["generator_assignments", "continuous_parameters", "cost", "penalty", "num_jobs", "history", "error"]
+    columns = ["instance", "generator_assignments", "continuous_parameters", "cost", "penalty", "num_jobs", "history", "error"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"generator_assignments": "string"})
         existing_df = existing_df.reindex(columns=columns)
@@ -155,7 +155,7 @@ def run_parallel() -> None:
 
     if absent_only:
         filled_mask = existing_df["generator_assignments"].notna()
-        filled_index_set = set(existing_df.index[filled_mask].tolist())
+        filled_index_set = set(existing_df.loc[filled_mask, "instance"].astype(int).tolist())
         instance_indices = [index for index in instance_indices if index not in filled_index_set]
 
     if len(instance_indices) == 0:
@@ -168,7 +168,7 @@ def run_parallel() -> None:
 
     workers = min(max(1, (os.cpu_count() or 1) // 2), len(instance_indices))
     print(f"Using {workers} worker(s).")
-    rows = existing_df.to_dict(orient="index")
+    rows = existing_df.set_index("instance").to_dict(orient="index")
     timeout_count = 0
     error_count = 0
     with ProcessPool(max_workers=workers) as pool:
@@ -196,8 +196,9 @@ def run_parallel() -> None:
                 "history": history,
                 "error": error,
             }
-            max_index = max(rows.keys())
-            pd.DataFrame.from_dict(rows, orient="index").sort_index().reindex(range(max_index + 1)).to_csv(solutions_path, index=False)
+            output_df = pd.DataFrame.from_dict(rows, orient="index").rename_axis("instance").reset_index().sort_values("instance")
+            output_df["num_jobs"] = output_df["num_jobs"].astype("Int64")
+            output_df.to_csv(solutions_path, index=False)
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
 
 
