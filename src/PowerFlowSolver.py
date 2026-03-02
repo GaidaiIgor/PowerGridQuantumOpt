@@ -216,11 +216,17 @@ class HybridSolver(PowerFlowSolver):
         """
         def get_assignment_cost_tracked(generator_statuses: str) -> float:
             nonlocal best_objective
-            objective = inner_optimizer.get_optimized_cost(generator_statuses)
+            objective = inner_optimizer.get_optimal_penalized_cost(generator_statuses)
             if objective < best_objective:
                 best_objective = objective
-                history.append({"time": self.vqp.get_current_classical_time(), "objective": float(objective), "num_jobs": self.vqp.num_jobs})
-                optimized_params = inner_optimizer.cache[generator_statuses].x
+                optimized_result = inner_optimizer.cache[generator_statuses]
+                history.append({
+                    "time": self.vqp.get_current_classical_time(),
+                    "objective": float(optimized_result.fun),
+                    "penalty": float(optimized_result.penalty),
+                    "num_jobs": self.vqp.num_jobs,
+                })
+                optimized_params = optimized_result.x
                 if progress_path is not None:
                     save_progress_snapshot(progress_path, history, generator_statuses, optimized_params.tolist())
             return objective
@@ -241,7 +247,6 @@ class HybridSolver(PowerFlowSolver):
         solution.extra["opt_result"] = best_sample[1]
         exact_sampler = ExactSampler()
         solution.extra["final_probs"] = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
-        solution.extra["cost_expectation"] = utils.get_cost_expectation(inner_optimizer.get_optimized_cost, solution.extra["final_probs"])
+        solution.extra["cost_expectation"] = utils.get_cost_expectation(inner_optimizer.get_optimal_penalized_cost, solution.extra["final_probs"])
         solution.extra["num_jobs"] = result.nfev
         return solution
-

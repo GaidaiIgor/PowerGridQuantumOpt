@@ -1,4 +1,4 @@
-import os
+﻿import os
 import pickle
 import shutil
 import time
@@ -204,4 +204,3 @@ if __name__ == "__main__":
 
     t2 = time.perf_counter()
     print(f"Elapsed time {t2 - t1} seconds")
-

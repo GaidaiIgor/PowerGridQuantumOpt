@@ -127,8 +127,8 @@ class ContinuousPowerOptimizer:
             self.cache[generator_statuses] = self._optimize(generator_statuses)
         return self.cache[generator_statuses]
 
-    def get_optimized_cost(self, generator_statuses: str) -> float:
-        """Returns the value of the cost function (with penalties) after optimization.
+    def get_optimal_penalized_cost(self, generator_statuses: str) -> float:
+        """Returns the value of the cost function + penalties after optimization.
         :param generator_statuses: Binary generator on/off bitstring.
         :return: Objective plus penalty for the optimized continuous variables.
         """
