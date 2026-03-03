@@ -3,6 +3,7 @@ import ast
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 from plots.general import Line, plot_general, save_figure
@@ -51,6 +52,77 @@ def plot_instance_objective_histories() -> None:
     save_figure()
 
 
+def plot_average_normalized_objective_histories() -> None:
+    """Plots average normalized objective histories for classical and hybrid solvers."""
+    data_path = Path(__file__).resolve().parent.parent / "data/5"
+    grid_times = np.arange(0, 1800, 5)
+
+    classical_histories = _load_solver_histories(data_path / ".solutions_classical.csv")
+    hybrid_histories = _load_solver_histories(data_path / ".solutions_hybrid.csv")
+    instance_ids = sorted(set(classical_histories) | set(hybrid_histories))
+    best_objectives = _get_best_objectives(instance_ids, classical_histories, hybrid_histories)
+    classical_curve = _get_average_normalized_curve(grid_times, instance_ids, classical_histories, best_objectives)
+    hybrid_curve = _get_average_normalized_curve(grid_times, instance_ids, hybrid_histories, best_objectives)
+    lines = [Line(grid_times, classical_curve, color="blue", label="Classical"), Line(grid_times, hybrid_curve, color="red", label="Hybrid")]
+    plot_general(lines, axis_labels=("Time [s]", "Normalized Objective"))
+    save_figure()
+
+
+def _load_solver_histories(csv_path: Path) -> dict[int, list[dict[str, float | int]]]:
+    """Loads solver histories grouped by instance from a CSV file.
+    :param csv_path: Path to the solver CSV file.
+    :return: Mapping from instance id to sorted history entries.
+    """
+    df = pd.read_csv(csv_path)
+    histories = {}
+    for instance, history_text in zip(df["instance"], df["history"]):
+        if pd.isna(history_text):
+            continue
+        history = ast.literal_eval(history_text)
+        if len(history) == 0:
+            continue
+        histories[instance] = history
+    return histories
+
+
+def _get_best_objectives(instance_ids: list[int], classical_histories: dict[int, list[dict[str, float | int]]],
+                         hybrid_histories: dict[int, list[dict[str, float | int]]]) -> dict[int, float]:
+    """Finds the best known feasible objective per instance.
+    :param instance_ids: Instance ids to include in aggregation.
+    :param classical_histories: Classical histories by instance.
+    :param hybrid_histories: Hybrid histories by instance.
+    :return: Mapping from instance id to the lowest objective found by either solver.
+    """
+    best_objectives = {}
+    for instance in instance_ids:
+        objectives = ([entry["objective"] for entry in classical_histories.get(instance, [])] +
+                      [entry["objective"] for entry in hybrid_histories.get(instance, [])])
+        best_objectives[instance] = min(objectives)
+    return best_objectives
+
+
+def _get_average_normalized_curve(grid_times: np.ndarray, instance_ids: list[int], solver_histories: dict[int, list[dict[str, float | int]]],
+                                  best_objectives: dict[int, float]) -> np.ndarray:
+    """Computes average normalized objective curve on a uniform time grid.
+    :param grid_times: Uniform time grid used for alignment.
+    :param instance_ids: Instance ids included in averaging denominator.
+    :param solver_histories: Histories for one solver grouped by instance.
+    :param best_objectives: Best known objective per instance across both solvers.
+    :return: Average normalized objective values for each grid time.
+    """
+    totals = np.zeros(len(grid_times))
+    for instance in instance_ids:
+        history = solver_histories.get(instance)
+        if history is None:
+            continue
+        history_times = np.array([entry["time"] for entry in history])
+        normalized_objectives = np.array([best_objectives[instance] / entry["objective"] for entry in history])
+        indices = np.searchsorted(history_times, grid_times, side="right") - 1
+        totals[indices >= 0] += normalized_objectives[indices[indices >= 0]]
+    return totals / len(instance_ids)
+
+
 if __name__ == "__main__":
-    plot_instance_objective_histories()
+    # plot_instance_objective_histories()
+    plot_average_normalized_objective_histories()
     plt.show()
