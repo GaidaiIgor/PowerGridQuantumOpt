@@ -34,7 +34,7 @@ class Line:
     xs: Sequence
     ys: Sequence
     error_margins: Sequence = None
-    color: tuple | int = colors[0]
+    color: str | tuple | int = colors[0]
     marker: str | int = 'o'
     style: str | int = '-'
     label: str = '_nolabel_'
@@ -81,9 +81,10 @@ class AnnotationManager:
             del self.annotations[(x_data, y_data)]
         else:
             bbox_settings = dict(boxstyle='round', fc=(1.0, 0.7, 0.7), ec='none')
-            arrow_settings = dict(arrowstyle='wedge, tail_width=1', fc=(1.0, 0.7, 0.7), ec='none', patchA=None, patchB=Ellipse((2, -1), 0.5, 0.5), relpos=(0.2, 0.5))
-            annotation = event.artist.axes.annotate(f'({x_data:.3g}, {y_data:.3g})', xy=(x_data, y_data), xytext=(20, 20), textcoords='offset points', size=10, bbox=bbox_settings,
-                                                    arrowprops=arrow_settings)
+            arrow_settings = dict(arrowstyle='wedge, tail_width=1', fc=(1.0, 0.7, 0.7), ec='none', patchA=None, patchB=Ellipse((2, -1), 0.5, 0.5),
+                                  relpos=(0.2, 0.5))
+            annotation = event.artist.axes.annotate(f'({x_data:.3g}, {y_data:.3g})', xy=(x_data, y_data), xytext=(20, 20), textcoords='offset points', size=10,
+                                                    bbox=bbox_settings, arrowprops=arrow_settings)
             annotation.draggable()
             self.annotations[(x_data, y_data)] = annotation
 
@@ -112,7 +113,8 @@ def data_matrix_to_lines(data: ndarray, line_labels: list[str] = None, colors: l
 
 
 def plot_general(lines: list[Line], axis_labels: tuple[str | None, str | None] = None, tick_multiples: tuple[float | None, float | None] = None,
-                 boundaries: tuple[float | None, float | None, float | None, float | None] = None, font_size: int = 20, legend_loc: str = 'best', figure_id: int = None, **kwargs) -> None:
+                 boundaries: tuple[float | None, float | None, float | None, float | None] = None, font_size: int = 20, legend_loc: str = 'best',
+                 figure_id: int = None, **kwargs) -> None:
     """Plots specified list of lines.
     :param lines: List of lines.
     :param axis_labels: Labels for x and y axes.
@@ -134,8 +136,8 @@ def plot_general(lines: list[Line], axis_labels: tuple[str | None, str | None] =
     plt.rcParams.update({'font.size': font_size})
 
     for line in lines:
-        plt.errorbar(line.xs, line.ys, yerr=line.error_margins, color=line.color, marker=line.marker, linestyle=line.style, markersize=marker_sizes[line.marker], label=line.label,
-                     capsize=5, picker=5)
+        plt.errorbar(line.xs, line.ys, yerr=line.error_margins, color=line.color, marker=line.marker, linestyle=line.style,
+                     markersize=marker_sizes[line.marker], label=line.label, capsize=5, picker=5)
         if line.label != '_nolabel_':
             handles, labels = plt.gca().get_legend_handles_labels()
             handles = [h[0] for h in handles]  # strips the error bars from the legend.
@@ -164,10 +166,10 @@ def plot_general(lines: list[Line], axis_labels: tuple[str | None, str | None] =
             plt.ylim(top=boundaries[3])
 
     if new_figure:
-        plt.get_current_fig_manager().window.state('zoomed')
+        win = fig.canvas.manager.window
+        win.after(1000, lambda: win.state("zoomed"))
         plt.gca().set_box_aspect(1)
         plt.gcf().set_size_inches(10, 10)
-        plt.tight_layout(pad=0.5)
 
 
 def save_figure(file_name: str = None) -> None:

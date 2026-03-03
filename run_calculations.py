@@ -137,9 +137,9 @@ def run_parallel() -> None:
     """Runs selected instances in parallel and persists each completed result to CSV."""
     num_generators = 5
     data_folder = Path(f"data/{num_generators}")
-    instance_indices = list(range(12))
+    instance_indices = list(range(100))
     absent_only = True
-    timeout_s = 300
+    timeout_s = 1800
 
     # solver = ClassicalSolver(silent=True)
     solver = get_hybrid_solver(num_generators)
