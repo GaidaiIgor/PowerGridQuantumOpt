@@ -4,7 +4,10 @@ import json
 import pickle
 from pathlib import Path
 
-from src.PowerFlowProblem import PowerFlowProblem
+import numpy as np
+import pandas as pd
+
+from src.PowerFlowProblem import PowerFlowProblem, PowerFlowSolution
 
 
 def save_instance_human_readable(instance_path: str | Path, output_path: str | Path | None = None) -> Path:
@@ -89,3 +92,21 @@ def set_all_generator_p_min(problem: PowerFlowProblem, p_min: float) -> None:
     for _, node_data in problem.graph.nodes(data=True):
         for generator in node_data["generators"]:
             generator.power_range = (p_min, generator.power_range[1])
+
+
+def print_solution_from_csv(data_path: str | Path, instance_index: int) -> None:
+    """Reads one problem instance and its persisted CSV solution, then prints it.
+    :param data_path: Path to a specific ``.solutions_*.csv`` file.
+    :param instance_index: Instance index identifying both ``<index>.pkl`` and the matching CSV row.
+    """
+    solutions_path = Path(data_path)
+    dataset_path = solutions_path.parent
+    with (dataset_path / f"{instance_index}.pkl").open("rb") as file:
+        problem = PowerFlowProblem(pickle.load(file))
+
+    solutions_df = pd.read_csv(solutions_path)
+    solution_row = solutions_df.loc[solutions_df["instance"].astype(int) == instance_index].iloc[0]
+    params = np.fromstring(solution_row["continuous_parameters"].strip("[]"), sep=",")
+    active_powers, reactive_powers, voltages, angles = problem.split_params(params)
+    solution = PowerFlowSolution(solution_row["generator_assignments"], active_powers, reactive_powers, voltages, angles, solution_row["cost"])
+    solution.print(problem)
