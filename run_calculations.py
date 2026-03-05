@@ -90,7 +90,7 @@ def run_single():
     progress_path = progress_folder / f"{index}.pkl"
     solution = solver.solve(problem, progress_path=progress_path)
     print("\nSolution:")
-    print(solution)
+    solution.print(problem)
 
     if isinstance(solver, HybridSolver):
         print(f"Optimized probabilities: {my_format(solution.extra["final_probs"])}")

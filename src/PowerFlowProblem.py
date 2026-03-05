@@ -1,16 +1,11 @@
 """Data structures and constraint/cost evaluation for AC power-flow optimization."""
 
-from contextlib import redirect_stdout
 from dataclasses import dataclass, field
-from io import StringIO
 from typing import Any, Sequence
 
 import numpy as np
 from networkx import Graph
 from numpy.typing import NDArray
-
-from .utils import my_format
-
 
 class PowerFlowProblem:
     """Represents an AC-OPF-UC instance on a graph.
@@ -54,16 +49,33 @@ class PowerFlowProblem:
         bounds = bounds_active + bounds_reactive + bounds_voltage + bounds_angle
         return bounds
 
-    def evaluate_constraints(self, active_powers: NDArray[float], reactive_powers: NDArray[float], voltages: NDArray[float], angles: NDArray[float]) \
-            -> list[float]:
+    def split_params[T](self, params: Sequence[T]) -> tuple[NDArray[T], NDArray[T], NDArray[T], NDArray[T]]:
+        """Splits overall parameter list into list of active powers, reactive power, voltages and angles.
+        :param params: Full continuous optimization vector.
+        :return: Active powers, reactive powers, voltage magnitudes, and phase angles.
         """
-        Evaluates all constraints other than bounds, i.e. power balance at each node (generated params + incoming - outgoing - load == 0)
+        active_powers = np.array(params[:len(self.generators)])
+        reactive_powers = np.array(params[len(self.generators):2 * len(self.generators)])
+        voltage_magnitudes = np.array(params[2 * len(self.generators):2 * len(self.generators) + len(self.graph)])
+        phase_angles = np.array(params[2 * len(self.generators) + len(self.graph):])
+        return active_powers, reactive_powers, voltage_magnitudes, phase_angles
+
+    def evaluate_constraints(self, params: Sequence[float]) -> list[float]:
+        """Evaluates all constraints for a concatenated parameter vector.
+        :param params: Concatenated sequence ordered as active powers, reactive powers, voltages, and angles.
+        :return: Constraint values. First equality constraints (len = 2 * number of nodes + 1), then inequality constraints (>= 0 is feasible for all).
+        """
+        return self.evaluate_constraints_split(*self.split_params(params))
+
+    def evaluate_constraints_split(self, active_powers: NDArray[float], reactive_powers: NDArray[float], voltages: NDArray[float], angles: NDArray[float]) \
+            -> list[float]:
+        """Evaluates all constraints other than bounds, i.e. power balance at each node (generated params + incoming - outgoing - load == 0)
         and line capacities (|I_ij| <= max capacity).
         :param active_powers: Active generation values for all generators.
         :param reactive_powers: Reactive generation values for all generators.
         :param voltages: Voltage magnitudes for all nodes.
         :param angles: Voltage phase angles for all nodes.
-        :return: Constraint values. First equality constraints (len = 2 * len(voltages) + 1), then inequality constraints (>= 0 is feasible for all).
+        :return: Constraint values. First equality constraints (len = 2 * number of nodes + 1), then inequality constraints (>= 0 is feasible for all).
         """
         complex_powers = active_powers + 1j * reactive_powers
         voltage_phasors = voltages * np.exp(1j * angles)
@@ -116,16 +128,37 @@ class PowerFlowSolution:
     history: list[dict[str, float | int]] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
-    def __str__(self) -> str:
-        """Returns a formatted multi-line representation of the solution.
-        :return: Human-readable summary string.
+    def print(self, problem: PowerFlowProblem) -> None:
+        """Prints node and line values with corresponding bounds and capacities.
+        :param problem: Power-flow instance that defines graph topology, loads, and bounds.
         """
-        buf = StringIO()
-        with redirect_stdout(buf):
-            print(f"Generator statuses: {self.generator_statuses}")
-            print(f"Active powers     : {my_format(self.active_powers)}")
-            print(f"Reactive powers   : {my_format(self.reactive_powers)}")
-            print(f"Voltages          : {my_format(self.voltages)}")
-            print(f"Phase angles      : {my_format(self.angles)}")
-            print(f"Optimized cost    : {my_format(self.cost)}")
-        return buf.getvalue()
+        num_nodes = len(problem.graph)
+        bounds = problem.get_bounds(self.generator_statuses)
+        bounds_active, bounds_reactive, bounds_voltage, bounds_angle = problem.split_params(bounds)
+        constraints = problem.evaluate_constraints_split(self.active_powers, self.reactive_powers, self.voltages, self.angles)
+        current_constraints = constraints[1 + 2 * num_nodes:]
+
+        for node_label, node_data in problem.graph.nodes(data=True):
+            node_ind = node_data["node_ind"]
+            voltage_bounds = bounds_voltage[node_ind]
+            angle_bounds = bounds_angle[node_ind]
+            print(f"Node {node_label}:")
+            print(f"  Load: P: {np.real(node_data['load']):.3g}, Q: {np.imag(node_data['load']):.3g}")
+            print(f"  Voltage: {voltage_bounds[0]:.3g} <= {self.voltages[node_ind]:.3g} <= {voltage_bounds[1]:.3g}")
+            print(f"  Angle: {angle_bounds[0]:.3g} <= {self.angles[node_ind]:.3g} <= {angle_bounds[1]:.3g}")
+            for gen_index in node_data["gen_inds"]:
+                active_bounds = bounds_active[gen_index]
+                reactive_bounds = bounds_reactive[gen_index]
+                print(f"  Generator {gen_index}: P: {active_bounds[0]:.3g} <= {self.active_powers[gen_index]:.3g} <= {active_bounds[1]:.3g}, "
+                      f"Q: {reactive_bounds[0]:.3g} <= {self.reactive_powers[gen_index]:.3g} <= {reactive_bounds[1]:.3g}")
+            print("")
+
+        line_index = 0
+        for node_label, node_data in problem.graph.nodes(data=True):
+            for _, neighbor_label, line_data in problem.graph.edges(node_label, data=True):
+                neighbor_data = problem.graph.nodes[neighbor_label]
+                if node_data["node_ind"] < neighbor_data["node_ind"]:
+                    abs_current = line_data["capacity"] - current_constraints[line_index]
+                    print(f"Line {node_label}--{neighbor_label}: {abs_current:.3g} <= {line_data['capacity']:.3g}")
+                    line_index += 1
+        assert line_index == len(current_constraints), f"Recovered {line_index} line currents but expected {len(current_constraints)}."

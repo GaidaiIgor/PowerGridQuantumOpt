@@ -242,7 +242,7 @@ class HybridSolver(PowerFlowSolver):
         assert result.success, f"Angle optimization failed: {result.message}"
 
         best_sample = min(inner_optimizer.cache.items(), key=lambda pair: pair[1].total)
-        active_powers, reactive_powers, voltages, angles = inner_optimizer.split_params(best_sample[1].x)
+        active_powers, reactive_powers, voltages, angles = problem.split_params(best_sample[1].x)
         solution = PowerFlowSolution(best_sample[0], active_powers, reactive_powers, voltages, angles, best_sample[1].fun)
         solution.history = history
 

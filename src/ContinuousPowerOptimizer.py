@@ -42,31 +42,12 @@ class ContinuousPowerOptimizer:
         constraint = LinearConstraint(eye, bounds_matrix[:, 0], bounds_matrix[:, 1])
         return constraint
 
-    def split_params(self, params: list[float]) -> tuple[NDArray[float], NDArray[float], NDArray[float], NDArray[float]]:
-        """Splits overall parameter list into list of active powers, reactive power, voltages and angles.
-        :param params: Full continuous optimization vector.
-        :return: Active powers, reactive powers, voltage magnitudes, and phase angles.
-        """
-        active_powers = np.array(params[:len(self.problem.generators)])
-        reactive_powers = np.array(params[len(self.problem.generators):2 * len(self.problem.generators)])
-        voltage_magnitudes = np.array(params[2 * len(self.problem.generators):2 * len(self.problem.generators) + len(self.problem.graph)])
-        phase_angles = np.array(params[2 * len(self.problem.generators) + len(self.problem.graph):])
-        return active_powers, reactive_powers, voltage_magnitudes, phase_angles
-
-    def evaluate_constraints(self, params: list[float]) -> list[float]:
-        """Evaluates all constraints. Feasible constraints are >= 0.
-        :param params: Full continuous optimization vector.
-        :return: Constraint values ordered as equality first, then inequality values.
-        """
-        active_powers, reactive_powers, voltage_magnitudes, phase_angles = self.split_params(params)
-        return self.problem.evaluate_constraints(active_powers, reactive_powers, voltage_magnitudes, phase_angles)
-
     def evaluate_equality_constraints(self, params: list[float]) -> list[float]:
         """Returns equality constraints only.
         :param params: Full continuous optimization vector.
         :return: Equality-constraint values.
         """
-        all_constraints = self.evaluate_constraints(params)
+        all_constraints = self.problem.evaluate_constraints(params)
         return all_constraints[:2 * len(self.problem.graph) + 1]
 
     def evaluate_inequality_constraints(self, params: list[float]) -> list[float]:
@@ -74,7 +55,7 @@ class ContinuousPowerOptimizer:
         :param params: Full continuous optimization vector.
         :return: Inequality-constraint values that are feasible when nonnegative.
         """
-        all_constraints = self.evaluate_constraints(params)
+        all_constraints = self.problem.evaluate_constraints(params)
         return all_constraints[2 * len(self.problem.graph) + 1:]
 
     def get_generation_cost(self, generator_statuses: str, params: list[float]) -> float:
@@ -83,7 +64,7 @@ class ContinuousPowerOptimizer:
         :param params: Full continuous optimization vector.
         :return: Total generation cost for active generators.
         """
-        active_powers = self.split_params(params)[0]
+        active_powers = self.problem.split_params(params)[0]
         return self.problem.get_generation_cost(generator_statuses, active_powers)
 
     def get_penalty(self, params: list[float], constraints: list[LinearConstraint | NonlinearConstraint]) -> float:
