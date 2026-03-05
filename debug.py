@@ -94,12 +94,12 @@ def set_all_generator_p_min(problem: PowerFlowProblem, p_min: float) -> None:
             generator.power_range = (p_min, generator.power_range[1])
 
 
-def print_solution_from_csv(data_path: str | Path, instance_index: int) -> None:
+def print_solution_from_csv(csv_path: str | Path, instance_index: int) -> None:
     """Reads one problem instance and its persisted CSV solution, then prints it.
-    :param data_path: Path to a specific ``.solutions_*.csv`` file.
+    :param csv_path: Path to a specific csv file.
     :param instance_index: Instance index identifying both ``<index>.pkl`` and the matching CSV row.
     """
-    solutions_path = Path(data_path)
+    solutions_path = Path(csv_path)
     dataset_path = solutions_path.parent
     with (dataset_path / f"{instance_index}.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file))

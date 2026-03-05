@@ -213,7 +213,9 @@ if __name__ == "__main__":
 
     # generate_dataset()
     # run_single()
-    run_parallel()
+    # run_parallel()
+
+    debug.print_solution_from_csv("data/5/.solutions_hybrid.csv", 3)
 
     t2 = time.perf_counter()
     print(f"Elapsed time {t2 - t1} seconds")
