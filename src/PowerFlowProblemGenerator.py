@@ -97,7 +97,7 @@ class PowerFlowProblemGenerator:
         num_instances: int,
         *,
         # graph parameters
-        average_node_degree: float = 4,
+        average_node_degree: float = 3,
         degree_bias: float = 0.3,
         voltage_range: tuple[float, float] = (0.9, 1.1),
         angle_range: tuple[float, float] = (-math.pi, math.pi),
@@ -168,7 +168,7 @@ class PowerFlowProblemGenerator:
         generator_p_range_ref_mean = self._get_active_power_mean(generator_s_range_ref_spec.mean, generator_react_frac_range)
         cost_specs = self._resolve_cost_specs(generator_p_range_ref_mean, cost_a_spec, cost_b_spec, cost_c_spec)
         impedance_distribution = impedance_spec or LognormalSpec(0.01, 10)
-        capacity_distribution = capacity_spec or LognormalSpec(4 * load_s_spec.mean / average_node_degree, 2)
+        capacity_distribution = capacity_spec or LognormalSpec(8 * load_s_spec.mean / average_node_degree, 2)
 
         generated_paths = []
         rejected_infeasible = 0

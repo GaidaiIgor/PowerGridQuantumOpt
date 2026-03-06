@@ -47,7 +47,7 @@ def get_power_flow_ac_problem() -> PowerFlowProblem:
 
 def generate_dataset():
     problem_generator = PowerFlowProblemGenerator()
-    problem_generator.generate_instances(5, 100, output_folder="data/5/large_capacity", strictness_factor=1.2, capacity_spec=LognormalSpec(100, 2))
+    problem_generator.generate_instances(5, 100, output_folder="data/5/AD_3", strictness_factor=1.2)
 
 
 def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgram:
@@ -140,7 +140,7 @@ def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float]
 def run_parallel() -> None:
     """Runs selected instances in parallel and persists each completed result to CSV."""
     num_generators = 5
-    data_folder = Path(f"data/{num_generators}/large_capacity")
+    data_folder = Path(f"data/{num_generators}/AD_3")
     instance_indices = list(range(100))
     absent_only = True
     timeout_s = 1800
