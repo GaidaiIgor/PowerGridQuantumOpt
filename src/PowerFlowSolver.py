@@ -191,7 +191,7 @@ class ClassicalSolver(PowerFlowSolver):
         solution = ClassicalSolver.extract_solution(model, variables)
         if progress_path is not None:
             assert np.isclose(history_handler.history[-1]["objective"], solution.cost), \
-                f"Latest recorded incumbent cost {history_handler.history[-1]['objective']} does not match final cost {solution.cost}."
+                f"Latest recorded incumbent cost {history_handler.history[-1]["objective"]} does not match final cost {solution.cost}."
             solution.history = history_handler.history
         solution.extra["solve_status"] = status
         return solution

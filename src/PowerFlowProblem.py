@@ -127,38 +127,3 @@ class PowerFlowSolution:
     cost: float
     history: list[dict[str, float | int]] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
-
-    def print(self, problem: PowerFlowProblem) -> None:
-        """Prints node and line values with corresponding bounds and capacities.
-        :param problem: Power-flow instance that defines graph topology, loads, and bounds.
-        """
-        num_nodes = len(problem.graph)
-        bounds = problem.get_bounds(self.generator_statuses)
-        bounds_active, bounds_reactive, bounds_voltage, bounds_angle = problem.split_params(bounds)
-        constraints = problem.evaluate_constraints_split(self.active_powers, self.reactive_powers, self.voltages, self.angles)
-        current_constraints = constraints[1 + 2 * num_nodes:]
-
-        for node_label, node_data in problem.graph.nodes(data=True):
-            node_ind = node_data["node_ind"]
-            voltage_bounds = bounds_voltage[node_ind]
-            angle_bounds = bounds_angle[node_ind]
-            print(f"Node {node_label}:")
-            print(f"  Load: P: {np.real(node_data['load']):.3g}, Q: {np.imag(node_data['load']):.3g}")
-            print(f"  Voltage: {voltage_bounds[0]:.3g} <= {self.voltages[node_ind]:.3g} <= {voltage_bounds[1]:.3g}")
-            print(f"  Angle: {angle_bounds[0]:.3g} <= {self.angles[node_ind]:.3g} <= {angle_bounds[1]:.3g}")
-            for gen_index in node_data["gen_inds"]:
-                active_bounds = bounds_active[gen_index]
-                reactive_bounds = bounds_reactive[gen_index]
-                print(f"  Generator {gen_index}: P: {active_bounds[0]:.3g} <= {self.active_powers[gen_index]:.3g} <= {active_bounds[1]:.3g}, "
-                      f"Q: {reactive_bounds[0]:.3g} <= {self.reactive_powers[gen_index]:.3g} <= {reactive_bounds[1]:.3g}")
-            print("")
-
-        line_index = 0
-        for node_label, node_data in problem.graph.nodes(data=True):
-            for _, neighbor_label, line_data in problem.graph.edges(node_label, data=True):
-                neighbor_data = problem.graph.nodes[neighbor_label]
-                if node_data["node_ind"] < neighbor_data["node_ind"]:
-                    abs_current = line_data["capacity"] - current_constraints[line_index]
-                    print(f"Line {node_label}--{neighbor_label}: {abs_current:.3g} <= {line_data['capacity']:.3g}")
-                    line_index += 1
-        assert line_index == len(current_constraints), f"Recovered {line_index} line currents but expected {len(current_constraints)}."

@@ -109,4 +109,42 @@ def print_solution_from_csv(csv_path: str | Path, instance_index: int) -> None:
     params = np.fromstring(solution_row["continuous_parameters"].strip("[]"), sep=",")
     active_powers, reactive_powers, voltages, angles = problem.split_params(params)
     solution = PowerFlowSolution(solution_row["generator_assignments"], active_powers, reactive_powers, voltages, angles, solution_row["cost"])
-    solution.print(problem)
+    print_power_flow_solution(problem, solution)
+
+
+def print_power_flow_solution(problem: PowerFlowProblem, solution: PowerFlowSolution) -> None:
+    """Prints node and line values for one power-flow problem and its solution.
+    :param problem: Power-flow instance that defines graph topology, loads, and bounds.
+    :param solution: Solution values to print against ``problem`` bounds and line capacities.
+    """
+    bounds = problem.get_bounds(solution.generator_statuses)
+    bounds_active, bounds_reactive, bounds_voltage, bounds_angle = problem.split_params(bounds)
+    voltage_phasors = solution.voltages * np.exp(1j * solution.angles)
+
+    for node_label, node_data in problem.graph.nodes(data=True):
+        node_ind = node_data["node_ind"]
+        voltage_bounds = bounds_voltage[node_ind]
+        angle_bounds = bounds_angle[node_ind]
+        print(f"Node {node_label}:")
+        print(f"  Load: P: {np.real(node_data["load"]):.3g}, Q: {np.imag(node_data["load"]):.3g}")
+        print(f"  Voltage: {voltage_bounds[0]:.3g} <= {solution.voltages[node_ind]:.3g} <= {voltage_bounds[1]:.3g}")
+        print(f"  Angle: {angle_bounds[0]:.3g} <= {solution.angles[node_ind]:.3g} <= {angle_bounds[1]:.3g}")
+        for gen_index in node_data["gen_inds"]:
+            active_bounds = bounds_active[gen_index]
+            reactive_bounds = bounds_reactive[gen_index]
+            print(f"  Generator {gen_index}: P: {active_bounds[0]:.3g} <= {solution.active_powers[gen_index]:.3g} <= {active_bounds[1]:.3g}, "
+                  f"Q: {reactive_bounds[0]:.3g} <= {solution.reactive_powers[gen_index]:.3g} <= {reactive_bounds[1]:.3g}")
+        total_active_generation = np.sum(solution.active_powers[node_data["gen_inds"]])
+        total_reactive_generation = np.sum(solution.reactive_powers[node_data["gen_inds"]])
+        print(f"  Total generation: P: {total_active_generation:.3g}, Q: {total_reactive_generation:.3g}")
+        total_line_power = 0
+        for _, neighbor_label, line_data in problem.graph.edges(node_label, data=True):
+            neighbor_data = problem.graph.nodes[neighbor_label]
+            voltage_diff = voltage_phasors[node_ind] - voltage_phasors[neighbor_data["node_ind"]]
+            current_phasor = line_data["admittance"] * voltage_diff
+            line_power = voltage_phasors[node_ind] * np.conj(current_phasor)
+            total_line_power += line_power
+            print(f"  Line {node_label}--{neighbor_label}: {np.abs(current_phasor):.3g} <= {line_data["capacity"]:.3g}, "
+                  f"P: {np.real(line_power):.3g}, Q: {np.imag(line_power):.3g}")
+        print(f"  Total line power: P: {np.real(total_line_power):.3g}, Q: {np.imag(total_line_power):.3g}")
+        print("")
