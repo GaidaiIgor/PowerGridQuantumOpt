@@ -15,7 +15,7 @@ from qiskit.primitives import StatevectorSampler
 from tqdm import tqdm
 
 import debug
-from src import PowerFlowProblemGenerator
+from src import PowerFlowProblemGenerator, LognormalSpec
 from src.CircuitLayer import AllToAllEntangler, ZXMixer
 from src.ContinuousPowerOptimizer import ContinuousPowerOptimizer
 from src.Generator import Generator
@@ -47,7 +47,7 @@ def get_power_flow_ac_problem() -> PowerFlowProblem:
 
 def generate_dataset():
     problem_generator = PowerFlowProblemGenerator()
-    problem_generator.generate_instances(5, 100, output_folder="data/5", strictness_factor=1.2)
+    problem_generator.generate_instances(5, 100, output_folder="data/5/large_capacity", strictness_factor=1.2, capacity_spec=LognormalSpec(100, 2))
 
 
 def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgram:
@@ -140,7 +140,7 @@ def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float]
 def run_parallel() -> None:
     """Runs selected instances in parallel and persists each completed result to CSV."""
     num_generators = 5
-    data_folder = Path(f"data/{num_generators}")
+    data_folder = Path(f"data/{num_generators}/large_capacity")
     instance_indices = list(range(100))
     absent_only = True
     timeout_s = 1800
@@ -152,7 +152,7 @@ def run_parallel() -> None:
     solutions_path = data_folder / f".solutions_{solver_name}.csv"
     columns = ["instance", "generator_assignments", "continuous_parameters", "cost", "penalty", "num_jobs", "history", "error"]
     if solutions_path.exists():
-        existing_df = pd.read_csv(solutions_path, dtype={"generator_assignments": "string"})
+        existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generator_assignments": "string"})
         existing_df = existing_df.reindex(columns=columns)
     else:
         existing_df = pd.DataFrame(columns=columns)
@@ -213,9 +213,9 @@ if __name__ == "__main__":
 
     # generate_dataset()
     # run_single()
-    # run_parallel()
+    run_parallel()
 
-    debug.print_solution_from_csv("data/5/.solutions_hybrid.csv", 3)
+    # debug.print_solution_from_csv("data/5/.solutions_hybrid.csv", 3)
 
     t2 = time.perf_counter()
     print(f"Elapsed time {t2 - t1} seconds")
