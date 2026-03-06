@@ -71,6 +71,14 @@ def get_hybrid_solver(num_generators: int) -> HybridSolver:
     return HybridSolver(vqp, inner_optimizer_factory, seed)
 
 
+def get_solver_name(solver: PowerFlowSolver) -> str:
+    """Returns canonical lowercase solver name used in file naming.
+    :param solver: Solver instance whose class name determines output naming suffix.
+    :return: Lowercase solver name without trailing ``Solver``.
+    """
+    return type(solver).__name__.removesuffix("Solver").lower()
+
+
 def run_single():
     # problem = get_power_flow_ac_problem()
     index = 1
@@ -85,7 +93,8 @@ def run_single():
     # solver = ClassicalSolver()
     solver = get_hybrid_solver(len(problem.generators))
 
-    progress_folder = data_path / ".progress"
+    solver_name = get_solver_name(solver)
+    progress_folder = data_path / f".progress_{solver_name}"
     progress_folder.mkdir(exist_ok=True)
     progress_path = progress_folder / f"{index}.pkl"
     solution = solver.solve(problem, progress_path=progress_path)
@@ -110,7 +119,8 @@ def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver) \
     :param solver: Solver used for the instance.
     :return: Tuple ``(index, generator_assignments, continuous_parameters, cost, penalty, num_jobs, history)``.
     """
-    progress_folder = data_folder / ".progress"
+    solver_name = get_solver_name(solver)
+    progress_folder = data_folder / f".progress_{solver_name}"
     log_path = progress_folder / f"{index}.txt"
     try:
         with log_path.open("w") as log_file, redirect_stdout(log_file), redirect_stderr(log_file):
@@ -153,7 +163,7 @@ def run_parallel() -> None:
     # solver = ClassicalSolver(silent=True)
     solver = get_hybrid_solver(num_generators)
 
-    solver_name = type(solver).__name__.removesuffix("Solver").lower()
+    solver_name = get_solver_name(solver)
     solutions_path = data_folder / f".solutions_{solver_name}.csv"
     columns = ["instance", "generator_assignments", "continuous_parameters", "cost", "penalty", "num_jobs", "history", "error"]
     if solutions_path.exists():
@@ -171,7 +181,7 @@ def run_parallel() -> None:
         print("No instance indices selected for run_parallel.")
         return
 
-    progress_folder = data_folder / ".progress"
+    progress_folder = data_folder / f".progress_{solver_name}"
     shutil.rmtree(progress_folder, ignore_errors=True)
     progress_folder.mkdir()
 
