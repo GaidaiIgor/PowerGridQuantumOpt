@@ -111,15 +111,20 @@ def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver) \
     :return: Tuple ``(index, generator_assignments, continuous_parameters, cost, penalty, num_jobs, history)``.
     """
     progress_folder = data_folder / ".progress"
-    with (progress_folder / f"{index}.txt").open("w") as log_file, redirect_stdout(log_file), redirect_stderr(log_file):
-        with (data_folder / f"{index}.pkl").open("rb") as file:
-            problem = PowerFlowProblem(pickle.load(file))
-        progress_path = progress_folder / f"{index}.pkl"
-        solution = solver.solve(problem, progress_path=progress_path)
-        continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
-        penalty = float(solution.extra["opt_result"].penalty) if isinstance(solver, HybridSolver) else 0
-        num_jobs = solution.history[-1]["num_jobs"] if isinstance(solver, HybridSolver) and len(solution.history) > 0 else np.nan
-        return index, solution.generator_statuses, continuous_params, solution.cost, penalty, num_jobs, solution.history
+    log_path = progress_folder / f"{index}.txt"
+    try:
+        with log_path.open("w") as log_file, redirect_stdout(log_file), redirect_stderr(log_file):
+            with (data_folder / f"{index}.pkl").open("rb") as file:
+                problem = PowerFlowProblem(pickle.load(file))
+            progress_path = progress_folder / f"{index}.pkl"
+            solution = solver.solve(problem, progress_path=progress_path)
+            continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
+            penalty = float(solution.extra["opt_result"].penalty) if isinstance(solver, HybridSolver) else 0
+            num_jobs = solution.history[-1]["num_jobs"] if isinstance(solver, HybridSolver) and len(solution.history) > 0 else np.nan
+            return index, solution.generator_statuses, continuous_params, solution.cost, penalty, num_jobs, solution.history
+    finally:
+        if log_path.stat().st_size == 0:
+            log_path.unlink()
 
 
 def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float] | None, float, float, float | int, list[dict[str, float | int]] | None]:
