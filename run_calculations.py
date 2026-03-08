@@ -47,7 +47,7 @@ def get_power_flow_ac_problem() -> PowerFlowProblem:
 
 def generate_dataset():
     problem_generator = PowerFlowProblemGenerator()
-    problem_generator.generate_instances(5, 100, output_folder="data/5/AD_3", strictness_factor=1.2)
+    problem_generator.generate_instances(10, 100, output_folder="data/10", strictness_factor=1.2)
 
 
 def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgram:
@@ -122,19 +122,15 @@ def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver) \
     solver_name = get_solver_name(solver)
     progress_folder = data_folder / f".progress_{solver_name}"
     log_path = progress_folder / f"{index}.txt"
-    try:
-        with log_path.open("w") as log_file, redirect_stdout(log_file), redirect_stderr(log_file):
-            with (data_folder / f"{index}.pkl").open("rb") as file:
-                problem = PowerFlowProblem(pickle.load(file))
-            progress_path = progress_folder / f"{index}.pkl"
-            solution = solver.solve(problem, progress_path=progress_path)
-            continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
-            penalty = float(solution.extra["opt_result"].penalty) if isinstance(solver, HybridSolver) else 0
-            num_jobs = solution.history[-1]["num_jobs"] if isinstance(solver, HybridSolver) and len(solution.history) > 0 else np.nan
-            return index, solution.generator_statuses, continuous_params, solution.cost, penalty, num_jobs, solution.history
-    finally:
-        if log_path.stat().st_size == 0:
-            log_path.unlink()
+    with log_path.open("w") as log_file, redirect_stdout(log_file), redirect_stderr(log_file):
+        with (data_folder / f"{index}.pkl").open("rb") as file:
+            problem = PowerFlowProblem(pickle.load(file))
+        progress_path = progress_folder / f"{index}.pkl"
+        solution = solver.solve(problem, progress_path=progress_path)
+        continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
+        penalty = float(solution.extra["opt_result"].penalty) if isinstance(solver, HybridSolver) else 0
+        num_jobs = solution.history[-1]["num_jobs"] if isinstance(solver, HybridSolver) and len(solution.history) > 0 else np.nan
+        return index, solution.generator_statuses, continuous_params, solution.cost, penalty, num_jobs, solution.history
 
 
 def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float] | None, float, float, float | int, list[dict[str, float | int]] | None]:
@@ -154,14 +150,14 @@ def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float]
 
 def run_parallel() -> None:
     """Runs selected instances in parallel and persists each completed result to CSV."""
-    num_generators = 5
-    data_folder = Path(f"data/{num_generators}/AD_3")
+    num_generators = 10
+    data_folder = Path(f"data/{num_generators}")
     instance_indices = list(range(100))
     absent_only = True
     timeout_s = 1800
 
-    # solver = ClassicalSolver(silent=True)
-    solver = get_hybrid_solver(num_generators)
+    solver = ClassicalSolver(silent=True)
+    # solver = get_hybrid_solver(num_generators)
 
     solver_name = get_solver_name(solver)
     solutions_path = data_folder / f".solutions_{solver_name}.csv"
@@ -195,6 +191,7 @@ def run_parallel() -> None:
         for future in tqdm(as_completed(future_to_metadata), total=len(future_to_metadata), smoothing=0.0):
             index = future_to_metadata[future]
             progress_path = progress_folder / f"{index}.pkl"
+            log_path = progress_folder / f"{index}.txt"
             try:
                 _, generator_assignments, continuous_params, cost, penalty, num_jobs, history = future.result()
                 error = None
@@ -206,6 +203,8 @@ def run_parallel() -> None:
                 else:
                     error_count += 1
                     error = f"{type(ex).__name__}: {ex}"
+            if log_path.stat().st_size == 0:
+                log_path.unlink()
             rows[index] = {
                 "generator_assignments": generator_assignments,
                 "continuous_parameters": continuous_params,
