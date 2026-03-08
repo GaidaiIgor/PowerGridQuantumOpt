@@ -1,11 +1,13 @@
 ﻿import os
 import pickle
 import shutil
+import sys
 import time
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import contextmanager
 from functools import partial
 from concurrent.futures import TimeoutError as FutureTimeoutError, as_completed
 from pathlib import Path
+from typing import Iterator
 
 import numpy as np
 import pandas as pd
@@ -66,7 +68,7 @@ def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgra
 def get_hybrid_solver(num_generators: int) -> HybridSolver:
     vqp = get_variational_quantum_program(num_generators)
     penalty_mult = 10
-    inner_optimizer_factory = partial(ContinuousPowerOptimizer, penalty_mult = penalty_mult)
+    inner_optimizer_factory = partial(ContinuousPowerOptimizer, penalty_mult=penalty_mult)
     seed = 0
     return HybridSolver(vqp, inner_optimizer_factory, seed)
 
@@ -77,6 +79,31 @@ def get_solver_name(solver: PowerFlowSolver) -> str:
     :return: Lowercase solver name without trailing ``Solver``.
     """
     return type(solver).__name__.removesuffix("Solver").lower()
+
+
+@contextmanager
+def redirect_worker_output(log_path: Path) -> Iterator[None]:
+    """Redirects process stdout and stderr to a worker log file.
+    :param log_path: Path to the worker log file.
+    :return: Yields while worker output is redirected to the log file.
+    """
+    stdout_fd = os.dup(1)
+    stderr_fd = os.dup(2)
+    sys.stdout.flush()
+    sys.stderr.flush()
+    try:
+        with log_path.open("w") as log_file:
+            log_fd = log_file.fileno()
+            os.dup2(log_fd, 1)
+            os.dup2(log_fd, 2)
+            yield
+    finally:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os.dup2(stdout_fd, 1)
+        os.dup2(stderr_fd, 2)
+        os.close(stdout_fd)
+        os.close(stderr_fd)
 
 
 def run_single():
@@ -122,7 +149,7 @@ def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver) \
     solver_name = get_solver_name(solver)
     progress_folder = data_folder / f".progress_{solver_name}"
     log_path = progress_folder / f"{index}.txt"
-    with log_path.open("w") as log_file, redirect_stdout(log_file), redirect_stderr(log_file):
+    with redirect_worker_output(log_path):
         with (data_folder / f"{index}.pkl").open("rb") as file:
             problem = PowerFlowProblem(pickle.load(file))
         progress_path = progress_folder / f"{index}.pkl"
