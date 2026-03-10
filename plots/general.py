@@ -67,11 +67,15 @@ class AnnotationManager:
         if not isinstance(event.artist, Line2D):
             return
 
-        x_data = event.artist.get_xdata()[event.ind][0]
-        y_data = event.artist.get_ydata()[event.ind][0]
-        data_disp_coords = event.artist.get_transform().transform([x_data, y_data])
+        x_candidates = np.asarray(event.artist.get_xdata())[event.ind]
+        y_candidates = np.asarray(event.artist.get_ydata())[event.ind]
+        candidate_coords = np.column_stack((x_candidates, y_candidates))
+        candidate_disp_coords = event.artist.get_transform().transform(candidate_coords)
         click_coords = np.array([event.mouseevent.x, event.mouseevent.y])
-        distance = linalg.norm(data_disp_coords - click_coords)
+        distances = linalg.norm(candidate_disp_coords - click_coords, axis=1)
+        closest_index = int(np.argmin(distances))
+        x_data, y_data = candidate_coords[closest_index]
+        distance = distances[closest_index]
         threshold_distance = event.artist.get_markersize() * event.artist.figure.dpi / 72 / 2
         if distance > threshold_distance:
             return
