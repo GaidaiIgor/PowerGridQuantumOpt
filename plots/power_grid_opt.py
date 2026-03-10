@@ -54,18 +54,21 @@ def plot_instance_objective_histories() -> None:
 
 def plot_average_normalized_objective_histories() -> None:
     """Plots average normalized objective histories for classical and hybrid solvers."""
-    num_generators = 11
-    data_path = Path(__file__).resolve().parent.parent / f"data/{num_generators}"
+    num_generators_list = [5, 10, 11]
     grid_times = np.arange(0, 1800, 5)
-
-    classical_histories = _load_solver_histories(data_path / ".solutions_classical.csv")
-    hybrid_histories = _load_solver_histories(data_path / ".solutions_hybrid.csv")
-    instance_ids = sorted(set(classical_histories) | set(hybrid_histories))
-    best_objectives = _get_best_objectives(instance_ids, classical_histories, hybrid_histories)
-    classical_curve = _get_average_normalized_curve(grid_times, instance_ids, classical_histories, best_objectives)
-    hybrid_curve = _get_average_normalized_curve(grid_times, instance_ids, hybrid_histories, best_objectives)
-    lines = [Line(grid_times, classical_curve, color="blue", label="Classical"), Line(grid_times, hybrid_curve, color="red", label="Hybrid")]
-    plot_general(lines, axis_labels=("Time [s]", "Normalized Objective"))
+    lines = []
+    for i, num_generators in enumerate(num_generators_list):
+        data_path = Path(__file__).resolve().parent.parent / f"data/{num_generators}"
+        classical_histories = _load_solver_histories(data_path / ".solutions_classical.csv")
+        hybrid_histories = _load_solver_histories(data_path / ".solutions_hybrid.csv")
+        instance_ids = sorted(set(classical_histories) | set(hybrid_histories))
+        best_objectives = _get_best_objectives(instance_ids, classical_histories, hybrid_histories)
+        line_style = 0
+        classical_curve = _get_average_normalized_curve(grid_times, instance_ids, classical_histories, best_objectives)
+        hybrid_curve = _get_average_normalized_curve(grid_times, instance_ids, hybrid_histories, best_objectives)
+        lines.append(Line(grid_times, classical_curve, color="blue", style=line_style, label="Classical" if i == 0 else "_nolabel_"))
+        lines.append(Line(grid_times, hybrid_curve, color="red", style=line_style, label="Hybrid" if i == 0 else "_nolabel_"))
+    plot_general(lines, axis_labels=("Time [s]", "Normalized Objective"), boundaries=(None, None, 0, 1))
     save_figure()
 
 
