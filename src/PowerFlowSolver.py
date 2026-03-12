@@ -118,7 +118,7 @@ class ClassicalSolver(PowerFlowSolver):
                 model.addCons(p <= gen.power_range[1] * u, name=f"p_max_{node_label}_{i}")
                 model.addCons(q >= gen.reactive_power_range[0] * u, name=f"q_min_{node_label}_{i}")
                 model.addCons(q <= gen.reactive_power_range[1] * u, name=f"q_max_{node_label}_{i}")
-                cost_terms.append(gen.cost_terms[0] * p * p + gen.cost_terms[1] * p + gen.cost_terms[2] * u)
+                cost_terms.append(gen.cost_terms[0] * p ** 2 + gen.cost_terms[1] * p + gen.cost_terms[2] * u)
                 variables["u"][node_data["node_ind"]].append(u)
                 variables["p"][node_data["node_ind"]].append(p)
                 variables["q"][node_data["node_ind"]].append(q)
@@ -136,13 +136,13 @@ class ClassicalSolver(PowerFlowSolver):
                 v_j = variables["v"][neighbor_data["node_ind"]]
                 alpha = line_data["admittance"].real
                 beta = line_data["admittance"].imag
-                real_flow = alpha * v_i * v_i - v_i * v_j * (alpha * cos(delta) + beta * sin(delta))
-                imag_flow = -beta * v_i * v_i + v_i * v_j * (beta * cos(delta) - alpha * sin(delta))
+                real_flow = alpha * v_i ** 2 - v_i * v_j * (alpha * cos(delta) + beta * sin(delta))
+                imag_flow = -beta * v_i ** 2 + v_i * v_j * (beta * cos(delta) - alpha * sin(delta))
                 real_flows.append(real_flow)
                 imag_flows.append(imag_flow)
                 if node_data["node_ind"] < neighbor_data["node_ind"]:
-                    abs_current_2 = abs(line_data["admittance"]) ** 2 * (v_i * v_i + v_j * v_j - 2 * v_i * v_j * cos(delta))
-                    model.addCons(abs_current_2 <= line_data["capacity"] ** 2, name=f"capacity_{node_label}_{neighbor_label}")
+                    abs_current_2 = abs(line_data["admittance"]) ** 2 * (v_i ** 2 + v_j ** 2 - 2 * v_i * v_j * cos(delta))
+                    model.addCons(abs_current_2 - line_data["capacity"] ** 2 <= 0, name=f"capacity_{node_label}_{neighbor_label}")
 
             model.addCons(quicksum(variables["p"][node_data["node_ind"]]) - node_data["load"].real - quicksum(real_flows) == 0,
                           name=f"net_power_real_{node_label}")
@@ -218,8 +218,8 @@ class HybridSolver(PowerFlowSolver):
         """
         def get_assignment_cost_tracked(generator_statuses: str) -> float:
             nonlocal best_objective
-            objective = inner_optimizer.get_optimal_penalized_cost(generator_statuses)
-            optimized_result = inner_optimizer.cache[generator_statuses]
+            optimized_result = inner_optimizer.optimize(generator_statuses)
+            objective = optimized_result.total
             if objective < best_objective and optimized_result.penalty < self.tolerance:
                 best_objective = objective
                 history.append({
@@ -249,5 +249,6 @@ class HybridSolver(PowerFlowSolver):
         solution.extra["opt_result"] = best_sample[1]
         exact_sampler = ExactSampler()
         solution.extra["final_probs"] = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
-        solution.extra["cost_expectation"] = utils.get_cost_expectation(inner_optimizer.get_optimal_penalized_cost, solution.extra["final_probs"])
+        solution.extra["cost_expectation"] = utils.get_cost_expectation(
+            lambda bitstring: inner_optimizer.optimize(bitstring).total, solution.extra["final_probs"])
         return solution

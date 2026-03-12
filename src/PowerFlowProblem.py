@@ -49,34 +49,39 @@ class PowerFlowProblem:
         bounds = bounds_active + bounds_reactive + bounds_voltage + bounds_angle
         return bounds
 
-    def split_params[T](self, params: Sequence[T]) -> tuple[NDArray[T], NDArray[T], NDArray[T], NDArray[T]]:
-        """Splits overall parameter list into list of active powers, reactive power, voltages and angles.
-        :param params: Full continuous optimization vector.
-        :return: Active powers, reactive powers, voltage magnitudes, and phase angles.
+    def split_params[T](self, params: T) -> tuple[T, T, T, T]:
+        """Splits overall parameter vector while preserving the input container type.
+        :param params: Full continuous or symbolic optimization vector, typically a NumPy array or CasADi ``SX`` vector.
+        :return: Active powers, reactive powers, voltage magnitudes, and phase angles with the same container type as ``params``.
         """
-        active_powers = np.array(params[:len(self.generators)])
-        reactive_powers = np.array(params[len(self.generators):2 * len(self.generators)])
-        voltage_magnitudes = np.array(params[2 * len(self.generators):2 * len(self.generators) + len(self.graph)])
-        phase_angles = np.array(params[2 * len(self.generators) + len(self.graph):])
-        return active_powers, reactive_powers, voltage_magnitudes, phase_angles
+        num_generators = len(self.generators)
+        num_nodes = len(self.graph)
+        return (
+            params[:num_generators],
+            params[num_generators:2 * num_generators],
+            params[2 * num_generators:2 * num_generators + num_nodes],
+            params[2 * num_generators + num_nodes:],
+        )
 
     def evaluate_constraints(self, params: Sequence[float]) -> list[float]:
         """Evaluates all constraints for a concatenated parameter vector.
         :param params: Concatenated sequence ordered as active powers, reactive powers, voltages, and angles.
-        :return: Constraint values. First equality constraints (len = 2 * number of nodes + 1), then inequality constraints (>= 0 is feasible for all).
+        :return: Constraint values. First equality constraints (len = 2 * number of nodes + 1), then inequality constraints (<= 0 is feasible for all).
         """
-        return self.evaluate_constraints_split(*self.split_params(params))
+        equality_constraints, inequality_constraints = self.evaluate_constraints_split(*self.split_params(params))
+        return equality_constraints + inequality_constraints
 
     def evaluate_constraints_split(self, active_powers: NDArray[float], reactive_powers: NDArray[float], voltages: NDArray[float], angles: NDArray[float]) \
-            -> list[float]:
+            -> tuple[list[float], list[float]]:
         """Evaluates all constraints other than bounds, i.e. power balance at each node (generated params + incoming - outgoing - load == 0)
         and line capacities (|I_ij| <= max capacity).
         :param active_powers: Active generation values for all generators.
         :param reactive_powers: Reactive generation values for all generators.
         :param voltages: Voltage magnitudes for all nodes.
         :param angles: Voltage phase angles for all nodes.
-        :return: Constraint values. First equality constraints (len = 2 * number of nodes + 1), then inequality constraints (>= 0 is feasible for all).
+        :return: Tuple of equality constraints and inequality constraints (<= 0 is feasible for inequality).
         """
+        active_powers, reactive_powers, voltages, angles = map(np.asarray, (active_powers, reactive_powers, voltages, angles))
         complex_powers = active_powers + 1j * reactive_powers
         voltage_phasors = voltages * np.exp(1j * angles)
 
@@ -92,12 +97,12 @@ class PowerFlowProblem:
                 line_power = voltage_phasors[node_data["node_ind"]] * np.conj(current_phasor)
                 outgoing_line_powers.append(line_power)
                 if node_data["node_ind"] < neighbor_data["node_ind"]:
-                    inequality_constraints.append(line_data["capacity"] - np.abs(current_phasor))
+                    inequality_constraints.append(np.abs(current_phasor) - line_data["capacity"])
 
             power_balance = generated_power - node_data["load"] - np.sum(outgoing_line_powers)
             equality_constraints.append(np.real(power_balance))
             equality_constraints.append(np.imag(power_balance))
-        return equality_constraints + inequality_constraints
+        return equality_constraints, inequality_constraints
 
     def get_generation_cost(self, generator_statuses: str, active_powers: Sequence[float]) -> float:
         """Returns the total cost of generation for a given set of enabled generators at given power outputs.
