@@ -117,10 +117,12 @@ class CasadiOptimizer(ContinuousPowerOptimizer):
     :var solver: Reusable IPOPT-backed nonlinear solver for the problem structure.
     :var constraints: Symbolic constraints together with their valid ranges.
     :var silent: Whether to suppress IPOPT and CasADi solver output.
+    :var max_iter: Optional IPOPT iteration limit. ``None`` leaves IPOPT at its own default.
     """
+    silent: bool = False
+    max_iter: int | None = None
     solver: ca.Function = field(init=False, repr=False)
     constraints: list[Constraint] = field(init=False, repr=False)
-    silent: bool = False
 
     def __post_init__(self) -> None:
         """Builds reusable symbolic problem representation after initialization."""
@@ -133,9 +135,11 @@ class CasadiOptimizer(ContinuousPowerOptimizer):
         params = ca.SX.sym("params", 2 * len(self.problem.generators) + 2 * len(self.problem.graph))
         active_powers, reactive_powers, voltages, angles = self.problem.split_params(params)
         constraints = self._build_constraints(active_powers, reactive_powers, voltages, angles)
-        options = {"error_on_fail": False, "ipopt.max_iter": 2 ** 31 - 1}
+        options = {"error_on_fail": False}
+        if self.max_iter is not None:
+            options["ipopt.max_iter"] = self.max_iter
         if self.silent:
-            options |= {"ipopt.print_level": 0, "print_time": 0}
+            options |= {"ipopt.print_level": 0, "print_time": 0, "ipopt.sb": "yes"}
         solver = ca.nlpsol(
             "continuous_power_optimizer",
             "ipopt",
