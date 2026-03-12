@@ -116,9 +116,11 @@ class CasadiOptimizer(ContinuousPowerOptimizer):
     """Optimizes continuous variables for fixed generator commitments with CasADi and IPOPT.
     :var solver: Reusable IPOPT-backed nonlinear solver for the problem structure.
     :var constraints: Symbolic constraints together with their valid ranges.
+    :var silent: Whether to suppress IPOPT and CasADi solver output.
     """
     solver: ca.Function = field(init=False, repr=False)
     constraints: list[Constraint] = field(init=False, repr=False)
+    silent: bool = False
 
     def __post_init__(self) -> None:
         """Builds reusable symbolic problem representation after initialization."""
@@ -131,11 +133,15 @@ class CasadiOptimizer(ContinuousPowerOptimizer):
         params = ca.SX.sym("params", 2 * len(self.problem.generators) + 2 * len(self.problem.graph))
         active_powers, reactive_powers, voltages, angles = self.problem.split_params(params)
         constraints = self._build_constraints(active_powers, reactive_powers, voltages, angles)
+        options = {"error_on_fail": False, "ipopt.max_iter": 2 ** 31 - 1}
+        if self.silent:
+            options |= {"ipopt.print_level": 0, "print_time": 0}
         solver = ca.nlpsol(
             "continuous_power_optimizer",
             "ipopt",
             {"x": params, "f": self._build_objective(active_powers), "g": ca.vertcat(*(constraint.expression for constraint in constraints))},
-            {"error_on_fail": False, "ipopt.max_iter": 2 ** 31 - 1, "ipopt.print_level": 0, "print_time": 0})
+            options
+        )
         return solver, constraints
 
     def _build_constraints(self, active_powers: ca.SX, reactive_powers: ca.SX, voltages: ca.SX, angles: ca.SX) -> list[Constraint]:
