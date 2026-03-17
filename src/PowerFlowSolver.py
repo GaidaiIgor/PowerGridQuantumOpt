@@ -28,13 +28,7 @@ def save_progress_snapshot(progress_path: Path, history: list[dict[str, float]],
     :param generator_statuses: Binary generator-on/off string of incumbent solution.
     :param continuous_parameters: Incumbent continuous variables in concatenated order.
     """
-    payload = {
-        "history": history,
-        "incumbent": {
-            "generator_assignments": generator_statuses,
-            "continuous_parameters": continuous_parameters,
-        },
-    }
+    payload = {"history": history, "incumbent": {"generator_assignments": generator_statuses, "continuous_parameters": continuous_parameters}}
     temp_path = progress_path.with_suffix(".tmp")
     with temp_path.open("wb") as file:
         pickle.dump(payload, file)
@@ -228,9 +222,8 @@ class HybridSolver(PowerFlowSolver):
                     "penalty": float(optimized_result.penalty),
                     "num_jobs": self.vqp.num_jobs,
                 })
-                optimized_params = optimized_result.x
                 if progress_path is not None:
-                    save_progress_snapshot(progress_path, history, generator_statuses, optimized_params.tolist())
+                    save_progress_snapshot(progress_path, history, generator_statuses, optimized_result.params.tolist())
             return objective
 
         inner_optimizer = self.inner_optimizer_factory(problem)
@@ -242,7 +235,7 @@ class HybridSolver(PowerFlowSolver):
         assert result.success, f"Angle optimization failed: {result.message}"
 
         best_sample = min(inner_optimizer.cache.items(), key=lambda pair: pair[1].total)
-        active_powers, reactive_powers, voltages, angles = problem.split_params(best_sample[1].x)
+        active_powers, reactive_powers, voltages, angles = problem.split_params(best_sample[1].params)
         solution = PowerFlowSolution(best_sample[0], active_powers, reactive_powers, voltages, angles, best_sample[1].fun)
         solution.history = history
 
