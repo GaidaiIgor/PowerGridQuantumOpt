@@ -19,7 +19,7 @@ from tqdm import tqdm
 import debug
 from src import PowerFlowProblemGenerator, LognormalSpec
 from src.CircuitLayer import AllToAllEntangler, ZXMixer
-from src.ContinuousPowerOptimizer import ContinuousPowerOptimizer
+from src.ContinuousPowerOptimizer import ContinuousPowerOptimizer, CasadiOptimizer
 from src.Generator import Generator
 from src.PowerFlowProblem import PowerFlowProblem
 from src.PowerFlowSolver import ClassicalSolver, HybridSolver, PowerFlowSolver
@@ -67,19 +67,23 @@ def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgra
 
 
 def get_hybrid_solver(num_generators: int) -> HybridSolver:
-    vqp = get_variational_quantum_program(num_generators)
+    max_inner_time_s = 30
     penalty_mult = 10
-    inner_optimizer_factory = partial(ContinuousPowerOptimizer, penalty_mult=penalty_mult)
     seed = 0
+    vqp = get_variational_quantum_program(num_generators)
+    inner_optimizer_factory = partial(CasadiOptimizer, penalty_mult=penalty_mult, max_time_s=max_inner_time_s)
     return HybridSolver(vqp, inner_optimizer_factory, seed)
 
 
 def get_solver_name(solver: PowerFlowSolver) -> str:
-    """Returns canonical lowercase solver name used in file naming.
-    :param solver: Solver instance whose class name determines output naming suffix.
-    :return: Lowercase solver name without trailing ``Solver``.
+    """Returns canonical solver name used in file naming.
+    :param solver: Solver instance whose implementation determines output naming suffix.
+    :return: Canonical solver name.
     """
-    return type(solver).__name__.removesuffix("Solver").lower()
+    if isinstance(solver, ClassicalSolver):
+        return "scip"
+    inner_optimizer_type = solver.inner_optimizer_factory.func if isinstance(solver.inner_optimizer_factory, partial) else solver.inner_optimizer_factory
+    return {"SLSQPOptimizer": "slsqp", "CasadiOptimizer": "casadi"}[inner_optimizer_type.__name__]
 
 
 @contextmanager
@@ -178,7 +182,7 @@ def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float]
 
 def run_parallel() -> None:
     """Runs selected instances in parallel and persists each completed result to CSV."""
-    num_generators = 12
+    num_generators = 11
     data_folder = Path(f"data/{num_generators}")
     instance_indices = list(range(100))
     absent_only = True
@@ -186,8 +190,8 @@ def run_parallel() -> None:
 
     # solver = ClassicalSolver(silent=True)
     solver = get_hybrid_solver(num_generators)
-
     solver_name = get_solver_name(solver)
+
     solutions_path = data_folder / f".solutions_{solver_name}.csv"
     columns = ["instance", "generator_assignments", "continuous_parameters", "cost", "penalty", "num_jobs", "history", "error"]
     if solutions_path.exists():

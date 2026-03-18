@@ -53,21 +53,29 @@ def plot_instance_objective_histories() -> None:
 
 
 def plot_average_normalized_objective_histories() -> None:
-    """Plots average normalized objective histories for classical and hybrid solvers."""
-    num_generators_list = [5, 10, 11]
-    grid_times = np.arange(0, 1800, 5)
+    """Plots average normalized objective histories for configured solvers."""
+    num_generators_list = [10, 11]
+    grid_times = np.linspace(0, 1800, 50)
+    solver_ids = ["scip", "slsqp", "casadi"]
+    solver_names = {"scip": "SCIP", "slsqp": "SLSQP", "casadi": "CasADi"}
+    instance_ids = list(range(100))
     lines = []
-    for i, num_generators in enumerate(num_generators_list):
-        data_path = Path(__file__).resolve().parent.parent / f"data/{num_generators}"
-        classical_histories = _load_solver_histories(data_path / ".solutions_classical.csv")
-        hybrid_histories = _load_solver_histories(data_path / ".solutions_hybrid.csv")
-        instance_ids = sorted(set(classical_histories) | set(hybrid_histories))
-        best_objectives = _get_best_objectives(instance_ids, classical_histories, hybrid_histories)
-        line_style = 0
-        classical_curve = _get_average_normalized_curve(grid_times, instance_ids, classical_histories, best_objectives)
-        hybrid_curve = _get_average_normalized_curve(grid_times, instance_ids, hybrid_histories, best_objectives)
-        lines.append(Line(grid_times, classical_curve, color="blue", style=line_style, label="Classical" if i == 0 else "_nolabel_"))
-        lines.append(Line(grid_times, hybrid_curve, color="red", style=line_style, label="Hybrid" if i == 0 else "_nolabel_"))
+    labeled_solvers = set()
+    for num_gens_ind, num_gens in enumerate(num_generators_list):
+        data_path = Path(__file__).resolve().parent.parent / f"data/{num_gens}"
+        solver_histories = {}
+        for solver_id in solver_ids:
+            csv_path = data_path / f".solutions_{solver_id}.csv"
+            if csv_path.exists():
+                solver_histories[solver_id] = _load_solver_histories(csv_path)
+        best_objectives = _get_best_objectives(instance_ids, solver_histories)
+        for solver_index, solver_id in enumerate(solver_ids):
+            if solver_id not in solver_histories:
+                continue
+            curve = _get_average_normalized_curve(grid_times, instance_ids, solver_histories[solver_id], best_objectives)
+            label = solver_names[solver_id] if solver_id not in labeled_solvers else "_nolabel_"
+            lines.append(Line(grid_times, curve, color=solver_index, marker=num_gens_ind, label=label))
+            labeled_solvers.add(solver_id)
     plot_general(lines, axis_labels=("Time [s]", "Normalized Objective"), boundaries=(None, None, 0, 1))
     save_figure()
 
@@ -88,18 +96,15 @@ def _load_solver_histories(csv_path: Path) -> dict[int, list[dict[str, float | i
     return histories
 
 
-def _get_best_objectives(instance_ids: list[int], classical_histories: dict[int, list[dict[str, float | int]] | None],
-                         hybrid_histories: dict[int, list[dict[str, float | int]] | None]) -> dict[int, float]:
+def _get_best_objectives(instance_ids: list[int], solver_histories: dict[str, dict[int, list[dict[str, float | int]] | None]]) -> dict[int, float | None]:
     """Finds the best known feasible objective per instance.
     :param instance_ids: Instance ids to include in aggregation.
-    :param classical_histories: Classical histories by instance.
-    :param hybrid_histories: Hybrid histories by instance.
-    :return: Mapping from instance id to the lowest objective found by either solver.
+    :param solver_histories: Histories grouped by solver name and then by instance.
+    :return: Mapping from instance id to the lowest objective found by any loaded solver.
     """
     best_objectives = {}
     for instance in instance_ids:
-        objectives = ([entry["objective"] for entry in classical_histories.get(instance) or []] +
-                      [entry["objective"] for entry in hybrid_histories.get(instance) or []])
+        objectives = [entry["objective"] for histories in solver_histories.values() for entry in histories.get(instance) or []]
         best_objectives[instance] = min(objectives) if len(objectives) > 0 else None
     return best_objectives
 
@@ -110,7 +115,7 @@ def _get_average_normalized_curve(grid_times: np.ndarray, instance_ids: list[int
     :param grid_times: Uniform time grid used for alignment.
     :param instance_ids: Instance ids included in averaging denominator.
     :param solver_histories: Histories for one solver grouped by instance.
-    :param best_objectives: Best known objective per instance across both solvers.
+    :param best_objectives: Best known objective per instance across the loaded solvers.
     :return: Average normalized objective values for each grid time.
     """
     totals = np.zeros(len(grid_times))
