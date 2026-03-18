@@ -75,17 +75,6 @@ def get_hybrid_solver(num_generators: int) -> HybridSolver:
     return HybridSolver(vqp, inner_optimizer_factory, seed)
 
 
-def get_solver_name(solver: PowerFlowSolver) -> str:
-    """Returns canonical solver name used in file naming.
-    :param solver: Solver instance whose implementation determines output naming suffix.
-    :return: Canonical solver name.
-    """
-    if isinstance(solver, ClassicalSolver):
-        return "scip"
-    inner_optimizer_type = solver.inner_optimizer_factory.func if isinstance(solver.inner_optimizer_factory, partial) else solver.inner_optimizer_factory
-    return {"SLSQPOptimizer": "slsqp", "CasadiOptimizer": "casadi"}[inner_optimizer_type.__name__]
-
-
 @contextmanager
 def redirect_worker_output(log_path: Path) -> Iterator[None]:
     """Redirects process stdout and stderr to a worker log file.
@@ -125,8 +114,7 @@ def run_single():
     # solver = ClassicalSolver()
     solver = get_hybrid_solver(len(problem.generators))
 
-    solver_name = get_solver_name(solver)
-    progress_folder = data_path / f".progress_{solver_name}"
+    progress_folder = data_path / f".progress_{solver.name}"
     progress_folder.mkdir(exist_ok=True)
     progress_path = progress_folder / f"{index}.pkl"
     solution = solver.solve(problem, progress_path=progress_path)
@@ -151,8 +139,7 @@ def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver) \
     :param solver: Solver used for the instance.
     :return: Tuple ``(index, generator_assignments, continuous_parameters, cost, penalty, num_jobs, history)``.
     """
-    solver_name = get_solver_name(solver)
-    progress_folder = data_folder / f".progress_{solver_name}"
+    progress_folder = data_folder / f".progress_{solver.name}"
     log_path = progress_folder / f"{index}.txt"
     with redirect_worker_output(log_path):
         with (data_folder / f"{index}.pkl").open("rb") as file:
@@ -190,9 +177,8 @@ def run_parallel() -> None:
 
     # solver = ClassicalSolver(silent=True)
     solver = get_hybrid_solver(num_generators)
-    solver_name = get_solver_name(solver)
 
-    solutions_path = data_folder / f".solutions_{solver_name}.csv"
+    solutions_path = data_folder / f".solutions_{solver.name}.csv"
     columns = ["instance", "generator_assignments", "continuous_parameters", "cost", "penalty", "num_jobs", "history", "error"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generator_assignments": "string"})
@@ -209,7 +195,7 @@ def run_parallel() -> None:
         print("No instance indices selected for run_parallel.")
         return
 
-    progress_folder = data_folder / f".progress_{solver_name}"
+    progress_folder = data_folder / f".progress_{solver.name}"
     shutil.rmtree(progress_folder, ignore_errors=True)
     progress_folder.mkdir()
 

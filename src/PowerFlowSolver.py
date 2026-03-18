@@ -5,7 +5,8 @@ import pickle
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Callable
 
@@ -72,7 +73,10 @@ class HistoryEventHandler(Eventhdlr):
 
 
 class PowerFlowSolver(ABC):
-    """Base class for power grid problem solvers."""
+    """Base class for power grid problem solvers.
+    :var name: Canonical solver name used in file naming.
+    """
+    name: str
 
     @abstractmethod
     def solve(self, problem: PowerFlowProblem, progress_path: Path | None = None) -> PowerFlowSolution:
@@ -91,6 +95,7 @@ class ClassicalSolver(PowerFlowSolver):
         """Initializes solver configuration.
         :param silent: Whether to suppress SCIP output while solving.
         """
+        self.name = "scip"
         self.silent = silent
 
     def build_model_power_flow(self, problem: PowerFlowProblem) -> tuple[Model, dict[str, list]]:
@@ -194,15 +199,22 @@ class ClassicalSolver(PowerFlowSolver):
 @dataclass
 class HybridSolver(PowerFlowSolver):
     """Optimizes binary variables on a quantum computer. Continuous variables are optimized classically by the problem.
+    :var name: Canonical solver name used in file naming.
     :var vqp: Variational quantum program used for binary-variable search.
     :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
     :var seed: Optional random seed for initial quantum-parameter sampling.
     :var tolerance: Feasibility tolerance; history stores only entries with penalty below this threshold.
     """
+    name: str = field(init=False)
     vqp: VariationalQuantumProgram
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
     seed: int = None
     tolerance: float = 1e-5
+
+    def __post_init__(self) -> None:
+        """Initializes derived solver metadata."""
+        inner_optimizer_type = self.inner_optimizer_factory.func if isinstance(self.inner_optimizer_factory, partial) else self.inner_optimizer_factory
+        self.name = {"SLSQPOptimizer": "slsqp", "CasadiOptimizer": "casadi"}[inner_optimizer_type.__name__]
 
     def solve(self, problem: PowerFlowProblem, progress_path: Path | None = None) -> PowerFlowSolution:
         """Optimizes quantum parameters and return the best cached continuous solution.
