@@ -3,7 +3,7 @@
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Sequence
+from typing import Self, Sequence
 
 import casadi as ca
 import numpy as np
@@ -44,6 +44,24 @@ class EvaluationResult:
     final: bool = False
     success: bool | None = None
     message: str | None = None
+
+    def is_better_than(self, other: Self | None, feasibility_tolerance: float) -> bool:
+        """Returns whether this result should replace another incumbent.
+        :param other: Current incumbent result, or ``None`` when no incumbent exists yet.
+        :param feasibility_tolerance: Maximum penalty still treated as feasible.
+        :return: Whether this result is better than ``other``.
+        """
+        if other is None:
+            return True
+        self_is_feasible = self.penalty <= feasibility_tolerance
+        other_is_feasible = other.penalty <= feasibility_tolerance
+        if self_is_feasible:
+            if other_is_feasible:
+                return self.fun < other.fun
+            return True
+        if other_is_feasible:
+            return False
+        return (self.penalty, self.fun) < (other.penalty, other.fun)
 
 
 @dataclass
@@ -110,7 +128,8 @@ class ContinuousPowerOptimizer(ABC):
         objective = self.get_cost(generator_statuses, params)
         penalty = self.get_penalty(params)
         result = EvaluationResult(params=params, fun=objective, penalty=penalty, total=objective + penalty)
-        self.cache[generator_statuses] = self.compare_results(result, self.cache.get(generator_statuses))
+        if result.is_better_than(self.cache.get(generator_statuses), self.feasibility_tolerance):
+            self.cache[generator_statuses] = result
         return result
 
     def get_cost(self, generator_statuses: str, params: Sequence[float]) -> float:
@@ -129,27 +148,6 @@ class ContinuousPowerOptimizer(ABC):
         """
         equality_constraints, inequality_constraints = self.problem.evaluate_constraints_split(*self.problem.split_params(params))
         return self.penalty_mult * (np.sum(np.square(equality_constraints)) + np.sum(np.square(np.maximum(inequality_constraints, 0))))
-
-    def compare_results(self, candidate: EvaluationResult, current: EvaluationResult | None) -> EvaluationResult:
-        """Returns the better of two incumbent results.
-        :param candidate: Result being considered for incumbent replacement.
-        :param current: Current incumbent result, or ``None`` when no incumbent exists yet.
-        :return: Better result, preferring feasible over infeasible and then lower objective or penalty.
-        """
-        if current is None:
-            return candidate
-        candidate_is_feasible = candidate.penalty <= self.feasibility_tolerance
-        current_is_feasible = current.penalty <= self.feasibility_tolerance
-        if candidate_is_feasible:
-            if current_is_feasible:
-                return candidate if candidate.fun < current.fun else current
-            else:
-                return candidate
-        else:
-            if current_is_feasible:
-                return current
-            else:
-                return candidate if (candidate.penalty, candidate.fun) < (current.penalty, current.fun) else current
 
 @dataclass
 class SLSQPOptimizer(ContinuousPowerOptimizer):

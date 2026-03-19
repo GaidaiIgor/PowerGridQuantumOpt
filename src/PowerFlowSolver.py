@@ -16,7 +16,7 @@ from pyscipopt import Eventhdlr, Model, SCIP_EVENTTYPE, sin, cos, quicksum
 from pyscipopt.recipes.nonlinear import set_nonlinear_objective
 
 from . import utils
-from .ContinuousPowerOptimizer import ContinuousPowerOptimizer
+from .ContinuousPowerOptimizer import ContinuousPowerOptimizer, EvaluationResult
 from .PowerFlowProblem import PowerFlowProblem, PowerFlowSolution
 from .Sampler import ExactSampler
 from .VariationalQuantumProgram import VariationalQuantumProgram
@@ -226,10 +226,10 @@ class HybridSolver(PowerFlowSolver):
         :return: Last recorded feasible solution obtained from sampled binary and optimized continuous parameters.
         """
         def get_assignment_cost_tracked(generator_statuses: str) -> float:
-            nonlocal best_objective
+            nonlocal best_result
             optimized_result = inner_optimizer.optimize(generator_statuses)
-            if optimized_result.total < best_objective and optimized_result.penalty < self.feasibility_tolerance:
-                best_objective = optimized_result.total
+            if optimized_result.is_better_than(best_result, self.feasibility_tolerance):
+                best_result = optimized_result
                 history.append({
                     "time": self.vqp.get_current_classical_time(),
                     "objective": float(optimized_result.fun),
@@ -246,7 +246,7 @@ class HybridSolver(PowerFlowSolver):
         rng = random.default_rng(self.seed)
         initial_angles = rng.uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
         history = []
-        best_objective = np.inf
+        best_result = None
         result = self.vqp.optimize_parameters(get_assignment_cost_tracked, initial_angles)
         assert result.success, f"Angle optimization failed: {result.message}"
 
