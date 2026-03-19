@@ -125,8 +125,9 @@ def print_power_flow_solution(problem: PowerFlowProblem, solution: PowerFlowSolu
         node_ind = node_data["node_ind"]
         voltage_bounds = bounds_voltage[node_ind]
         angle_bounds = bounds_angle[node_ind]
+        load_power = -node_data["load"]
         print(f"Node {node_label}:")
-        print(f"  Load: P: {-np.real(node_data["load"]):.3g}, Q: {-np.imag(node_data["load"]):.3g}")
+        print(f"  Load: P: {load_power.real:.3g}, Q: {load_power.imag:.3g}")
         print(f"  Voltage: {voltage_bounds[0]:.3g} <= {solution.voltages[node_ind]:.3g} <= {voltage_bounds[1]:.3g}")
         print(f"  Angle: {angle_bounds[0]:.3g} <= {solution.angles[node_ind]:.3g} <= {angle_bounds[1]:.3g}")
         for gen_index in node_data["gen_inds"]:
@@ -134,17 +135,19 @@ def print_power_flow_solution(problem: PowerFlowProblem, solution: PowerFlowSolu
             reactive_bounds = bounds_reactive[gen_index]
             print(f"  Generator {gen_index}: P: {active_bounds[0]:.3g} <= {solution.active_powers[gen_index]:.3g} <= {active_bounds[1]:.3g}, "
                   f"Q: {reactive_bounds[0]:.3g} <= {solution.reactive_powers[gen_index]:.3g} <= {reactive_bounds[1]:.3g}")
-        total_active_generation = np.sum(solution.active_powers[node_data["gen_inds"]])
-        total_reactive_generation = np.sum(solution.reactive_powers[node_data["gen_inds"]])
-        print(f"  Total generation: P: {total_active_generation:.3g}, Q: {total_reactive_generation:.3g}")
+        total_generation = np.sum(solution.active_powers[node_data["gen_inds"]]) + 1j * np.sum(solution.reactive_powers[node_data["gen_inds"]])
+        print(f"  Total generation: P: {total_generation.real:.3g}, Q: {total_generation.imag:.3g}")
         total_line_power = 0
         for _, neighbor_label, line_data in problem.graph.edges(node_label, data=True):
             neighbor_data = problem.graph.nodes[neighbor_label]
             voltage_diff = voltage_phasors[node_ind] - voltage_phasors[neighbor_data["node_ind"]]
             current_phasor = line_data["admittance"] * voltage_diff
             line_power = voltage_phasors[node_ind] * np.conj(current_phasor)
-            total_line_power += line_power
-            print(f"  Line {node_label}--{neighbor_label}: Capacity {np.abs(current_phasor):.3g} <= {line_data["capacity"]:.3g}; "
-                  f"Power P: {-np.real(line_power):.3g}, Q: {-np.imag(line_power):.3g}")
-        print(f"  Total line power: P: {-np.real(total_line_power):.3g}, Q: {-np.imag(total_line_power):.3g}")
+            signed_line_power = -line_power
+            total_line_power += signed_line_power
+            print(f"  Line {node_label}--{neighbor_label}: Capacity {np.abs(current_phasor):.3g} <= {line_data['capacity']:.3g}; "
+                  f"Power P: {signed_line_power.real:.3g}, Q: {signed_line_power.imag:.3g}")
+        print(f"  Total line power: P: {total_line_power.real:.3g}, Q: {total_line_power.imag:.3g}")
+        total_node_power_balance = total_generation + load_power + total_line_power
+        print(f"  Total node power balance: P: {total_node_power_balance.real:.3g}, Q: {total_node_power_balance.imag:.3g}")
         print("")
