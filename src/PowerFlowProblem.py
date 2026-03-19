@@ -11,11 +11,14 @@ class PowerFlowProblem:
     """Represents an AC-OPF-UC instance on a graph.
     :var graph: NetworkX graph with node and edge electrical metadata.
     :var generators: Flat list of generator objects collected from all nodes.
+    :var voltage_deviation_mult: Multiplier applied to squared voltage deviation from ``1`` in the objective.
     """
+    voltage_deviation_mult: float
 
-    def __init__(self, graph: Graph):
+    def __init__(self, graph: Graph, voltage_deviation_mult: float = 1):
         """Constructs power flow problem from graph.
         :param graph: Graph whose nodes contain generator/load/voltage/angle data and edges contain capacity/admittance data.
+        :param voltage_deviation_mult: Multiplier applied to squared voltage deviation from ``1`` in the objective.
         Graph nodes should have the following properties:
         1) generators: list[Generator]. List of generator instances located at a given node.
         2) load: complex. Total load at a given node.
@@ -28,6 +31,7 @@ class PowerFlowProblem:
         1) gen_inds: list[int]. List of generator indices in self.generators corresponding to generators at this node.
         Collects generators from all nodes into a single generators list. """
         self.graph = graph
+        self.voltage_deviation_mult = voltage_deviation_mult
         self.generators = []
         for i, (_, data) in enumerate(sorted(self.graph.nodes(data=True))):
             data["node_ind"] = i
@@ -103,6 +107,15 @@ class PowerFlowProblem:
             equality_constraints.append(np.real(power_balance))
             equality_constraints.append(np.imag(power_balance))
         return equality_constraints, inequality_constraints
+
+    def get_total_cost(self, generator_statuses: str, active_powers: Sequence[float], voltages: Sequence[float]) -> float:
+        """Returns the full objective value for a given generator-status and voltage assignment.
+        :param generator_statuses: Binary on/off string for all generators.
+        :param active_powers: Active power outputs for all generators.
+        :param voltages: Voltage magnitudes for all nodes.
+        :return: Generation cost plus voltage-deviation penalty.
+        """
+        return self.get_generation_cost(generator_statuses, active_powers) + self.voltage_deviation_mult * sum((voltage - 1) ** 2 for voltage in voltages)
 
     def get_generation_cost(self, generator_statuses: str, active_powers: Sequence[float]) -> float:
         """Returns the total cost of generation for a given set of enabled generators at given power outputs.

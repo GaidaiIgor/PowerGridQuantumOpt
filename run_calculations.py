@@ -55,7 +55,7 @@ def run_single():
     print("\nSolution:")
     debug.print_power_flow_solution(problem, solution)
 
-    if isinstance(solver, HybridSolver):
+    if isinstance(solver, HybridSolver) and solver.exact_final_expectation:
         print(f"Optimized probabilities: {my_format(solution.extra["final_probs"])}")
         print(f"Optimized expectation: {solution.extra["cost_expectation"]}")
         print(f"Number of jobs: {solution.history[-1]["num_jobs"]}")

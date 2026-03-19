@@ -1,4 +1,4 @@
-﻿"""Classical and hybrid solvers for ``PowerFlowProblem`` instances."""
+"""Classical and hybrid solvers for ``PowerFlowProblem`` instances."""
 
 import os
 import pickle
@@ -91,15 +91,14 @@ class PowerFlowSolver(ABC):
         pass
 
 
+@dataclass
 class ClassicalSolver(PowerFlowSolver):
-    """Uses SCIP library to solve power grid problems classically."""
-
-    def __init__(self, *, silent: bool = False) -> None:
-        """Initializes solver configuration.
-        :param silent: Whether to suppress SCIP output while solving.
-        """
-        self.name = "scip"
-        self.silent = silent
+    """Uses SCIP library to solve power grid problems classically.
+    :var name: Canonical solver name used in file naming.
+    :var silent: Whether SCIP output is suppressed while solving.
+    """
+    name: str = "scip"
+    silent: bool = False
 
     def build_model_power_flow(self, problem: PowerFlowProblem) -> tuple[Model, dict[str, list]]:
         """Builds model based on problem description.
@@ -126,6 +125,7 @@ class ClassicalSolver(PowerFlowSolver):
                 variables["q"][node_data["node_ind"]].append(q)
             variables["v"][node_data["node_ind"]] = model.addVar(lb=node_data["voltage_range"][0], ub=node_data["voltage_range"][1], name=f"v_{node_label}")
             variables["d"][node_data["node_ind"]] = model.addVar(lb=node_data["angle_range"][0], ub=node_data["angle_range"][1], name=f"d_{node_label}")
+            cost_terms.append(problem.voltage_deviation_mult * (variables["v"][node_data["node_ind"]] - 1) ** 2)
 
         model.addCons(variables["d"][0] == 0, name="fixed angle")
         for node_label, node_data in problem.graph.nodes(data=True):
@@ -138,10 +138,8 @@ class ClassicalSolver(PowerFlowSolver):
                 v_j = variables["v"][neighbor_data["node_ind"]]
                 alpha = line_data["admittance"].real
                 beta = line_data["admittance"].imag
-                real_flow = alpha * v_i ** 2 - v_i * v_j * (alpha * cos(delta) + beta * sin(delta))
-                imag_flow = -beta * v_i ** 2 + v_i * v_j * (beta * cos(delta) - alpha * sin(delta))
-                real_flows.append(real_flow)
-                imag_flows.append(imag_flow)
+                real_flows.append(alpha * v_i ** 2 - v_i * v_j * (alpha * cos(delta) + beta * sin(delta)))
+                imag_flows.append(-beta * v_i ** 2 + v_i * v_j * (beta * cos(delta) - alpha * sin(delta)))
                 if node_data["node_ind"] < neighbor_data["node_ind"]:
                     abs_current_2 = abs(line_data["admittance"]) ** 2 * (v_i ** 2 + v_j ** 2 - 2 * v_i * v_j * cos(delta))
                     model.addCons(abs_current_2 - line_data["capacity"] ** 2 <= 0, name=f"capacity_{node_label}_{neighbor_label}")
@@ -206,14 +204,14 @@ class HybridSolver(PowerFlowSolver):
     :var vqp: Variational quantum program used for binary-variable search.
     :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
     :var seed: Optional random seed for initial quantum-parameter sampling.
-    :var tolerance: Feasibility tolerance; history stores only entries with penalty below this threshold.
+    :var feasibility_tolerance: Feasibility tolerance; history stores only entries with penalty below this threshold.
     :var exact_final_expectation: Whether to compute the exact final bitstring distribution and expectation after optimization.
     """
     name: str = field(init=False)
     vqp: VariationalQuantumProgram
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
     seed: int = None
-    tolerance: float = 1e-5
+    feasibility_tolerance: float = 1e-5
     exact_final_expectation: bool = False
 
     def __post_init__(self) -> None:
@@ -231,7 +229,7 @@ class HybridSolver(PowerFlowSolver):
             nonlocal best_objective
             optimized_result = inner_optimizer.optimize(generator_statuses)
             objective = optimized_result.total
-            if objective < best_objective and optimized_result.penalty < self.tolerance:
+            if objective < best_objective and optimized_result.penalty < self.feasibility_tolerance:
                 best_objective = objective
                 history.append({
                     "time": self.vqp.get_current_classical_time(),

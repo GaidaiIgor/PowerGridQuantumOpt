@@ -107,21 +107,20 @@ class ContinuousPowerOptimizer(ABC):
         :return: Result metrics for ``params``.
         """
         params = np.array(params).reshape(-1)
-        objective = self.get_generation_cost(generator_statuses, params)
+        objective = self.get_cost(generator_statuses, params)
         penalty = self.get_penalty(params)
         result = EvaluationResult(params=params, fun=objective, penalty=penalty, total=objective + penalty)
-        if generator_statuses in self.cache:
-            result = self.compare_results(result, self.cache[generator_statuses])
-        self.cache[generator_statuses] = result
+        self.cache[generator_statuses] = self.compare_results(result, self.cache.get(generator_statuses))
         return result
 
-    def get_generation_cost(self, generator_statuses: str, params: Sequence[float]) -> float:
-        """Returns total generation cost for the given statuses and continuous parameters.
+    def get_cost(self, generator_statuses: str, params: Sequence[float]) -> float:
+        """Returns total objective for the given statuses and continuous parameters.
         :param generator_statuses: Binary generator on/off bitstring.
         :param params: Full continuous optimization vector.
-        :return: Total generation cost for active generators.
+        :return: Generation cost plus voltage-deviation penalty.
         """
-        return self.problem.get_generation_cost(generator_statuses, self.problem.split_params(params)[0])
+        active_powers, _, voltages, _ = self.problem.split_params(params)
+        return self.problem.get_total_cost(generator_statuses, active_powers, voltages)
 
     def get_penalty(self, params: Sequence[float]) -> float:
         """Evaluates penalty term for a parameter vector from the full constraint list.
@@ -131,12 +130,14 @@ class ContinuousPowerOptimizer(ABC):
         equality_constraints, inequality_constraints = self.problem.evaluate_constraints_split(*self.problem.split_params(params))
         return self.penalty_mult * (np.sum(np.square(equality_constraints)) + np.sum(np.square(np.maximum(inequality_constraints, 0))))
 
-    def compare_results(self, candidate: EvaluationResult, current: EvaluationResult) -> EvaluationResult:
+    def compare_results(self, candidate: EvaluationResult, current: EvaluationResult | None) -> EvaluationResult:
         """Returns the better of two incumbent results.
         :param candidate: Result being considered for incumbent replacement.
-        :param current: Current incumbent result.
+        :param current: Current incumbent result, or ``None`` when no incumbent exists yet.
         :return: Better result, preferring feasible over infeasible and then lower objective or penalty.
         """
+        if current is None:
+            return candidate
         candidate_is_feasible = candidate.penalty <= self.feasibility_tolerance
         current_is_feasible = current.penalty <= self.feasibility_tolerance
         if candidate_is_feasible:
@@ -273,7 +274,7 @@ class CasadiOptimizer(ContinuousPowerOptimizer):
         self.solver = ca.nlpsol(
             "continuous_power_optimizer",
             "ipopt",
-            {"x": params, "f": self._build_objective(active_powers), "g": ca.vertcat(*(constraint.expression for constraint in self.constraints))},
+            {"x": params, "f": self._build_objective(active_powers, voltages), "g": ca.vertcat(*(constraint.expression for constraint in self.constraints))},
             options
         )
 
@@ -308,13 +309,16 @@ class CasadiOptimizer(ContinuousPowerOptimizer):
                 Constraint(imag_gen_power - node_data["load"].imag - sum(imag_flows, ca.SX(0)), 0, 0)])
         return constraints
 
-    def _build_objective(self, active_powers: ca.SX) -> ca.SX:
-        """Builds symbolic generation-cost objective without commitment constants.
+    def _build_objective(self, active_powers: ca.SX, voltages: ca.SX) -> ca.SX:
+        """Builds symbolic objective without commitment constants.
         :param active_powers: Symbolic active generation values.
+        :param voltages: Symbolic voltage magnitudes.
         :return: Symbolic objective expression.
         """
-        return sum((gen.cost_terms[0] * active_powers[i] ** 2 + gen.cost_terms[1] * active_powers[i] for i, gen in enumerate(self.problem.generators)),
-            ca.SX(0))
+        generation_cost = \
+            sum((gen.cost_terms[0] * active_powers[i] ** 2 + gen.cost_terms[1] * active_powers[i] for i, gen in enumerate(self.problem.generators)), ca.SX(0))
+        voltage_deviation_cost = self.problem.voltage_deviation_mult * sum(((voltages[i] - 1) ** 2 for i in range(len(self.problem.graph))), ca.SX(0))
+        return generation_cost + voltage_deviation_cost
 
     def _optimize(self, generator_statuses: str) -> None:
         """Runs IPOPT for a given set of enabled generators.
