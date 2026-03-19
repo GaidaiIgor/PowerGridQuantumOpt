@@ -211,7 +211,7 @@ class HybridSolver(PowerFlowSolver):
     vqp: VariationalQuantumProgram
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
     seed: int = None
-    feasibility_tolerance: float = 1e-5
+    feasibility_tolerance: float = 1e-10
     exact_final_expectation: bool = False
 
     def __post_init__(self) -> None:
@@ -228,9 +228,8 @@ class HybridSolver(PowerFlowSolver):
         def get_assignment_cost_tracked(generator_statuses: str) -> float:
             nonlocal best_objective
             optimized_result = inner_optimizer.optimize(generator_statuses)
-            objective = optimized_result.total
-            if objective < best_objective and optimized_result.penalty < self.feasibility_tolerance:
-                best_objective = objective
+            if optimized_result.total < best_objective and optimized_result.penalty < self.feasibility_tolerance:
+                best_objective = optimized_result.total
                 history.append({
                     "time": self.vqp.get_current_classical_time(),
                     "objective": float(optimized_result.fun),
@@ -241,7 +240,7 @@ class HybridSolver(PowerFlowSolver):
                 })
                 if progress_path is not None:
                     save_progress_snapshot(progress_path, history)
-            return objective
+            return optimized_result.total
 
         inner_optimizer = self.inner_optimizer_factory(problem)
         rng = random.default_rng(self.seed)

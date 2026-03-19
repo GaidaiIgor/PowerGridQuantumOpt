@@ -142,14 +142,14 @@ class ContinuousPowerOptimizer(ABC):
         current_is_feasible = current.penalty <= self.feasibility_tolerance
         if candidate_is_feasible:
             if current_is_feasible:
-                return candidate if candidate.total < current.total else current
+                return candidate if candidate.fun < current.fun else current
             else:
                 return candidate
         else:
             if current_is_feasible:
                 return current
             else:
-                return candidate if (candidate.penalty, candidate.total) < (current.penalty, current.total) else current
+                return candidate if (candidate.penalty, candidate.fun) < (current.penalty, current.fun) else current
 
 @dataclass
 class SLSQPOptimizer(ContinuousPowerOptimizer):

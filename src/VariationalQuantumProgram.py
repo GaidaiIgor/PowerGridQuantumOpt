@@ -50,7 +50,7 @@ class VariationalQuantumProgram:
         self.layer_types = layer_types
         self.sampler = sampler
         self.circuit = self.build_circuit()
-        self.classical_time = 0.0
+        self.classical_time = 0
         self.num_jobs = 0
         self.exp_eval_start_time: float | None = None
 
@@ -58,7 +58,7 @@ class VariationalQuantumProgram:
         """Returns accumulated classical-time including ongoing expectation evaluation.
         :return: Classical-time elapsed in seconds.
         """
-        return self.classical_time + (time.perf_counter() - self.exp_eval_start_time if self.exp_eval_start_time is not None else 0.0)
+        return self.classical_time + (time.perf_counter() - self.exp_eval_start_time if self.exp_eval_start_time is not None else 0)
 
     def get_cost_expectation(self, cost_function: Callable[[str], float], param_vals: Sequence[float]) -> float:
         """Evaluates expectation of the cost function for given circuit parameter values.
@@ -80,7 +80,7 @@ class VariationalQuantumProgram:
         :param initial_angles: Initial parameter vector for classical optimization.
         :return: Optimization result including optimized angles and metadata.
         """
-        self.classical_time = 0.0
+        self.classical_time = 0
         self.num_jobs = 0
         self.exp_eval_start_time = None
         objective = partial(self.get_cost_expectation, cost_function)
