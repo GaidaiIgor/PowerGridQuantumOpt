@@ -121,7 +121,7 @@ class PowerFlowSolution:
     :var voltages: Voltage magnitudes for all nodes.
     :var angles: Voltage phase angles for all nodes.
     :var cost: Objective value of the solution.
-    :var history: Incumbent history entries with ``time`` and ``objective`` plus solver-specific metadata.
+    :var history: Incumbent history entries with ``time`` and ``objective`` plus solver-specific metadata and, for hybrid runs, the corresponding solution.
     :var extra: Additional solver-specific metadata.
     """
     generator_statuses: str
@@ -130,5 +130,5 @@ class PowerFlowSolution:
     voltages: NDArray[float]
     angles: NDArray[float]
     cost: float
-    history: list[dict[str, float | int]] = field(default_factory=list)
+    history: list[dict[str, float | int | str | list[float]]] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)

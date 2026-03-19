@@ -22,14 +22,12 @@ from .Sampler import ExactSampler
 from .VariationalQuantumProgram import VariationalQuantumProgram
 
 
-def save_progress_snapshot(progress_path: Path, history: list[dict[str, float]], generator_statuses: str, continuous_parameters: list[float]) -> None:
-    """Persists incumbent snapshot and history to disk.
+def save_progress_snapshot(progress_path: Path, history: list[dict[str, float | int | str | list[float]]]) -> None:
+    """Persists history to disk.
     :param progress_path: Path where progress snapshot should be stored.
     :param history: Full incumbent history accumulated so far.
-    :param generator_statuses: Binary generator-on/off string of incumbent solution.
-    :param continuous_parameters: Incumbent continuous variables in concatenated order.
     """
-    payload = {"history": history, "incumbent": {"generator_assignments": generator_statuses, "continuous_parameters": continuous_parameters}}
+    payload = {"history": history}
     temp_path = progress_path.with_suffix(".tmp")
     with temp_path.open("wb") as file:
         pickle.dump(payload, file)
@@ -51,7 +49,7 @@ class HistoryEventHandler(Eventhdlr):
         self.variables = variables
         self.progress_path = progress_path
         self.start_time = start_time
-        self.history: list[dict[str, float]] = []
+        self.history: list[dict[str, float | int | str | list[float]]] = []
 
     def eventinit(self) -> None:
         """Registers event subscription for incumbent updates."""
@@ -62,14 +60,19 @@ class HistoryEventHandler(Eventhdlr):
         self.model.dropEvent(SCIP_EVENTTYPE.BESTSOLFOUND, self)
 
     def eventexec(self, event: object) -> None:
-        """Appends current time, primal bound, and dual bound for each incumbent event.
+        """Appends current time, objective, dual bound, and solution for each incumbent event.
         :param event: Event payload provided by SCIP.
         """
         current_time = time.perf_counter() - self.start_time
         solution = ClassicalSolver.extract_solution(self.model, self.variables)
-        self.history.append({"time": current_time, "objective": solution.cost, "dual_bound": float(self.model.getDualbound())})
-        continuous_parameters = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
-        save_progress_snapshot(self.progress_path, self.history, solution.generator_statuses, continuous_parameters)
+        self.history.append({
+            "time": current_time,
+            "objective": solution.cost,
+            "dual_bound": float(self.model.getDualbound()),
+            "generator_assignments": solution.generator_statuses,
+            "continuous_parameters": np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist(),
+        })
+        save_progress_snapshot(self.progress_path, self.history)
 
 
 class PowerFlowSolver(ABC):
@@ -233,9 +236,11 @@ class HybridSolver(PowerFlowSolver):
                     "objective": float(optimized_result.fun),
                     "penalty": float(optimized_result.penalty),
                     "num_jobs": self.vqp.num_jobs,
+                    "generator_assignments": generator_statuses,
+                    "continuous_parameters": optimized_result.params.tolist(),
                 })
                 if progress_path is not None:
-                    save_progress_snapshot(progress_path, history, generator_statuses, optimized_result.params.tolist())
+                    save_progress_snapshot(progress_path, history)
             return objective
 
         inner_optimizer = self.inner_optimizer_factory(problem)

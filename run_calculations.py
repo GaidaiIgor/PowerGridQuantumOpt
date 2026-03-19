@@ -1,4 +1,4 @@
-﻿import os
+import os
 import pickle
 import shutil
 import sys
@@ -28,6 +28,61 @@ from src.VariationalQuantumProgram import VariationalQuantumProgram
 from src.utils import my_format
 
 
+def generate_dataset():
+    num_generators = 5
+    problem_generator = PowerFlowProblemGenerator()
+    problem_generator.generate_instances(num_generators, 100, output_folder=f"data/{num_generators}/capacity_100", strictness_factor=1.2, capacity_spec=LognormalSpec(100, 2))
+
+
+def run_single():
+    # problem = get_power_flow_ac_problem()
+    index = 2
+    data_path = Path(f"data/5/capacity_100")
+    with (data_path / f"{index}.pkl").open("rb") as file:
+        problem = PowerFlowProblem(pickle.load(file))
+
+    # debug.set_all_edge_capacities(problem, 100)
+    debug.set_all_node_voltage_ranges(problem, (1, 100))
+    # debug.set_all_generator_p_min(problem, 0)
+
+    # solver = ClassicalSolver()
+    solver = get_hybrid_solver(len(problem.generators))
+
+    progress_folder = data_path / f".progress_{solver.name}"
+    progress_folder.mkdir(exist_ok=True)
+    progress_path = progress_folder / f"{index}.pkl"
+    solution = solver.solve(problem, progress_path=progress_path)
+    print("\nSolution:")
+    debug.print_power_flow_solution(problem, solution)
+
+    if isinstance(solver, HybridSolver):
+        print(f"Optimized probabilities: {my_format(solution.extra["final_probs"])}")
+        print(f"Optimized expectation: {solution.extra["cost_expectation"]}")
+        print(f"Number of jobs: {solution.history[-1]["num_jobs"]}")
+
+
+def get_hybrid_solver(num_generators: int) -> HybridSolver:
+    max_inner_time_s = 30
+    penalty_mult = 10
+    seed = 0
+    vqp = get_variational_quantum_program(num_generators)
+    inner_optimizer_factory = partial(CasadiOptimizer, penalty_mult=penalty_mult, max_time_s=max_inner_time_s, silent=True)
+    return HybridSolver(vqp, inner_optimizer_factory, seed)
+
+
+def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgram:
+    entangler = AllToAllEntangler(num_qubits)
+    mixer = ZXMixer(num_qubits)
+    num_layers = 1
+
+    # sampler = ExactSampler()
+    sampler = MySamplerV2(StatevectorSampler(default_shots=1000))
+    # sampler = IonQSampler("simulator", 1000, None)
+    # sampler = IonQSampler("qpu.forte-enterprise-1", 1000, None)
+
+    return VariationalQuantumProgram(num_layers, [entangler, mixer], sampler)
+
+
 def get_power_flow_ac_problem() -> PowerFlowProblem:
     voltage_range = (0, 10)
     angle_range = (-np.pi, np.pi)
@@ -47,130 +102,10 @@ def get_power_flow_ac_problem() -> PowerFlowProblem:
     return PowerFlowProblem(graph)
 
 
-def generate_dataset():
-    num_generators = 12
-    problem_generator = PowerFlowProblemGenerator()
-    problem_generator.generate_instances(num_generators, 100, output_folder=f"data/{num_generators}", strictness_factor=1.2)
-
-
-def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgram:
-    entangler = AllToAllEntangler(num_qubits)
-    mixer = ZXMixer(num_qubits)
-    num_layers = 1
-
-    # sampler = ExactSampler()
-    sampler = MySamplerV2(StatevectorSampler(default_shots=1000))
-    # sampler = IonQSampler("simulator", 1000, None)
-    # sampler = IonQSampler("qpu.forte-enterprise-1", 1000, None)
-
-    return VariationalQuantumProgram(num_layers, [entangler, mixer], sampler)
-
-
-def get_hybrid_solver(num_generators: int) -> HybridSolver:
-    max_inner_time_s = 30
-    penalty_mult = 10
-    seed = 0
-    vqp = get_variational_quantum_program(num_generators)
-    inner_optimizer_factory = partial(CasadiOptimizer, penalty_mult=penalty_mult, max_time_s=max_inner_time_s)
-    return HybridSolver(vqp, inner_optimizer_factory, seed)
-
-
-@contextmanager
-def redirect_worker_output(log_path: Path) -> Iterator[None]:
-    """Redirects process stdout and stderr to a worker log file.
-    :param log_path: Path to the worker log file.
-    :return: Yields while worker output is redirected to the log file.
-    """
-    stdout_fd = os.dup(1)
-    stderr_fd = os.dup(2)
-    sys.stdout.flush()
-    sys.stderr.flush()
-    try:
-        with log_path.open("w") as log_file:
-            log_fd = log_file.fileno()
-            os.dup2(log_fd, 1)
-            os.dup2(log_fd, 2)
-            yield
-    finally:
-        sys.stdout.flush()
-        sys.stderr.flush()
-        os.dup2(stdout_fd, 1)
-        os.dup2(stderr_fd, 2)
-        os.close(stdout_fd)
-        os.close(stderr_fd)
-
-
-def run_single():
-    # problem = get_power_flow_ac_problem()
-    index = 1
-    data_path = Path(f"data/5")
-    with (data_path / f"{index}.pkl").open("rb") as file:
-        problem = PowerFlowProblem(pickle.load(file))
-
-    # debug.set_all_edge_capacities(problem, 100)
-    # debug.set_all_node_voltage_ranges(problem, (0.5, 1.5))
-    # debug.set_all_generator_p_min(problem, 0)
-
-    # solver = ClassicalSolver()
-    solver = get_hybrid_solver(len(problem.generators))
-
-    progress_folder = data_path / f".progress_{solver.name}"
-    progress_folder.mkdir(exist_ok=True)
-    progress_path = progress_folder / f"{index}.pkl"
-    solution = solver.solve(problem, progress_path=progress_path)
-    print("\nSolution:")
-    debug.print_power_flow_solution(problem, solution)
-
-    if isinstance(solver, HybridSolver):
-        print(f"Optimized probabilities: {my_format(solution.extra["final_probs"])}")
-        print(f"Optimized expectation: {solution.extra["cost_expectation"]}")
-        print(f"Number of jobs: {solution.extra["num_jobs"]}")
-
-        print("=== Best sample ===")
-        print(f"Inner optimization successful: {solution.extra["opt_result"].success}")
-        print(f"Penalty: {solution.extra["opt_result"].penalty}")
-
-
-def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver) \
-    -> tuple[int, str, list[float], float, float, float | int, list[dict[str, float | int]]]:
-    """Solves one instance and returns a serialized result row.
-    :param data_folder: Path to the dataset folder.
-    :param index: Instance index to solve.
-    :param solver: Solver used for the instance.
-    :return: Tuple ``(index, generator_assignments, continuous_parameters, cost, penalty, num_jobs, history)``.
-    """
-    progress_folder = data_folder / f".progress_{solver.name}"
-    log_path = progress_folder / f"{index}.txt"
-    with redirect_worker_output(log_path):
-        with (data_folder / f"{index}.pkl").open("rb") as file:
-            problem = PowerFlowProblem(pickle.load(file))
-        progress_path = progress_folder / f"{index}.pkl"
-        solution = solver.solve(problem, progress_path=progress_path)
-        continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
-        penalty = float(solution.extra["opt_result"].penalty) if isinstance(solver, HybridSolver) else 0
-        num_jobs = solution.history[-1]["num_jobs"] if isinstance(solver, HybridSolver) and len(solution.history) > 0 else np.nan
-        return index, solution.generator_statuses, continuous_params, solution.cost, penalty, num_jobs, solution.history
-
-
-def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float] | None, float, float, float | int, list[dict[str, float | int]] | None]:
-    """Loads persisted worker progress for one instance.
-    :param progress_path: Path to pickle snapshot written by a worker process.
-    :return: Tuple ``(generator_assignments, continuous_parameters, cost, penalty, num_jobs, history)`` recovered from the snapshot.
-    """
-    if not progress_path.exists():
-        return None, None, np.nan, np.nan, np.nan, None
-    with progress_path.open("rb") as file:
-        payload = pickle.load(file)
-    incumbent = payload["incumbent"]
-    last_entry = payload["history"][-1]
-    return (incumbent["generator_assignments"], incumbent["continuous_parameters"], last_entry["objective"],
-            last_entry.get("penalty", np.nan), last_entry.get("num_jobs", np.nan), payload["history"])
-
-
 def run_parallel() -> None:
     """Runs selected instances in parallel and persists each completed result to CSV."""
-    num_generators = 11
-    data_folder = Path(f"data/{num_generators}")
+    num_generators = 5
+    data_folder = Path(f"data/{num_generators}/capacity_100")
     instance_indices = list(range(100))
     absent_only = True
     timeout_s = 1800
@@ -238,16 +173,78 @@ def run_parallel() -> None:
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
 
 
+def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver) \
+    -> tuple[int, str, list[float], float, float, float | int, list[dict[str, float | int | str | list[float]]]]:
+    """Solves one instance and returns a serialized result row.
+    :param data_folder: Path to the dataset folder.
+    :param index: Instance index to solve.
+    :param solver: Solver used for the instance.
+    :return: Tuple ``(index, generator_assignments, continuous_parameters, cost, penalty, num_jobs, history)``.
+    """
+    progress_folder = data_folder / f".progress_{solver.name}"
+    log_path = progress_folder / f"{index}.txt"
+    with redirect_worker_output(log_path):
+        with (data_folder / f"{index}.pkl").open("rb") as file:
+            problem = PowerFlowProblem(pickle.load(file))
+        progress_path = progress_folder / f"{index}.pkl"
+        solution = solver.solve(problem, progress_path=progress_path)
+        continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
+        penalty = float(solution.extra["opt_result"].penalty) if isinstance(solver, HybridSolver) else 0
+        num_jobs = solution.history[-1]["num_jobs"] if isinstance(solver, HybridSolver) and len(solution.history) > 0 else np.nan
+        return index, solution.generator_statuses, continuous_params, solution.cost, penalty, num_jobs, solution.history
+
+
+@contextmanager
+def redirect_worker_output(log_path: Path) -> Iterator[None]:
+    """Redirects process stdout and stderr to a worker log file.
+    :param log_path: Path to the worker log file.
+    :return: Yields while worker output is redirected to the log file.
+    """
+    stdout_fd = os.dup(1)
+    stderr_fd = os.dup(2)
+    sys.stdout.flush()
+    sys.stderr.flush()
+    try:
+        with log_path.open("w") as log_file:
+            log_fd = log_file.fileno()
+            os.dup2(log_fd, 1)
+            os.dup2(log_fd, 2)
+            yield
+    finally:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os.dup2(stdout_fd, 1)
+        os.dup2(stderr_fd, 2)
+        os.close(stdout_fd)
+        os.close(stderr_fd)
+
+
+def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float] | None, float, float, float | int,
+                                                         list[dict[str, float | int | str | list[float]]] | None]:
+    """Loads persisted worker progress for one instance.
+    :param progress_path: Path to pickle snapshot written by a worker process.
+    :return: Tuple ``(generator_assignments, continuous_parameters, cost, penalty, num_jobs, history)`` recovered from the snapshot.
+    """
+    if not progress_path.exists():
+        return None, None, np.nan, np.nan, np.nan, None
+    with progress_path.open("rb") as file:
+        payload = pickle.load(file)
+    history = payload["history"]
+    last_entry = history[-1]
+    return (last_entry["generator_assignments"], last_entry["continuous_parameters"], last_entry["objective"],
+            last_entry.get("penalty", np.nan), last_entry.get("num_jobs", np.nan), history)
+
+
 if __name__ == "__main__":
     t1 = time.perf_counter()
 
     # debug.save_instance_human_readable("data/5/5.pkl")
 
     # generate_dataset()
-    # run_single()
-    run_parallel()
+    run_single()
+    # run_parallel()
 
-    # debug.print_solution_from_csv("data/5/.solutions_hybrid.csv", 3)
+    # debug.print_solution_from_csv("data/5/capacity_100/.solutions_casadi.csv", 2)
 
     t2 = time.perf_counter()
     print(f"Elapsed time {t2 - t1} seconds")
