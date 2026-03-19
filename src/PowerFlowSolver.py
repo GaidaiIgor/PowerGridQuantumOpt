@@ -220,10 +220,10 @@ class HybridSolver(PowerFlowSolver):
         self.name = {"SLSQPOptimizer": "slsqp", "CasadiOptimizer": "casadi"}[inner_optimizer_type.__name__]
 
     def solve(self, problem: PowerFlowProblem, progress_path: Path | None = None) -> PowerFlowSolution:
-        """Optimizes quantum parameters and return the best cached continuous solution.
+        """Optimizes quantum parameters and returns the last recorded feasible solution.
         :param problem: Power-flow optimization problem to solve.
         :param progress_path: Optional path for persisting incumbent progress snapshots.
-        :return: Best solution obtained from sampled binary and optimized continuous parameters.
+        :return: Last recorded feasible solution obtained from sampled binary and optimized continuous parameters.
         """
         def get_assignment_cost_tracked(generator_statuses: str) -> float:
             nonlocal best_objective
@@ -251,14 +251,12 @@ class HybridSolver(PowerFlowSolver):
         result = self.vqp.optimize_parameters(get_assignment_cost_tracked, initial_angles)
         assert result.success, f"Angle optimization failed: {result.message}"
 
-        best_sample = min(inner_optimizer.cache.items(), key=lambda pair: pair[1].total)
-        active_powers, reactive_powers, voltages, angles = problem.split_params(best_sample[1].params)
-        solution = PowerFlowSolution(best_sample[0], active_powers, reactive_powers, voltages, angles, best_sample[1].fun)
-        solution.history = history
+        assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
+        active_powers, reactive_powers, voltages, angles = problem.split_params(np.array(history[-1]["continuous_parameters"]))
+        solution = PowerFlowSolution(history[-1]["generator_assignments"], active_powers, reactive_powers, voltages, angles, history[-1]["objective"], history)
 
-        solution.extra["opt_result"] = best_sample[1]
         exact_sampler = ExactSampler()
         solution.extra["final_probs"] = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
-        solution.extra["cost_expectation"] = utils.get_cost_expectation(
-            lambda bitstring: inner_optimizer.optimize(bitstring).total, solution.extra["final_probs"])
+        solution.extra["cost_expectation"] = (
+            utils.get_cost_expectation(lambda bitstring: inner_optimizer.optimize(bitstring).total, solution.extra["final_probs"]))
         return solution
