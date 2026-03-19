@@ -207,12 +207,14 @@ class HybridSolver(PowerFlowSolver):
     :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
     :var seed: Optional random seed for initial quantum-parameter sampling.
     :var tolerance: Feasibility tolerance; history stores only entries with penalty below this threshold.
+    :var exact_final_expectation: Whether to compute the exact final bitstring distribution and expectation after optimization.
     """
     name: str = field(init=False)
     vqp: VariationalQuantumProgram
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
     seed: int = None
     tolerance: float = 1e-5
+    exact_final_expectation: bool = False
 
     def __post_init__(self) -> None:
         """Initializes derived solver metadata."""
@@ -255,8 +257,9 @@ class HybridSolver(PowerFlowSolver):
         active_powers, reactive_powers, voltages, angles = problem.split_params(np.array(history[-1]["continuous_parameters"]))
         solution = PowerFlowSolution(history[-1]["generator_assignments"], active_powers, reactive_powers, voltages, angles, history[-1]["objective"], history)
 
-        exact_sampler = ExactSampler()
-        solution.extra["final_probs"] = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
-        solution.extra["cost_expectation"] = (
-            utils.get_cost_expectation(lambda bitstring: inner_optimizer.optimize(bitstring).total, solution.extra["final_probs"]))
+        if self.exact_final_expectation:
+            exact_sampler = ExactSampler()
+            solution.extra["final_probs"] = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
+            solution.extra["cost_expectation"] = \
+                utils.get_cost_expectation(lambda bitstring: inner_optimizer.optimize(bitstring).total, solution.extra["final_probs"])
         return solution
