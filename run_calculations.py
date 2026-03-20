@@ -39,7 +39,7 @@ def generate_dataset():
 
 def run_single():
     # problem = get_power_flow_ac_problem()
-    index = 0
+    index = 71
     voltage_deviation_mult = 10
     exact_final_expectation = False
     data_path = Path(f"data/5/capacity_100")
@@ -62,7 +62,7 @@ def run_single():
         history = solver.solve(problem, progress_path)
 
     print("\nSolution:")
-    debug.print_power_flow_solution(problem, history[-1].evaluation_result)
+    debug.print_evaluation_result(problem, history[-1].evaluation_result)
     print(f"Number of jobs: {history[-1].num_jobs}")
     if exact_final_expectation:
         print(f"Optimized probabilities: {my_format(extra["final_probs"])}")
@@ -228,12 +228,11 @@ if __name__ == "__main__":
     t1 = time.perf_counter()
 
     # debug.save_instance_human_readable("data/5/5.pkl")
+    debug.print_solution_from_csv("data/5/capacity_100/.solutions_casadi.csv", 49)
 
     # generate_dataset()
     # run_single()
-    run_parallel()
-
-    # debug.print_solution_from_csv("data/5/capacity_100/.solutions_casadi.csv", 2)
+    # run_parallel()
 
     t2 = time.perf_counter()
     print(f"Elapsed time {t2 - t1} seconds")

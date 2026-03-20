@@ -69,7 +69,7 @@ def save_instance_human_readable(instance_path: str | Path, output_path: str | P
     return destination_path
 
 
-def set_all_edge_capacities(problem: PowerFlowProblem, capacity: float) -> None:
+def set_all_edge_capacities(problem: PowerFlowProblem, capacity: float):
     """Sets all edge capacities in a power-flow problem to the same value.
     :param problem: Power-flow problem whose graph edges are modified in place.
     :param capacity: Capacity value assigned to each edge.
@@ -78,7 +78,7 @@ def set_all_edge_capacities(problem: PowerFlowProblem, capacity: float) -> None:
         edge_data["capacity"] = capacity
 
 
-def set_all_node_voltage_ranges(problem: PowerFlowProblem, voltage_range: tuple[float, float]) -> None:
+def set_all_node_voltage_ranges(problem: PowerFlowProblem, voltage_range: tuple[float, float]):
     """Sets voltage ranges for all nodes in a power-flow problem to the same range.
     :param problem: Power-flow problem whose node voltage ranges are modified in place.
     :param voltage_range: Voltage range assigned to each node.
@@ -87,7 +87,7 @@ def set_all_node_voltage_ranges(problem: PowerFlowProblem, voltage_range: tuple[
         node_data["voltage_range"] = voltage_range
 
 
-def set_all_generator_p_min(problem: PowerFlowProblem, p_min: float) -> None:
+def set_all_generator_p_min(problem: PowerFlowProblem, p_min: float):
     """Sets active-power lower bound for all generators in a power-flow problem.
     :param problem: Power-flow problem whose generator active-power ranges are modified in place.
     :param p_min: Lower bound assigned to active-power range of each generator.
@@ -97,7 +97,7 @@ def set_all_generator_p_min(problem: PowerFlowProblem, p_min: float) -> None:
             generator.power_range = (p_min, generator.power_range[1])
 
 
-def print_solution_from_csv(csv_path: str | Path, instance_index: int) -> None:
+def print_solution_from_csv(csv_path: str | Path, instance_index: int):
     """Reads one problem instance and its persisted CSV solution, then prints it.
     :param csv_path: Path to a specific csv file.
     :param instance_index: Instance index identifying both ``<index>.pkl`` and the matching CSV row.
@@ -110,10 +110,14 @@ def print_solution_from_csv(csv_path: str | Path, instance_index: int) -> None:
     solutions_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generator_assignments": "string"})
     solution_row = solutions_df.loc[solutions_df["instance"].astype(int) == instance_index].iloc[0]
     converter = make_converter()
-    print_power_flow_solution(problem, converter.loads(solution_row["history"], list[HistoryEntry])[-1].evaluation_result)
+    history = converter.loads(solution_row["history"], list[HistoryEntry])
+    for entry_ind, entry in enumerate(history):
+        print(f"===========================================================================")
+        print(f"History entry {entry_ind}: time={entry.time:.6g}, num_jobs={entry.num_jobs}")
+        print_evaluation_result(problem, entry.evaluation_result)
 
 
-def print_power_flow_solution(problem: PowerFlowProblem, result: EvaluationResult) -> None:
+def print_evaluation_result(problem: PowerFlowProblem, result: EvaluationResult):
     """Prints node and line values for one power-flow problem and its solution. Positive active power is produced. Negative active power is spent.
     :param problem: Power-flow instance that defines graph topology, loads, and bounds.
     :param result: Evaluation result printed against ``problem`` bounds and line capacities.
@@ -123,6 +127,9 @@ def print_power_flow_solution(problem: PowerFlowProblem, result: EvaluationResul
     bounds_active, bounds_reactive, bounds_voltage, bounds_angle = problem.split_params(bounds)
     voltage_phasors = voltages * np.exp(1j * angles)
 
+    print(f"Objective: {result.fun:.3g}")
+    print(f"Penalty: {result.penalty:.3g}")
+    print(f"Generator assignments: {result.generator_statuses}")
     for node_label, node_data in problem.graph.nodes(data=True):
         node_ind = node_data["node_ind"]
         voltage_bounds = bounds_voltage[node_ind]
