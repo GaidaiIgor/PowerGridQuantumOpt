@@ -59,6 +59,7 @@ def plot_average_normalized_objective_histories() -> None:
     num_generators_list = [10, 11]
     grid_times = np.linspace(0, 1800, 50)
     solver_ids = ["scip", "slsqp", "casadi"]
+    infeasible_tolerance = 1e-10
     solver_names = {"scip": "SCIP", "slsqp": "SLSQP", "casadi": "CasADi"}
     instance_ids = list(range(100))
     lines = []
@@ -69,7 +70,7 @@ def plot_average_normalized_objective_histories() -> None:
         for solver_id in solver_ids:
             csv_path = data_path / f".solutions_{solver_id}.csv"
             if csv_path.exists():
-                solver_histories[solver_id] = _load_solver_histories(csv_path)
+                solver_histories[solver_id] = _load_solver_histories(csv_path, infeasible_tolerance)
         best_objectives = _get_best_objectives(instance_ids, solver_histories)
         for solver_index, solver_id in enumerate(solver_ids):
             if solver_id not in solver_histories:
@@ -82,9 +83,10 @@ def plot_average_normalized_objective_histories() -> None:
     save_figure()
 
 
-def _load_solver_histories(csv_path: Path) -> dict[int, list[HistoryEntry] | None]:
+def _load_solver_histories(csv_path: Path, infeasible_tolerance: float) -> dict[int, list[HistoryEntry] | None]:
     """Loads solver histories grouped by instance from a CSV file.
     :param csv_path: Path to the solver CSV file.
+    :param infeasible_tolerance: Maximum penalty still treated as feasible.
     :return: Mapping from instance id to sorted history entries, or ``None`` when the CSV history is null.
     """
     df = pd.read_csv(csv_path)
@@ -94,7 +96,7 @@ def _load_solver_histories(csv_path: Path) -> dict[int, list[HistoryEntry] | Non
         if pd.isna(history_text):
             histories[instance] = None
             continue
-        histories[instance] = converter.loads(history_text, list[HistoryEntry])
+        histories[instance] = [entry for entry in converter.loads(history_text, list[HistoryEntry]) if entry.evaluation_result.penalty <= infeasible_tolerance]
     return histories
 
 

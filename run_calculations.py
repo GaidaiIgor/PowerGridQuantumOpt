@@ -230,8 +230,8 @@ if __name__ == "__main__":
     # debug.save_instance_human_readable("data/5/5.pkl")
 
     # generate_dataset()
-    run_single()
-    # run_parallel()
+    # run_single()
+    run_parallel()
 
     # debug.print_solution_from_csv("data/5/capacity_100/.solutions_casadi.csv", 2)
 
