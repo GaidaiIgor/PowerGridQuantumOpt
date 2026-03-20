@@ -39,7 +39,7 @@ def generate_dataset():
 
 def run_single():
     # problem = get_power_flow_ac_problem()
-    index = 71
+    index = 49
     voltage_deviation_mult = 10
     exact_final_expectation = False
     data_path = Path(f"data/5/capacity_100")
@@ -52,6 +52,9 @@ def run_single():
 
     # solver = ClassicalSolver()
     solver = get_hybrid_solver(len(problem.generators))
+
+    inner_solver = solver.inner_optimizer_factory(problem)
+    result = inner_solver.optimize("11111")
 
     progress_folder = data_path / f".progress_{solver.name}"
     progress_folder.mkdir(exist_ok=True)
@@ -228,10 +231,10 @@ if __name__ == "__main__":
     t1 = time.perf_counter()
 
     # debug.save_instance_human_readable("data/5/5.pkl")
-    debug.print_solution_from_csv("data/5/capacity_100/.solutions_casadi.csv", 49)
+    # debug.print_solution_from_csv("data/5/capacity_100/.solutions_casadi.csv", 49)
 
     # generate_dataset()
-    # run_single()
+    run_single()
     # run_parallel()
 
     t2 = time.perf_counter()

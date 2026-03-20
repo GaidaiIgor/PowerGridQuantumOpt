@@ -127,9 +127,17 @@ def print_evaluation_result(problem: PowerFlowProblem, result: EvaluationResult)
     bounds_active, bounds_reactive, bounds_voltage, bounds_angle = problem.split_params(bounds)
     voltage_phasors = voltages * np.exp(1j * angles)
 
+    total_load = -sum(node_data["load"] for _, node_data in problem.graph.nodes(data=True))
+    total_generation_p_min = sum(active_bounds[0] for active_bounds in bounds_active)
+    total_generation_p_max = sum(active_bounds[1] for active_bounds in bounds_active)
+    total_generation_q_min = sum(reactive_bounds[0] for reactive_bounds in bounds_reactive)
+    total_generation_q_max = sum(reactive_bounds[1] for reactive_bounds in bounds_reactive)
     print(f"Objective: {result.fun:.3g}")
     print(f"Penalty: {result.penalty:.3g}")
     print(f"Generator assignments: {result.generator_statuses}")
+    print(f"Total load: P: {total_load.real}, Q: {total_load.imag}")
+    print(f"Total generation range: P: {total_generation_p_min:.3g} <= total <= {total_generation_p_max:.3g}, "
+          f"Q: {total_generation_q_min:.3g} <= total <= {total_generation_q_max:.3g}")
     for node_label, node_data in problem.graph.nodes(data=True):
         node_ind = node_data["node_ind"]
         voltage_bounds = bounds_voltage[node_ind]
