@@ -1,12 +1,13 @@
 """Plotting helpers for power-grid optimization outputs."""
-import ast
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from cattrs.preconf.json import make_converter
 
 from plots.general import Line, plot_general, save_figure
+from src.HistoryEntry import HistoryEntry
 
 
 def plot_probability_distribution(probs: dict[str, float], y_max: float = 1):
@@ -26,25 +27,26 @@ def plot_instance_objective_histories() -> None:
     data_path = Path(__file__).resolve().parent.parent / "data/5"
     classical_df = pd.read_csv(data_path / ".solutions_classical.csv")
     hybrid_df = pd.read_csv(data_path / ".solutions_hybrid.csv")
+    converter = make_converter()
 
     lines = []
     first_classical = True
     for history_text in classical_df["history"].dropna():
-        history = ast.literal_eval(history_text)
+        history = converter.loads(history_text, list[HistoryEntry])
         if len(history) == 0:
             continue
-        xs = [entry["time"] for entry in history]
-        ys = [entry["objective"] for entry in history]
+        xs = [entry.time for entry in history]
+        ys = [entry.evaluation_result.fun for entry in history]
         lines.append(Line(xs, ys, color="blue", label="Classical" if first_classical else "_nolabel_"))
         first_classical = False
 
     first_hybrid = True
     for history_text in hybrid_df["history"].dropna():
-        history = ast.literal_eval(history_text)
+        history = converter.loads(history_text, list[HistoryEntry])
         if len(history) == 0:
             continue
-        xs = [entry["time"] for entry in history]
-        ys = [entry["objective"] for entry in history]
+        xs = [entry.time for entry in history]
+        ys = [entry.evaluation_result.fun for entry in history]
         lines.append(Line(xs, ys, color="red", label="Hybrid" if first_hybrid else "_nolabel_"))
         first_hybrid = False
 
@@ -80,23 +82,23 @@ def plot_average_normalized_objective_histories() -> None:
     save_figure()
 
 
-def _load_solver_histories(csv_path: Path) -> dict[int, list[dict[str, float | int]] | None]:
+def _load_solver_histories(csv_path: Path) -> dict[int, list[HistoryEntry] | None]:
     """Loads solver histories grouped by instance from a CSV file.
     :param csv_path: Path to the solver CSV file.
     :return: Mapping from instance id to sorted history entries, or ``None`` when the CSV history is null.
     """
     df = pd.read_csv(csv_path)
+    converter = make_converter()
     histories = {}
     for instance, history_text in zip(df["instance"], df["history"]):
         if pd.isna(history_text):
             histories[instance] = None
             continue
-        history = ast.literal_eval(history_text)
-        histories[instance] = history
+        histories[instance] = converter.loads(history_text, list[HistoryEntry])
     return histories
 
 
-def _get_best_objectives(instance_ids: list[int], solver_histories: dict[str, dict[int, list[dict[str, float | int]] | None]]) -> dict[int, float | None]:
+def _get_best_objectives(instance_ids: list[int], solver_histories: dict[str, dict[int, list[HistoryEntry] | None]]) -> dict[int, float | None]:
     """Finds the best known feasible objective per instance.
     :param instance_ids: Instance ids to include in aggregation.
     :param solver_histories: Histories grouped by solver name and then by instance.
@@ -104,12 +106,12 @@ def _get_best_objectives(instance_ids: list[int], solver_histories: dict[str, di
     """
     best_objectives = {}
     for instance in instance_ids:
-        objectives = [entry["objective"] for histories in solver_histories.values() for entry in histories.get(instance) or []]
-        best_objectives[instance] = min(objectives) if len(objectives) > 0 else None
+        solver_objectives = [history[-1].evaluation_result.fun for histories in solver_histories.values() if (history := histories.get(instance))]
+        best_objectives[instance] = min(solver_objectives) if len(solver_objectives) > 0 else None
     return best_objectives
 
 
-def _get_average_normalized_curve(grid_times: np.ndarray, instance_ids: list[int], solver_histories: dict[int, list[dict[str, float | int]] | None],
+def _get_average_normalized_curve(grid_times: np.ndarray, instance_ids: list[int], solver_histories: dict[int, list[HistoryEntry] | None],
                                   best_objectives: dict[int, float]) -> np.ndarray:
     """Computes average normalized objective curve on a uniform time grid.
     :param grid_times: Uniform time grid used for alignment.
@@ -123,8 +125,8 @@ def _get_average_normalized_curve(grid_times: np.ndarray, instance_ids: list[int
         history = solver_histories.get(instance)
         if not history:
             continue
-        history_times = np.array([entry["time"] for entry in history])
-        normalized_objectives = np.array([best_objectives[instance] / entry["objective"] for entry in history])
+        history_times = np.array([entry.time for entry in history])
+        normalized_objectives = np.array([best_objectives[instance] / entry.evaluation_result.fun for entry in history])
         indices = np.searchsorted(history_times, grid_times, side="right") - 1
         totals[indices >= 0] += normalized_objectives[indices[indices >= 0]]
     return totals / len(instance_ids)

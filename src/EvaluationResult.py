@@ -3,8 +3,6 @@
 from dataclasses import dataclass
 from typing import Self
 
-from numpy.typing import NDArray
-
 
 @dataclass
 class EvaluationResult:
@@ -19,7 +17,7 @@ class EvaluationResult:
     :var message: Solver-status message for this result when ``final`` is true.
     """
     generator_statuses: str
-    params: NDArray[float]
+    params: list[float]
     fun: float
     penalty: float
     total: float

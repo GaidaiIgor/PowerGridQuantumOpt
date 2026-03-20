@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 from networkx import Graph
 from pebble import ProcessPool
+from cattrs.preconf.json import make_converter
 from qiskit.primitives import StatevectorSampler
 from tqdm import tqdm
 
@@ -20,6 +21,7 @@ import debug
 from src import PowerFlowProblemGenerator, LognormalSpec
 from src.CircuitLayer import AllToAllEntangler, ZXMixer
 from src.ContinuousPowerOptimizer import ContinuousPowerOptimizer, CasadiOptimizer
+from src.HistoryEntry import HistoryEntry
 from src.Generator import Generator
 from src.PowerFlowProblem import PowerFlowProblem
 from src.PowerFlowSolver import ClassicalSolver, HybridSolver, PowerFlowSolver
@@ -60,7 +62,7 @@ def run_single():
     if isinstance(solver, HybridSolver) and solver.exact_final_expectation:
         print(f"Optimized probabilities: {my_format(solution.extra["final_probs"])}")
         print(f"Optimized expectation: {solution.extra["cost_expectation"]}")
-        print(f"Number of jobs: {solution.history[-1]["num_jobs"]}")
+        print(f"Number of jobs: {solution.history[-1].num_jobs}")
 
 
 def get_hybrid_solver(num_generators: int) -> HybridSolver:
@@ -140,6 +142,7 @@ def run_parallel() -> None:
     workers = min(max(1, (os.cpu_count() or 1) // 2), len(instance_indices))
     print(f"Using {workers} worker(s).")
     rows = existing_df.set_index("instance").to_dict(orient="index")
+    converter = make_converter()
     timeout_count = 0
     error_count = 0
     with ProcessPool(max_workers=workers) as pool:
@@ -153,7 +156,16 @@ def run_parallel() -> None:
                 _, generator_assignments, continuous_params, cost, penalty, num_jobs, history = future.result()
                 error = None
             except Exception as ex:
-                generator_assignments, continuous_params, cost, penalty, num_jobs, history = load_progress_snapshot(progress_path)
+                history = pd.read_pickle(progress_path) if progress_path.exists() else None
+                if history is None:
+                    generator_assignments, continuous_params, cost, penalty, num_jobs = None, None, None, None, None
+                else:
+                    last_result = history[-1].evaluation_result
+                    generator_assignments = last_result.generator_statuses
+                    continuous_params = last_result.params
+                    cost = last_result.fun
+                    penalty = last_result.penalty
+                    num_jobs = history[-1].num_jobs
                 if isinstance(ex, FutureTimeoutError):
                     timeout_count += 1
                     error = f"Timeout after {timeout_s}s"
@@ -162,22 +174,15 @@ def run_parallel() -> None:
                     error = f"{type(ex).__name__}: {ex}"
             if log_path.stat().st_size == 0:
                 log_path.unlink()
-            rows[index] = {
-                "generator_assignments": generator_assignments,
-                "continuous_parameters": continuous_params,
-                "cost": cost,
-                "penalty": penalty,
-                "num_jobs": num_jobs,
-                "history": history,
-                "error": error,
-            }
+            rows[index] = {"generator_assignments": generator_assignments, "continuous_parameters": continuous_params, "cost": cost, "penalty": penalty,
+                           "num_jobs": num_jobs, "history": converter.dumps(history) if history is not None else None, "error": error}
             output_df = pd.DataFrame.from_dict(rows, orient="index").rename_axis("instance").reset_index().sort_values("instance")
             output_df["num_jobs"] = output_df["num_jobs"].astype("Int64")
             output_df.to_csv(solutions_path, index=False)
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
 
 def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver, voltage_deviation_mult: float) \
-    -> tuple[int, str, list[float], float, float, float | int, list[dict[str, float | int | str | list[float]]]]:
+    -> tuple[int, str, list[float], float, float, int | None, list[HistoryEntry]]:
     """Solves one instance and returns a serialized result row.
     :param data_folder: Path to the dataset folder.
     :param index: Instance index to solve.
@@ -193,8 +198,8 @@ def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver, voltage
         progress_path = progress_folder / f"{index}.pkl"
         solution = solver.solve(problem, progress_path=progress_path)
         continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
-        penalty = float(solution.extra["opt_result"].penalty) if isinstance(solver, HybridSolver) else 0
-        num_jobs = solution.history[-1]["num_jobs"] if isinstance(solver, HybridSolver) and len(solution.history) > 0 else np.nan
+        penalty = solution.history[-1].evaluation_result.penalty if isinstance(solver, HybridSolver) else 0
+        num_jobs = solution.history[-1].num_jobs if isinstance(solver, HybridSolver) and len(solution.history) > 0 else None
         return index, solution.generator_statuses, continuous_params, solution.cost, penalty, num_jobs, solution.history
 
 
@@ -221,22 +226,6 @@ def redirect_worker_output(log_path: Path) -> Iterator[None]:
         os.dup2(stderr_fd, 2)
         os.close(stdout_fd)
         os.close(stderr_fd)
-
-
-def load_progress_snapshot(progress_path: Path) -> \
-        tuple[str | None, list[float] | None, float, float, float | int, list[dict[str, float | int | str | list[float]]] | None]:
-    """Loads persisted worker progress for one instance.
-    :param progress_path: Path to pickle snapshot written by a worker process.
-    :return: Tuple ``(generator_assignments, continuous_parameters, cost, penalty, num_jobs, history)`` recovered from the snapshot.
-    """
-    if not progress_path.exists():
-        return None, None, np.nan, np.nan, np.nan, None
-    with progress_path.open("rb") as file:
-        payload = pickle.load(file)
-    history = payload["history"]
-    last_entry = history[-1]
-    return (last_entry["generator_assignments"], last_entry["continuous_parameters"], last_entry["objective"],
-            last_entry.get("penalty", np.nan), last_entry.get("num_jobs", np.nan), history)
 
 
 if __name__ == "__main__":

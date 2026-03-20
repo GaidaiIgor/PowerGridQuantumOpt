@@ -1,7 +1,5 @@
 """Classical and hybrid solvers for ``PowerFlowProblem`` instances."""
 
-import os
-import pickle
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
@@ -11,6 +9,7 @@ from pathlib import Path
 from typing import Callable
 
 import numpy as np
+import pandas as pd
 from numpy import random
 from pyscipopt import Eventhdlr, Model, SCIP_EVENTTYPE, sin, cos, quicksum
 from pyscipopt.recipes.nonlinear import set_nonlinear_objective
@@ -18,27 +17,14 @@ from pyscipopt.recipes.nonlinear import set_nonlinear_objective
 from . import utils
 from .ContinuousPowerOptimizer import ContinuousPowerOptimizer
 from .EvaluationResult import EvaluationResult
+from .HistoryEntry import HistoryEntry
 from .PowerFlowProblem import PowerFlowProblem, PowerFlowSolution
 from .Sampler import ExactSampler
 from .VariationalQuantumProgram import VariationalQuantumProgram
 
 
-def save_progress_snapshot(progress_path: Path, history: list[dict[str, float | int | str | list[float]]]) -> None:
-    """Persists history to disk.
-    :param progress_path: Path where progress snapshot should be stored.
-    :param history: Full incumbent history accumulated so far.
-    """
-    payload = {"history": history}
-    temp_path = progress_path.with_suffix(".tmp")
-    with temp_path.open("wb") as file:
-        pickle.dump(payload, file)
-        file.flush()
-        os.fsync(file.fileno())
-    temp_path.replace(progress_path)
-
-
 class HistoryEventHandler(Eventhdlr):
-    """Records primal and dual bounds each time a new incumbent solution is found."""
+    """Records incumbent solutions each time SCIP finds a better one."""
 
     def __init__(self, variables: dict[str, list], progress_path: Path, start_time: float) -> None:
         """Initializes event handler state.
@@ -50,7 +36,7 @@ class HistoryEventHandler(Eventhdlr):
         self.variables = variables
         self.progress_path = progress_path
         self.start_time = start_time
-        self.history: list[dict[str, float | int | str | list[float]]] = []
+        self.history: list[HistoryEntry] = []
 
     def eventinit(self) -> None:
         """Registers event subscription for incumbent updates."""
@@ -61,19 +47,15 @@ class HistoryEventHandler(Eventhdlr):
         self.model.dropEvent(SCIP_EVENTTYPE.BESTSOLFOUND, self)
 
     def eventexec(self, event: object) -> None:
-        """Appends current time, objective, dual bound, and solution for each incumbent event.
+        """Appends current time and evaluation result for each incumbent event.
         :param event: Event payload provided by SCIP.
         """
         current_time = time.perf_counter() - self.start_time
         solution = ClassicalSolver.extract_solution(self.model, self.variables)
-        self.history.append({
-            "time": current_time,
-            "objective": solution.cost,
-            "dual_bound": float(self.model.getDualbound()),
-            "generator_assignments": solution.generator_statuses,
-            "continuous_parameters": np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist(),
-        })
-        save_progress_snapshot(self.progress_path, self.history)
+        params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
+        evaluation_result = EvaluationResult(solution.generator_statuses, params, solution.cost, 0, solution.cost)
+        self.history.append(HistoryEntry(current_time, None, evaluation_result))
+        pd.to_pickle(self.history, self.progress_path)
 
 
 class PowerFlowSolver(ABC):
@@ -182,7 +164,7 @@ class ClassicalSolver(PowerFlowSolver):
         model, variables = self.build_model_power_flow(problem)
         if progress_path is not None:
             history_handler = HistoryEventHandler(variables, progress_path, t1)
-            model.includeEventhdlr(history_handler, "incumbent_history", "Records incumbent primal/dual bound history.")
+            model.includeEventhdlr(history_handler, "incumbent_history", "Records incumbent solution history.")
         model.optimize()
 
         status = str(model.getStatus())
@@ -191,8 +173,6 @@ class ClassicalSolver(PowerFlowSolver):
                 
         solution = ClassicalSolver.extract_solution(model, variables)
         if progress_path is not None:
-            assert np.isclose(history_handler.history[-1]["objective"], solution.cost), \
-                f"Latest recorded incumbent cost {history_handler.history[-1]["objective"]} does not match final cost {solution.cost}."
             solution.history = history_handler.history
         solution.extra["solve_status"] = status
         return solution
@@ -231,16 +211,9 @@ class HybridSolver(PowerFlowSolver):
             optimized_result = inner_optimizer.optimize(generator_statuses)
             if optimized_result.is_better_than(best_result, self.feasibility_tolerance):
                 best_result = optimized_result
-                history.append({
-                    "time": self.vqp.get_current_classical_time(),
-                    "objective": float(optimized_result.fun),
-                    "penalty": float(optimized_result.penalty),
-                    "num_jobs": self.vqp.num_jobs,
-                    "generator_assignments": generator_statuses,
-                    "continuous_parameters": optimized_result.params.tolist(),
-                })
+                history.append(HistoryEntry(self.vqp.get_current_classical_time(), self.vqp.num_jobs, optimized_result))
                 if progress_path is not None:
-                    save_progress_snapshot(progress_path, history)
+                    pd.to_pickle(history, progress_path)
             return optimized_result.total
 
         inner_optimizer = self.inner_optimizer_factory(problem)
@@ -252,8 +225,9 @@ class HybridSolver(PowerFlowSolver):
         assert result.success, f"Angle optimization failed: {result.message}"
 
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
-        active_powers, reactive_powers, voltages, angles = problem.split_params(np.array(history[-1]["continuous_parameters"]))
-        solution = PowerFlowSolution(history[-1]["generator_assignments"], active_powers, reactive_powers, voltages, angles, history[-1]["objective"], history)
+        final_result = history[-1].evaluation_result
+        active_powers, reactive_powers, voltages, angles = problem.split_params(np.array(final_result.params))
+        solution = PowerFlowSolution(final_result.generator_statuses, active_powers, reactive_powers, voltages, angles, final_result.fun, history)
 
         if self.exact_final_expectation:
             exact_sampler = ExactSampler()

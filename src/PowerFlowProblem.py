@@ -7,6 +7,8 @@ import numpy as np
 from networkx import Graph
 from numpy.typing import NDArray
 
+from .HistoryEntry import HistoryEntry
+
 class PowerFlowProblem:
     """Represents an AC-OPF-UC instance on a graph.
     :var graph: NetworkX graph with node and edge electrical metadata.
@@ -59,12 +61,8 @@ class PowerFlowProblem:
         """
         num_generators = len(self.generators)
         num_nodes = len(self.graph)
-        return (
-            params[:num_generators],
-            params[num_generators:2 * num_generators],
-            params[2 * num_generators:2 * num_generators + num_nodes],
-            params[2 * num_generators + num_nodes:],
-        )
+        return (params[:num_generators], params[num_generators:2 * num_generators], params[2 * num_generators:2 * num_generators + num_nodes],
+                params[2 * num_generators + num_nodes:])
 
     def evaluate_constraints(self, params: Sequence[float]) -> list[float]:
         """Evaluates all constraints for a concatenated parameter vector.
@@ -133,7 +131,7 @@ class PowerFlowSolution:
     :var voltages: Voltage magnitudes for all nodes.
     :var angles: Voltage phase angles for all nodes.
     :var cost: Objective value of the solution.
-    :var history: Incumbent history entries with ``time`` and ``objective`` plus solver-specific metadata and, for hybrid runs, the corresponding solution.
+    :var history: Incumbent history entries containing ``time``, ``num_jobs``, and ``evaluation_result`` data.
     :var extra: Additional solver-specific metadata.
     """
     generator_statuses: str
@@ -142,5 +140,5 @@ class PowerFlowSolution:
     voltages: NDArray[float]
     angles: NDArray[float]
     cost: float
-    history: list[dict[str, float | int | str | list[float]]] = field(default_factory=list)
+    history: list[HistoryEntry] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
