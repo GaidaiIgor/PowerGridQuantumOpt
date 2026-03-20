@@ -3,7 +3,7 @@
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Self, Sequence
+from typing import Sequence
 
 import casadi as ca
 import numpy as np
@@ -11,6 +11,7 @@ from numpy.typing import NDArray
 from scipy import optimize
 from scipy.optimize import NonlinearConstraint
 
+from .EvaluationResult import EvaluationResult
 from .PowerFlowProblem import PowerFlowProblem
 
 
@@ -24,45 +25,6 @@ class Constraint:
     expression: ca.SX
     lb: float
     ub: float
-
-
-@dataclass
-class EvaluationResult:
-    """Stores one evaluated continuous-parameter assignment and its metrics.
-    :var params: Full continuous optimization vector.
-    :var fun: Objective value without constraint penalty.
-    :var penalty: Penalty from violated constraints.
-    :var total: Penalized objective value.
-    :var final: Whether this result is considered final by the solver (will not be further improved).
-    :var success: Whether the solver reported success for this result when ``final`` is true.
-    :var message: Solver-status message for this result when ``final`` is true.
-    """
-    params: NDArray[float]
-    fun: float
-    penalty: float
-    total: float
-    final: bool = False
-    success: bool | None = None
-    message: str | None = None
-
-    def is_better_than(self, other: Self | None, feasibility_tolerance: float) -> bool:
-        """Returns whether this result should replace another incumbent.
-        :param other: Current incumbent result, or ``None`` when no incumbent exists yet.
-        :param feasibility_tolerance: Maximum penalty still treated as feasible.
-        :return: Whether this result is better than ``other``.
-        """
-        if other is None:
-            return True
-        self_is_feasible = self.penalty <= feasibility_tolerance
-        other_is_feasible = other.penalty <= feasibility_tolerance
-        if self_is_feasible:
-            if other_is_feasible:
-                return self.fun < other.fun
-            return True
-        if other_is_feasible:
-            return False
-        return (self.penalty, self.fun) < (other.penalty, other.fun)
-
 
 @dataclass
 class ContinuousPowerOptimizer(ABC):
@@ -127,7 +89,7 @@ class ContinuousPowerOptimizer(ABC):
         params = np.array(params).reshape(-1)
         objective = self.get_cost(generator_statuses, params)
         penalty = self.get_penalty(params)
-        result = EvaluationResult(params=params, fun=objective, penalty=penalty, total=objective + penalty)
+        result = EvaluationResult(generator_statuses, params, objective, penalty, objective + penalty)
         if result.is_better_than(self.cache.get(generator_statuses), self.feasibility_tolerance):
             self.cache[generator_statuses] = result
         return result

@@ -16,7 +16,8 @@ from pyscipopt import Eventhdlr, Model, SCIP_EVENTTYPE, sin, cos, quicksum
 from pyscipopt.recipes.nonlinear import set_nonlinear_objective
 
 from . import utils
-from .ContinuousPowerOptimizer import ContinuousPowerOptimizer, EvaluationResult
+from .ContinuousPowerOptimizer import ContinuousPowerOptimizer
+from .EvaluationResult import EvaluationResult
 from .PowerFlowProblem import PowerFlowProblem, PowerFlowSolution
 from .Sampler import ExactSampler
 from .VariationalQuantumProgram import VariationalQuantumProgram

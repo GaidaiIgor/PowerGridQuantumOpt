@@ -13,7 +13,6 @@ class PowerFlowProblem:
     :var generators: Flat list of generator objects collected from all nodes.
     :var voltage_deviation_mult: Multiplier applied to squared voltage deviation from ``1`` in the objective.
     """
-    voltage_deviation_mult: float
 
     def __init__(self, graph: Graph, voltage_deviation_mult: float = 1):
         """Constructs power flow problem from graph.

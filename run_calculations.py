@@ -31,18 +31,20 @@ from src.utils import my_format
 def generate_dataset():
     num_generators = 5
     problem_generator = PowerFlowProblemGenerator()
-    problem_generator.generate_instances(num_generators, 100, output_folder=f"data/{num_generators}/capacity_100", strictness_factor=1.2, capacity_spec=LognormalSpec(100, 2))
+    problem_generator.generate_instances(num_generators, 100, voltage_range=(0, 100), output_folder=f"data/{num_generators}/capacity_100",
+                                         strictness_factor=1.2, capacity_spec=LognormalSpec(100, 2))
 
 
 def run_single():
     # problem = get_power_flow_ac_problem()
-    index = 2
+    index = 0
+    voltage_deviation_mult = 10
     data_path = Path(f"data/5/capacity_100")
     with (data_path / f"{index}.pkl").open("rb") as file:
-        problem = PowerFlowProblem(pickle.load(file))
+        problem = PowerFlowProblem(pickle.load(file), voltage_deviation_mult)
 
     # debug.set_all_edge_capacities(problem, 100)
-    debug.set_all_node_voltage_ranges(problem, (1, 100))
+    # debug.set_all_node_voltage_ranges(problem, (1, 100))
     # debug.set_all_generator_p_min(problem, 0)
 
     # solver = ClassicalSolver()
@@ -107,6 +109,7 @@ def run_parallel() -> None:
     num_generators = 5
     data_folder = Path(f"data/{num_generators}/capacity_100")
     instance_indices = list(range(100))
+    voltage_deviation_mult = 10
     absent_only = True
     timeout_s = 1800
 
@@ -140,7 +143,8 @@ def run_parallel() -> None:
     timeout_count = 0
     error_count = 0
     with ProcessPool(max_workers=workers) as pool:
-        future_to_metadata = {pool.schedule(run_instance, args=(data_folder, index, solver), timeout=timeout_s): index for index in instance_indices}
+        future_to_metadata = \
+            {pool.schedule(run_instance, args=(data_folder, index, solver, voltage_deviation_mult), timeout=timeout_s): index for index in instance_indices}
         for future in tqdm(as_completed(future_to_metadata), total=len(future_to_metadata), smoothing=0.0):
             index = future_to_metadata[future]
             progress_path = progress_folder / f"{index}.pkl"
@@ -172,20 +176,20 @@ def run_parallel() -> None:
             output_df.to_csv(solutions_path, index=False)
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
 
-
-def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver) \
+def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver, voltage_deviation_mult: float) \
     -> tuple[int, str, list[float], float, float, float | int, list[dict[str, float | int | str | list[float]]]]:
     """Solves one instance and returns a serialized result row.
     :param data_folder: Path to the dataset folder.
     :param index: Instance index to solve.
     :param solver: Solver used for the instance.
+    :param voltage_deviation_mult: Multiplier applied to squared voltage deviation from ``1`` in the objective.
     :return: Tuple ``(index, generator_assignments, continuous_parameters, cost, penalty, num_jobs, history)``.
     """
     progress_folder = data_folder / f".progress_{solver.name}"
     log_path = progress_folder / f"{index}.txt"
     with redirect_worker_output(log_path):
         with (data_folder / f"{index}.pkl").open("rb") as file:
-            problem = PowerFlowProblem(pickle.load(file))
+            problem = PowerFlowProblem(pickle.load(file), voltage_deviation_mult)
         progress_path = progress_folder / f"{index}.pkl"
         solution = solver.solve(problem, progress_path=progress_path)
         continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
@@ -219,8 +223,8 @@ def redirect_worker_output(log_path: Path) -> Iterator[None]:
         os.close(stderr_fd)
 
 
-def load_progress_snapshot(progress_path: Path) -> tuple[str | None, list[float] | None, float, float, float | int,
-                                                         list[dict[str, float | int | str | list[float]]] | None]:
+def load_progress_snapshot(progress_path: Path) -> \
+        tuple[str | None, list[float] | None, float, float, float | int, list[dict[str, float | int | str | list[float]]] | None]:
     """Loads persisted worker progress for one instance.
     :param progress_path: Path to pickle snapshot written by a worker process.
     :return: Tuple ``(generator_assignments, continuous_parameters, cost, penalty, num_jobs, history)`` recovered from the snapshot.
