@@ -123,15 +123,19 @@ def _get_average_normalized_curve(grid_times: np.ndarray, instance_ids: list[int
     :return: Average normalized objective values for each grid time.
     """
     totals = np.zeros(len(grid_times))
+    feasible_count = 0
     for instance in instance_ids:
+        if (best_objective := best_objectives[instance]) is None:
+            continue
+        feasible_count += 1
         history = solver_histories.get(instance)
         if not history:
             continue
         history_times = np.array([entry.time for entry in history])
-        normalized_objectives = np.array([best_objectives[instance] / entry.evaluation_result.fun for entry in history])
+        normalized_objectives = np.array([best_objective / entry.evaluation_result.fun for entry in history])
         indices = np.searchsorted(history_times, grid_times, side="right") - 1
         totals[indices >= 0] += normalized_objectives[indices[indices >= 0]]
-    return totals / len(instance_ids)
+    return totals / feasible_count
 
 
 if __name__ == "__main__":

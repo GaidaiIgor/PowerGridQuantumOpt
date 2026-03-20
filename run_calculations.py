@@ -54,7 +54,7 @@ def run_single():
     solver = get_hybrid_solver(len(problem.generators))
 
     inner_solver = solver.inner_optimizer_factory(problem)
-    result = inner_solver.optimize("11111")
+    result = inner_solver.optimize("11110")
 
     progress_folder = data_path / f".progress_{solver.name}"
     progress_folder.mkdir(exist_ok=True)
