@@ -20,12 +20,12 @@ from tqdm import tqdm
 import debug
 from src import PowerFlowProblemGenerator, LognormalSpec
 from src.CircuitLayer import AllToAllEntangler, ZXMixer
-from src.ContinuousPowerOptimizer import ContinuousPowerOptimizer, CasadiOptimizer
+from src.ContinuousPowerOptimizer import CasadiOptimizer
 from src.HistoryEntry import HistoryEntry
 from src.Generator import Generator
 from src.PowerFlowProblem import PowerFlowProblem
 from src.PowerFlowSolver import ClassicalSolver, HybridSolver, PowerFlowSolver
-from src.Sampler import ExactSampler, MySamplerV2
+from src.Sampler import MySamplerV2
 from src.VariationalQuantumProgram import VariationalQuantumProgram
 from src.utils import my_format
 
@@ -41,6 +41,7 @@ def run_single():
     # problem = get_power_flow_ac_problem()
     index = 0
     voltage_deviation_mult = 10
+    exact_final_expectation = False
     data_path = Path(f"data/5/capacity_100")
     with (data_path / f"{index}.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file), voltage_deviation_mult)
@@ -55,14 +56,17 @@ def run_single():
     progress_folder = data_path / f".progress_{solver.name}"
     progress_folder.mkdir(exist_ok=True)
     progress_path = progress_folder / f"{index}.pkl"
-    solution = solver.solve(problem, progress_path=progress_path)
-    print("\nSolution:")
-    debug.print_power_flow_solution(problem, solution)
+    if exact_final_expectation:
+        history, extra = solver.solve_with_extras(problem, progress_path, exact_final_expectation)
+    else:
+        history = solver.solve(problem, progress_path)
 
-    if isinstance(solver, HybridSolver) and solver.exact_final_expectation:
-        print(f"Optimized probabilities: {my_format(solution.extra["final_probs"])}")
-        print(f"Optimized expectation: {solution.extra["cost_expectation"]}")
-        print(f"Number of jobs: {solution.history[-1].num_jobs}")
+    print("\nSolution:")
+    debug.print_power_flow_solution(problem, history[-1].evaluation_result)
+    print(f"Number of jobs: {history[-1].num_jobs}")
+    if exact_final_expectation:
+        print(f"Optimized probabilities: {my_format(extra["final_probs"])}")
+        print(f"Optimized expectation: {extra["cost_expectation"]}")
 
 
 def get_hybrid_solver(num_generators: int) -> HybridSolver:
@@ -196,11 +200,9 @@ def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver, voltage
         with (data_folder / f"{index}.pkl").open("rb") as file:
             problem = PowerFlowProblem(pickle.load(file), voltage_deviation_mult)
         progress_path = progress_folder / f"{index}.pkl"
-        solution = solver.solve(problem, progress_path=progress_path)
-        continuous_params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
-        penalty = solution.history[-1].evaluation_result.penalty if isinstance(solver, HybridSolver) else 0
-        num_jobs = solution.history[-1].num_jobs if isinstance(solver, HybridSolver) and len(solution.history) > 0 else None
-        return index, solution.generator_statuses, continuous_params, solution.cost, penalty, num_jobs, solution.history
+        history = solver.solve(problem, progress_path=progress_path)
+        last_result = history[-1].evaluation_result
+        return index, last_result.generator_statuses, last_result.params, last_result.fun, last_result.penalty, history[-1].num_jobs, history
 
 
 @contextmanager

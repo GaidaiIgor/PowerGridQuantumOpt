@@ -6,7 +6,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Any
 
 import numpy as np
 import pandas as pd
@@ -18,7 +18,7 @@ from . import utils
 from .ContinuousPowerOptimizer import ContinuousPowerOptimizer
 from .EvaluationResult import EvaluationResult
 from .HistoryEntry import HistoryEntry
-from .PowerFlowProblem import PowerFlowProblem, PowerFlowSolution
+from .PowerFlowProblem import PowerFlowProblem
 from .Sampler import ExactSampler
 from .VariationalQuantumProgram import VariationalQuantumProgram
 
@@ -51,10 +51,7 @@ class HistoryEventHandler(Eventhdlr):
         :param event: Event payload provided by SCIP.
         """
         current_time = time.perf_counter() - self.start_time
-        solution = ClassicalSolver.extract_solution(self.model, self.variables)
-        params = np.concatenate((solution.active_powers, solution.reactive_powers, solution.voltages, solution.angles)).tolist()
-        evaluation_result = EvaluationResult(solution.generator_statuses, params, solution.cost, 0, solution.cost)
-        self.history.append(HistoryEntry(current_time, None, evaluation_result))
+        self.history.append(HistoryEntry(current_time, None, ClassicalSolver.extract_evaluation_result(self.model, self.variables)))
         pd.to_pickle(self.history, self.progress_path)
 
 
@@ -65,11 +62,11 @@ class PowerFlowSolver(ABC):
     name: str
 
     @abstractmethod
-    def solve(self, problem: PowerFlowProblem, progress_path: Path | None = None) -> PowerFlowSolution:
-        """Solves a given power grid optimization problem and returns its solution.
+    def solve(self, problem: PowerFlowProblem, progress_path: Path) -> list[HistoryEntry]:
+        """Solves a given power grid optimization problem and returns its history.
         :param problem: Power-flow optimization problem to solve.
-        :param progress_path: Optional path for persisting incumbent progress snapshots.
-        :return: Solution object produced by the solver.
+        :param progress_path: Path for persisting incumbent progress snapshots.
+        :return: Solver history whose last entry is the final incumbent.
         """
         pass
 
@@ -136,11 +133,11 @@ class ClassicalSolver(PowerFlowSolver):
         return model, variables
 
     @staticmethod
-    def extract_solution(model: Model, variables: dict[str, list]) -> PowerFlowSolution:
-        """Extracts optimized variables from model and fills out solution instance.
+    def extract_evaluation_result(model: Model, variables: dict[str, list]) -> EvaluationResult:
+        """Extracts optimized variables from model and builds evaluation-result data.
         :param model: Solved SCIP model with at least one solution.
         :param variables: Grouped variable containers returned by model builder.
-        :return: Extracted power-flow solution.
+        :return: Extracted evaluation result for the current incumbent.
         """
         best_solution = model.getBestSol()
         all_u = sum(variables["u"], [])
@@ -152,30 +149,22 @@ class ClassicalSolver(PowerFlowSolver):
         voltages = np.array([model.getSolVal(best_solution, var) for var in variables["v"]])
         angles = np.array([model.getSolVal(best_solution, var) for var in variables["d"]])
         cost = model.getSolObjVal(best_solution)
-        return PowerFlowSolution(generator_statuses, active_powers, reactive_powers, voltages, angles, cost)
+        return EvaluationResult(generator_statuses, np.concatenate((active_powers, reactive_powers, voltages, angles)).tolist(), cost, 0, cost)
 
-    def solve(self, problem: PowerFlowProblem, progress_path: Path | None = None) -> PowerFlowSolution:
-        """Solves given problem and returns its solution.
+    def solve(self, problem: PowerFlowProblem, progress_path: Path) -> list[HistoryEntry]:
+        """Solves given problem and returns its incumbent history.
         :param problem: Power-flow optimization problem to solve.
-        :param progress_path: Optional path for persisting incumbent progress snapshots.
-        :return: Final solution with bound-history metadata.
+        :param progress_path: Path for persisting incumbent progress snapshots.
+        :return: Solver history whose last entry is the final incumbent.
         """
         t1 = time.perf_counter()
         model, variables = self.build_model_power_flow(problem)
-        if progress_path is not None:
-            history_handler = HistoryEventHandler(variables, progress_path, t1)
-            model.includeEventhdlr(history_handler, "incumbent_history", "Records incumbent solution history.")
+        history_handler = HistoryEventHandler(variables, progress_path, t1)
+        model.includeEventhdlr(history_handler, "incumbent_history", "Records incumbent solution history.")
         model.optimize()
-
-        status = str(model.getStatus())
-        if status == "infeasible":
-            raise AssertionError("Infeasible instance")
-                
-        solution = ClassicalSolver.extract_solution(model, variables)
-        if progress_path is not None:
-            solution.history = history_handler.history
-        solution.extra["solve_status"] = status
-        return solution
+        assert str(model.getStatus()) != "infeasible", "Infeasible instance"
+        pd.to_pickle(history_handler.history, progress_path)
+        return history_handler.history
 
 
 @dataclass
@@ -186,25 +175,33 @@ class HybridSolver(PowerFlowSolver):
     :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
     :var seed: Optional random seed for initial quantum-parameter sampling.
     :var feasibility_tolerance: Feasibility tolerance; history stores only entries with penalty below this threshold.
-    :var exact_final_expectation: Whether to compute the exact final bitstring distribution and expectation after optimization.
     """
     name: str = field(init=False)
     vqp: VariationalQuantumProgram
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
     seed: int = None
     feasibility_tolerance: float = 1e-10
-    exact_final_expectation: bool = False
 
     def __post_init__(self) -> None:
         """Initializes derived solver metadata."""
         inner_optimizer_type = self.inner_optimizer_factory.func if isinstance(self.inner_optimizer_factory, partial) else self.inner_optimizer_factory
         self.name = {"SLSQPOptimizer": "slsqp", "CasadiOptimizer": "casadi"}[inner_optimizer_type.__name__]
 
-    def solve(self, problem: PowerFlowProblem, progress_path: Path | None = None) -> PowerFlowSolution:
-        """Optimizes quantum parameters and returns the last recorded feasible solution.
+    def solve(self, problem: PowerFlowProblem, progress_path: Path) -> list[HistoryEntry]:
+        """Optimizes quantum parameters and returns the feasible incumbent history.
         :param problem: Power-flow optimization problem to solve.
-        :param progress_path: Optional path for persisting incumbent progress snapshots.
-        :return: Last recorded feasible solution obtained from sampled binary and optimized continuous parameters.
+        :param progress_path: Path for persisting incumbent progress snapshots.
+        :return: History of improving feasible incumbents.
+        """
+        return self.solve_with_extras(problem, progress_path)[0]
+
+    def solve_with_extras(self, problem: PowerFlowProblem, progress_path: Path, exact_final_expectation: bool = False) \
+            -> tuple[list[HistoryEntry], dict[str, Any]]:
+        """Optimizes quantum parameters and optionally computes exact final-distribution extras.
+        :param problem: Power-flow optimization problem to solve.
+        :param progress_path: Path for persisting incumbent progress snapshots.
+        :param exact_final_expectation: Whether to compute the exact final bitstring distribution and expectation after optimization.
+        :return: Tuple of feasible incumbent history and optional extra hybrid-run information.
         """
         def get_assignment_cost_tracked(generator_statuses: str) -> float:
             nonlocal best_result
@@ -212,8 +209,7 @@ class HybridSolver(PowerFlowSolver):
             if optimized_result.is_better_than(best_result, self.feasibility_tolerance):
                 best_result = optimized_result
                 history.append(HistoryEntry(self.vqp.get_current_classical_time(), self.vqp.num_jobs, optimized_result))
-                if progress_path is not None:
-                    pd.to_pickle(history, progress_path)
+                pd.to_pickle(history, progress_path)
             return optimized_result.total
 
         inner_optimizer = self.inner_optimizer_factory(problem)
@@ -223,15 +219,11 @@ class HybridSolver(PowerFlowSolver):
         best_result = None
         result = self.vqp.optimize_parameters(get_assignment_cost_tracked, initial_angles)
         assert result.success, f"Angle optimization failed: {result.message}"
-
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
-        final_result = history[-1].evaluation_result
-        active_powers, reactive_powers, voltages, angles = problem.split_params(np.array(final_result.params))
-        solution = PowerFlowSolution(final_result.generator_statuses, active_powers, reactive_powers, voltages, angles, final_result.fun, history)
 
-        if self.exact_final_expectation:
+        if exact_final_expectation:
             exact_sampler = ExactSampler()
-            solution.extra["final_probs"] = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
-            solution.extra["cost_expectation"] = \
-                utils.get_cost_expectation(lambda bitstring: inner_optimizer.optimize(bitstring).total, solution.extra["final_probs"])
-        return solution
+            final_probs = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
+            cost_expectation = utils.get_cost_expectation(lambda bitstring: inner_optimizer.optimize(bitstring).total, final_probs)
+            return history, {"final_probs": final_probs, "cost_expectation": cost_expectation}
+        return history, {}

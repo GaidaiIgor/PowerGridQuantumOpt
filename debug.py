@@ -6,8 +6,11 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from cattrs.preconf.json import make_converter
 
-from src.PowerFlowProblem import PowerFlowProblem, PowerFlowSolution
+from src.EvaluationResult import EvaluationResult
+from src.HistoryEntry import HistoryEntry
+from src.PowerFlowProblem import PowerFlowProblem
 
 
 def save_instance_human_readable(instance_path: str | Path, output_path: str | Path | None = None) -> Path:
@@ -106,20 +109,19 @@ def print_solution_from_csv(csv_path: str | Path, instance_index: int) -> None:
 
     solutions_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generator_assignments": "string"})
     solution_row = solutions_df.loc[solutions_df["instance"].astype(int) == instance_index].iloc[0]
-    params = np.fromstring(solution_row["continuous_parameters"].strip("[]"), sep=",")
-    active_powers, reactive_powers, voltages, angles = problem.split_params(params)
-    solution = PowerFlowSolution(solution_row["generator_assignments"], active_powers, reactive_powers, voltages, angles, solution_row["cost"])
-    print_power_flow_solution(problem, solution)
+    converter = make_converter()
+    print_power_flow_solution(problem, converter.loads(solution_row["history"], list[HistoryEntry])[-1].evaluation_result)
 
 
-def print_power_flow_solution(problem: PowerFlowProblem, solution: PowerFlowSolution) -> None:
+def print_power_flow_solution(problem: PowerFlowProblem, result: EvaluationResult) -> None:
     """Prints node and line values for one power-flow problem and its solution. Positive active power is produced. Negative active power is spent.
     :param problem: Power-flow instance that defines graph topology, loads, and bounds.
-    :param solution: Solution values to print against ``problem`` bounds and line capacities.
+    :param result: Evaluation result printed against ``problem`` bounds and line capacities.
     """
-    bounds = problem.get_bounds(solution.generator_statuses)
+    active_powers, reactive_powers, voltages, angles = problem.split_params(np.array(result.params))
+    bounds = problem.get_bounds(result.generator_statuses)
     bounds_active, bounds_reactive, bounds_voltage, bounds_angle = problem.split_params(bounds)
-    voltage_phasors = solution.voltages * np.exp(1j * solution.angles)
+    voltage_phasors = voltages * np.exp(1j * angles)
 
     for node_label, node_data in problem.graph.nodes(data=True):
         node_ind = node_data["node_ind"]
@@ -128,14 +130,14 @@ def print_power_flow_solution(problem: PowerFlowProblem, solution: PowerFlowSolu
         load_power = -node_data["load"]
         print(f"Node {node_label}:")
         print(f"  Load: P: {load_power.real:.3g}, Q: {load_power.imag:.3g}")
-        print(f"  Voltage: {voltage_bounds[0]:.3g} <= {solution.voltages[node_ind]:.3g} <= {voltage_bounds[1]:.3g}")
-        print(f"  Angle: {angle_bounds[0]:.3g} <= {solution.angles[node_ind]:.3g} <= {angle_bounds[1]:.3g}")
+        print(f"  Voltage: {voltage_bounds[0]:.3g} <= {voltages[node_ind]:.3g} <= {voltage_bounds[1]:.3g}")
+        print(f"  Angle: {angle_bounds[0]:.3g} <= {angles[node_ind]:.3g} <= {angle_bounds[1]:.3g}")
         for gen_index in node_data["gen_inds"]:
             active_bounds = bounds_active[gen_index]
             reactive_bounds = bounds_reactive[gen_index]
-            print(f"  Generator {gen_index}: P: {active_bounds[0]:.3g} <= {solution.active_powers[gen_index]:.3g} <= {active_bounds[1]:.3g}, "
-                  f"Q: {reactive_bounds[0]:.3g} <= {solution.reactive_powers[gen_index]:.3g} <= {reactive_bounds[1]:.3g}")
-        total_generation = np.sum(solution.active_powers[node_data["gen_inds"]]) + 1j * np.sum(solution.reactive_powers[node_data["gen_inds"]])
+            print(f"  Generator {gen_index}: P: {active_bounds[0]:.3g} <= {active_powers[gen_index]:.3g} <= {active_bounds[1]:.3g}, "
+                  f"Q: {reactive_bounds[0]:.3g} <= {reactive_powers[gen_index]:.3g} <= {reactive_bounds[1]:.3g}")
+        total_generation = np.sum(active_powers[node_data["gen_inds"]]) + 1j * np.sum(reactive_powers[node_data["gen_inds"]])
         print(f"  Total generation: P: {total_generation.real:.3g}, Q: {total_generation.imag:.3g}")
         total_line_power = 0
         for _, neighbor_label, line_data in problem.graph.edges(node_label, data=True):

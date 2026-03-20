@@ -1,13 +1,10 @@
 """Data structures and constraint/cost evaluation for AC power-flow optimization."""
 
-from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Sequence
 
 import numpy as np
 from networkx import Graph
 from numpy.typing import NDArray
-
-from .HistoryEntry import HistoryEntry
 
 class PowerFlowProblem:
     """Represents an AC-OPF-UC instance on a graph.
@@ -121,24 +118,3 @@ class PowerFlowProblem:
         :return: Total generation cost.
         """
         return sum(int(status) * gen.generation_cost(power) for status, gen, power in zip(generator_statuses, self.generators, active_powers))
-
-@dataclass
-class PowerFlowSolution:
-    """Represents solution to a power grid network.
-    :var generator_statuses: Binary on/off string for all generators.
-    :var active_powers: Active power outputs for all generators.
-    :var reactive_powers: Reactive power outputs for all generators.
-    :var voltages: Voltage magnitudes for all nodes.
-    :var angles: Voltage phase angles for all nodes.
-    :var cost: Objective value of the solution.
-    :var history: Incumbent history entries containing ``time``, ``num_jobs``, and ``evaluation_result`` data.
-    :var extra: Additional solver-specific metadata.
-    """
-    generator_statuses: str
-    active_powers: NDArray[float]
-    reactive_powers: NDArray[float]
-    voltages: NDArray[float]
-    angles: NDArray[float]
-    cost: float
-    history: list[HistoryEntry] = field(default_factory=list)
-    extra: dict[str, Any] = field(default_factory=dict)
