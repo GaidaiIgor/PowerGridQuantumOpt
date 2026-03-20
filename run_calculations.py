@@ -157,42 +157,38 @@ def run_parallel() -> None:
             progress_path = progress_folder / f"{index}.pkl"
             log_path = progress_folder / f"{index}.txt"
             try:
-                _, generator_assignments, continuous_params, cost, penalty, num_jobs, history = future.result()
+                history = future.result()
                 error = None
             except Exception as ex:
                 history = pd.read_pickle(progress_path) if progress_path.exists() else None
-                if history is None:
-                    generator_assignments, continuous_params, cost, penalty, num_jobs = None, None, None, None, None
-                else:
-                    last_result = history[-1].evaluation_result
-                    generator_assignments = last_result.generator_statuses
-                    continuous_params = last_result.params
-                    cost = last_result.fun
-                    penalty = last_result.penalty
-                    num_jobs = history[-1].num_jobs
                 if isinstance(ex, FutureTimeoutError):
                     timeout_count += 1
                     error = f"Timeout after {timeout_s}s"
                 else:
                     error_count += 1
                     error = f"{type(ex).__name__}: {ex}"
+
             if log_path.stat().st_size == 0:
                 log_path.unlink()
-            rows[index] = {"generator_assignments": generator_assignments, "continuous_parameters": continuous_params, "cost": cost, "penalty": penalty,
-                           "num_jobs": num_jobs, "history": converter.dumps(history) if history is not None else None, "error": error}
-            output_df = pd.DataFrame.from_dict(rows, orient="index").rename_axis("instance").reset_index().sort_values("instance")
+            row = {"history": None, "error": error}
+            if history is not None:
+                last_result = history[-1].evaluation_result
+                row |= {"generator_assignments": last_result.generator_statuses, "continuous_parameters": last_result.params, "cost": last_result.fun,
+                        "penalty": last_result.penalty, "num_jobs": history[-1].num_jobs, "history": converter.dumps(history)}
+            rows[index] = row
+            output_df = pd.DataFrame.from_dict(rows, orient="index").rename_axis("instance").reset_index().reindex(columns=columns).sort_values("instance")
             output_df["num_jobs"] = output_df["num_jobs"].astype("Int64")
             output_df.to_csv(solutions_path, index=False)
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
 
-def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver, voltage_deviation_mult: float) \
-    -> tuple[int, str, list[float], float, float, int | None, list[HistoryEntry]]:
-    """Solves one instance and returns a serialized result row.
+
+def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver, voltage_deviation_mult: float) -> list[HistoryEntry]:
+    """Solves one instance and returns its solver history.
     :param data_folder: Path to the dataset folder.
     :param index: Instance index to solve.
     :param solver: Solver used for the instance.
     :param voltage_deviation_mult: Multiplier applied to squared voltage deviation from ``1`` in the objective.
-    :return: Tuple ``(index, generator_assignments, continuous_parameters, cost, penalty, num_jobs, history)``.
+    :return: Solver history whose last entry is the final incumbent.
     """
     progress_folder = data_folder / f".progress_{solver.name}"
     log_path = progress_folder / f"{index}.txt"
@@ -200,9 +196,7 @@ def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver, voltage
         with (data_folder / f"{index}.pkl").open("rb") as file:
             problem = PowerFlowProblem(pickle.load(file), voltage_deviation_mult)
         progress_path = progress_folder / f"{index}.pkl"
-        history = solver.solve(problem, progress_path=progress_path)
-        last_result = history[-1].evaluation_result
-        return index, last_result.generator_statuses, last_result.params, last_result.fun, last_result.penalty, history[-1].num_jobs, history
+        return solver.solve(problem, progress_path=progress_path)
 
 
 @contextmanager
