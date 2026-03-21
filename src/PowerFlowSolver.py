@@ -26,7 +26,7 @@ from .VariationalQuantumProgram import VariationalQuantumProgram
 class HistoryEventHandler(Eventhdlr):
     """Records incumbent solutions each time SCIP finds a better one."""
 
-    def __init__(self, variables: dict[str, list], progress_path: Path, start_time: float) -> None:
+    def __init__(self, variables: dict[str, list], progress_path: Path, start_time: float):
         """Initializes event handler state.
         :param variables: Structured variable container returned by model builder.
         :param progress_path: Path for persisting incumbent data and full history.
@@ -38,15 +38,15 @@ class HistoryEventHandler(Eventhdlr):
         self.start_time = start_time
         self.history: list[HistoryEntry] = []
 
-    def eventinit(self) -> None:
+    def eventinit(self):
         """Registers event subscription for incumbent updates."""
         self.model.catchEvent(SCIP_EVENTTYPE.BESTSOLFOUND, self)
 
-    def eventexit(self) -> None:
+    def eventexit(self):
         """Removes event subscription for incumbent updates."""
         self.model.dropEvent(SCIP_EVENTTYPE.BESTSOLFOUND, self)
 
-    def eventexec(self, event: object) -> None:
+    def eventexec(self, event: object):
         """Appends current time and evaluation result for each incumbent event.
         :param event: Event payload provided by SCIP.
         """
@@ -182,7 +182,7 @@ class HybridSolver(PowerFlowSolver):
     seed: int = None
     feasibility_tolerance: float = 1e-10
 
-    def __post_init__(self) -> None:
+    def __post_init__(self):
         """Initializes derived solver metadata."""
         inner_optimizer_type = self.inner_optimizer_factory.func if isinstance(self.inner_optimizer_factory, partial) else self.inner_optimizer_factory
         self.name = {"SLSQPOptimizer": "slsqp", "CasadiOptimizer": "casadi"}[inner_optimizer_type.__name__]
@@ -203,27 +203,24 @@ class HybridSolver(PowerFlowSolver):
         :param exact_final_expectation: Whether to compute the exact final bitstring distribution and expectation after optimization.
         :return: Tuple of feasible incumbent history and optional extra hybrid-run information.
         """
-        def get_assignment_cost_tracked(generator_statuses: str) -> float:
-            nonlocal best_result
-            optimized_result = inner_optimizer.optimize(generator_statuses)
-            if optimized_result.is_better_than(best_result, self.feasibility_tolerance):
-                best_result = optimized_result
-                history.append(HistoryEntry(self.vqp.get_current_classical_time(), self.vqp.num_jobs, optimized_result))
-                pd.to_pickle(history, progress_path)
-            return optimized_result.total
+        def update_history(new_result: EvaluationResult):
+            history.append(HistoryEntry(self.vqp.get_current_classical_time(), self.vqp.num_jobs, new_result))
+            pd.to_pickle(history, progress_path)
 
+        history = []
         inner_optimizer = self.inner_optimizer_factory(problem)
+        inner_optimizer.feasibility_tolerance = self.feasibility_tolerance
+        inner_optimizer.best_result_callback = update_history
         rng = random.default_rng(self.seed)
         initial_angles = rng.uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
-        history = []
-        best_result = None
-        result = self.vqp.optimize_parameters(get_assignment_cost_tracked, initial_angles)
+        result = self.vqp.optimize_parameters(lambda generator_statuses: inner_optimizer.optimize(generator_statuses).total, initial_angles)
         assert result.success, f"Angle optimization failed: {result.message}"
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
 
         if exact_final_expectation:
             exact_sampler = ExactSampler()
             final_probs = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
+            inner_optimizer.best_result_callback = None
             cost_expectation = utils.get_cost_expectation(lambda bitstring: inner_optimizer.optimize(bitstring).total, final_probs)
             return history, {"final_probs": final_probs, "cost_expectation": cost_expectation}
         return history, {}

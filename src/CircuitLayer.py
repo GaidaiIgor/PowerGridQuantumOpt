@@ -17,7 +17,7 @@ class CircuitLayer(ABC):
     num_qubits: int
 
     @staticmethod
-    def connect_pair(qc: QuantumCircuit, i: int, j: int, angle: Parameter) -> None:
+    def connect_pair(qc: QuantumCircuit, i: int, j: int, angle: Parameter):
         """Appends an RZZ coupling gate between two qubits.
         :param qc: Circuit that receives the new gate.
         :param i: Index of the first qubit.
@@ -53,7 +53,7 @@ class AllToAllEntangler(CircuitLayer):
 class ButterflyEntangler(CircuitLayer):
     """Recursive butterfly-style ZZ entangler over contiguous qubit ranges."""
 
-    def connect_qubits(self, qc: QuantumCircuit, qubit_range: tuple[int, int], name_suffix: str) -> None:
+    def connect_qubits(self, qc: QuantumCircuit, qubit_range: tuple[int, int], name_suffix: str):
         """Applies butterfly couplings recursively over a half-open qubit range.
         :param qc: Circuit that receives coupling gates.
         :param qubit_range: Half-open index range ``(start, stop)`` to entangle.

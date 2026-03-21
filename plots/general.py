@@ -49,12 +49,12 @@ class Line:
     style: str | int = "-"
     label: str = "_nolabel_"
 
-    def set_color(self, color: tuple | int) -> None:
+    def set_color(self, color: tuple | int):
         self.color = color
         if isinstance(color, int):
             self.color = colors[color]
 
-    def __post_init__(self) -> None:
+    def __post_init__(self):
         if isinstance(self.color, int):
             self.color = colors[self.color]
         if isinstance(self.marker, int):
@@ -118,21 +118,21 @@ class AnnotationManager:
     drag_start_offset: tuple[float, float] | None = None
     next_tag_id: int = 0
 
-    def attach_canvas(self, canvas: object) -> None:
+    def attach_canvas(self, canvas: object):
         """Attaches the Matplotlib and Tk canvases used for native bubble rendering.
         :param canvas: Matplotlib canvas associated with the current figure.
         """
         self.canvas = canvas
         self.canvas_widget = canvas.get_tk_widget()
 
-    def register_line(self, axes: Axes, artist: Line2D) -> None:
+    def register_line(self, axes: Axes, artist: Line2D):
         """Registers one plotted data line for point hit-testing.
         :param axes: Axes that own the plotted line.
         :param artist: Main data line artist produced by Matplotlib plotting.
         """
         self.axes_lines.setdefault(axes, []).append(artist)
 
-    def button_press_event_handler(self, event) -> None:
+    def button_press_event_handler(self, event):
         """Handles clicks on plotted data points.
         :param event: Matplotlib button-press event produced after clicking in the plot.
         """
@@ -146,7 +146,7 @@ class AnnotationManager:
         self._toggle_annotation(point, event.inaxes)
         event.canvas.draw_idle()
 
-    def draw_event_handler(self, event) -> None:
+    def draw_event_handler(self, event):
         """Repositions all native bubbles after the figure is redrawn.
         :param event: Matplotlib draw event produced after the canvas is rendered.
         """
@@ -155,7 +155,7 @@ class AnnotationManager:
         for point in self.annotations:
             self._update_annotation_geometry(point)
 
-    def _toggle_annotation(self, point: tuple[float, float], axes: Axes) -> None:
+    def _toggle_annotation(self, point: tuple[float, float], axes: Axes):
         """Creates or removes a native bubble for one data point.
         :param point: Coordinates of the data point.
         :param axes: Matplotlib axes where the annotated point lives.
@@ -165,7 +165,7 @@ class AnnotationManager:
             return
         self._create_annotation(point, axes)
 
-    def _create_annotation(self, point: tuple[float, float], axes: Axes) -> None:
+    def _create_annotation(self, point: tuple[float, float], axes: Axes):
         """Creates native Tk-canvas items for one annotation bubble.
         :param point: Coordinates of the annotated data point.
         :param axes: Matplotlib axes where the annotated point lives.
@@ -181,7 +181,7 @@ class AnnotationManager:
         self._bind_annotation_events(point)
         self._update_annotation_geometry(point)
 
-    def _bind_annotation_events(self, point: tuple[float, float]) -> None:
+    def _bind_annotation_events(self, point: tuple[float, float]):
         """Binds native Tk mouse events for one annotation bubble.
         :param point: Coordinates of the annotated data point.
         """
@@ -246,7 +246,7 @@ class AnnotationManager:
         self._start_editing(point)
         return "break"
 
-    def _start_editing(self, point: tuple[float, float]) -> None:
+    def _start_editing(self, point: tuple[float, float]):
         """Starts native Tk text editing inside one bubble.
         :param point: Coordinates of the annotated data point.
         """
@@ -256,7 +256,7 @@ class AnnotationManager:
         self.original_text = self.annotations[point].text
         self._create_editor()
 
-    def _create_editor(self) -> None:
+    def _create_editor(self):
         """Creates and configures the native Tk text widget used inside the active bubble."""
         assert self.editing_point is not None, "Editing state must exist before creating the editor."
         assert self.canvas_widget is not None, "Canvas widget must be attached before creating the editor."
@@ -281,7 +281,7 @@ class AnnotationManager:
         self.editor_widget.focus_set()
         self.editor_widget.mark_set(tk.INSERT, "end-1c")
 
-    def _editor_text_updated(self, event: object) -> None:
+    def _editor_text_updated(self, event: object):
         """Synchronizes native Tk text edits back into the bubble geometry.
         :param event: Tk virtual event raised after text widget content changes.
         """
@@ -336,7 +336,7 @@ class AnnotationManager:
         self.editor_widget.see(tk.INSERT)
         return "break"
 
-    def _finish_editing(self, save: bool) -> None:
+    def _finish_editing(self, save: bool):
         """Finishes native bubble editing and either commits or restores the original text.
         :param save: Whether to keep the edited text instead of restoring the original text.
         """
@@ -355,7 +355,7 @@ class AnnotationManager:
         self._update_annotation_geometry(point)
         self.canvas.draw_idle()
 
-    def _destroy_editor(self) -> None:
+    def _destroy_editor(self):
         """Destroys the active native Tk text widget and its canvas window item."""
         assert self.canvas_widget is not None, "Canvas widget must be attached before destroying the editor."
         editor_window_id = self.editor_window_id
@@ -368,7 +368,7 @@ class AnnotationManager:
         if editor_widget is not None:
             editor_widget.destroy()
 
-    def _update_annotation_geometry(self, point: tuple[float, float]) -> None:
+    def _update_annotation_geometry(self, point: tuple[float, float]):
         """Updates one bubble's native canvas geometry from its anchor point and current text.
         :param point: Coordinates of the annotated data point.
         """
@@ -394,7 +394,7 @@ class AnnotationManager:
         if point == self.editing_point:
             self._place_editor(editor_text_bbox)
 
-    def _place_editor(self, text_bbox: tuple[int, int, int, int]) -> None:
+    def _place_editor(self, text_bbox: tuple[int, int, int, int]):
         """Places the active native Tk text widget inside the current bubble text bounds.
         :param text_bbox: Canvas bounding box of the hidden text item used for bubble sizing.
         """
@@ -405,7 +405,7 @@ class AnnotationManager:
         self.canvas_widget.itemconfigure(self.editor_window_id, width=max(1, text_bbox[2] - text_bbox[0]), height=max(1, text_bbox[3] - text_bbox[1]))
         self.canvas_widget.tag_raise(self.editor_window_id)
 
-    def _raise_annotation(self, point: tuple[float, float]) -> None:
+    def _raise_annotation(self, point: tuple[float, float]):
         """Raises one bubble's native canvas items above the rendered plot.
         :param point: Coordinates of the annotated data point.
         """
@@ -417,7 +417,7 @@ class AnnotationManager:
         if point == self.editing_point and self.editor_window_id is not None:
             self.canvas_widget.tag_raise(self.editor_window_id)
 
-    def _disable_default_shortcuts(self, canvas: object) -> None:
+    def _disable_default_shortcuts(self, canvas: object):
         """Disables Matplotlib's built-in key shortcuts for the current figure.
         :param canvas: Figure canvas whose default key handler should be disabled.
         """
@@ -428,7 +428,7 @@ class AnnotationManager:
         canvas.mpl_disconnect(self.default_key_press_handler_id)
         manager.key_press_handler_id = None
 
-    def _enable_default_shortcuts(self, canvas: object) -> None:
+    def _enable_default_shortcuts(self, canvas: object):
         """Re-enables Matplotlib's built-in key shortcuts for the current figure.
         :param canvas: Figure canvas whose default key handler should be re-enabled.
         """
@@ -438,7 +438,7 @@ class AnnotationManager:
         manager.key_press_handler_id = canvas.mpl_connect("key_press_event", key_press_handler)
         self.default_key_press_handler_id = None
 
-    def _remove_annotation(self, point: tuple[float, float]) -> None:
+    def _remove_annotation(self, point: tuple[float, float]):
         """Removes one native bubble from the Tk canvas.
         :param point: Coordinates of the annotated data point.
         """
@@ -540,7 +540,7 @@ def data_matrix_to_lines(data: ndarray, line_labels: list[str] = None, colors: l
 
 def plot_general(lines: list[Line], axis_labels: tuple[str | None, str | None] = None, tick_multiples: tuple[float | None, float | None] = None,
                  boundaries: tuple[float | None, float | None, float | None, float | None] = None, font_size: int = 20, legend_loc: str = "best",
-                 figure_id: int = None, **kwargs) -> None:
+                 figure_id: int = None, **kwargs):
     """Plots specified list of lines.
     :param lines: List of lines.
     :param axis_labels: Labels for x and y axes.
@@ -601,7 +601,7 @@ def plot_general(lines: list[Line], axis_labels: tuple[str | None, str | None] =
         plt.gcf().set_size_inches(10, 10)
 
 
-def save_figure(file_name: str = None) -> None:
+def save_figure(file_name: str = None):
     """Saves figure to a file.
     :param file_name: Name of the file or None to use caller's name (without plot_).
     """

@@ -3,7 +3,7 @@
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Sequence
+from typing import Callable, Sequence
 
 import casadi as ca
 import numpy as np
@@ -31,16 +31,20 @@ class ContinuousPowerOptimizer(ABC):
     """Base class for continuous parameter optimization for fixed generator assignments.
     :var problem: Power-flow instance that provides constraints, bounds, and generation costs.
     :var penalty_mult: Multiplier applied to summed squared constraint violations.
-    :var max_time_s: Optional wall-clock limit in seconds. ``None`` disables the limit.
+    :var max_time_s: Wall-clock limit in seconds.
     :var feasibility_tolerance: Maximum penalty still treated as feasible when comparing candidates.
+    :var best_result_callback: Callback invoked whenever the best cached result across all assignments improves.
     :var cache: Map from generator-status bitstring to cached optimization result or the current incumbent during an active run.
+    :var best_result: Best cached result across all assignments optimized by this object.
     :var tracking_start_time: Wall-clock timestamp when the current tracked run started.
     """
     problem: PowerFlowProblem
     penalty_mult: float
-    max_time_s: float | None = None
+    max_time_s: float
     feasibility_tolerance: float = 1e-10
+    best_result_callback: Callable[[EvaluationResult], None] | None = None
     cache: dict[str, EvaluationResult] = field(default_factory=dict)
+    best_result: EvaluationResult | None = field(init=False, default=None)
     tracking_start_time: float = field(init=False, repr=False, default=0)
 
     def optimize(self, generator_statuses: str) -> EvaluationResult:
@@ -53,7 +57,7 @@ class ContinuousPowerOptimizer(ABC):
         return self.cache[generator_statuses]
 
     @abstractmethod
-    def _optimize(self, generator_statuses: str) -> None:
+    def _optimize(self, generator_statuses: str):
         """Finds optimal continuous variables for a given set of enabled generators. Updates cache as it solves.
         :param generator_statuses: Binary generator on/off bitstring.
         """
@@ -92,6 +96,10 @@ class ContinuousPowerOptimizer(ABC):
         result = EvaluationResult(generator_statuses, params.tolist(), objective, penalty, objective + penalty)
         if result.is_better_than(self.cache.get(generator_statuses), self.feasibility_tolerance):
             self.cache[generator_statuses] = result
+            if result.is_better_than(self.best_result, self.feasibility_tolerance):
+                self.best_result = result
+                if self.best_result_callback is not None:
+                    self.best_result_callback(result)
         return result
 
     def get_cost(self, generator_statuses: str, params: Sequence[float]) -> float:
@@ -115,13 +123,13 @@ class ContinuousPowerOptimizer(ABC):
 class SLSQPOptimizer(ContinuousPowerOptimizer):
     """Optimizes continuous variables for fixed generator commitments with SLSQP."""
 
-    def _optimize(self, generator_statuses: str) -> None:
+    def _optimize(self, generator_statuses: str):
         """Runs SLSQP for a given set of enabled generators.
         :param generator_statuses: Binary generator on/off bitstring.
         """
         def cost_function(params: Sequence[float]) -> float:
             result = self.consider_candidate(generator_statuses, params)
-            if self.max_time_s is not None and time.perf_counter() - self.tracking_start_time > self.max_time_s:
+            if time.perf_counter() - self.tracking_start_time > self.max_time_s:
                 raise TimeoutError
             return result.fun
 
@@ -139,7 +147,7 @@ class SLSQPOptimizer(ContinuousPowerOptimizer):
         self.cache[generator_statuses].message = result.message
 
 
-class TimeLimitCallback(ca.Callback):
+class UpdateCallback(ca.Callback):
     """Tracks IPOPT iterates and requests termination after the configured time limit.
     :var _optimizer: Owning optimizer whose incumbent tracking is updated.
     :var _num_params: Number of decision variables in the NLP.
@@ -199,7 +207,7 @@ class TimeLimitCallback(ca.Callback):
         """
         assert self.generator_statuses is not None, "Tracking must be initialized before callback evaluation."
         self._optimizer.consider_candidate(self.generator_statuses, args[0])
-        return [self._optimizer.max_time_s is not None and time.perf_counter() - self._optimizer.tracking_start_time >= self._optimizer.max_time_s]
+        return [time.perf_counter() - self._optimizer.tracking_start_time >= self._optimizer.max_time_s]
 
 
 @dataclass
@@ -207,7 +215,7 @@ class CasadiOptimizer(ContinuousPowerOptimizer):
     """Optimizes continuous variables for fixed generator commitments with CasADi and IPOPT.
     :var solver: Reusable IPOPT-backed nonlinear solver for the problem structure.
     :var constraints: Symbolic constraints together with their valid ranges.
-    :var iteration_callback: Optional CasADi callback used to track incumbents and enforce ``max_time_s``.
+    :var update_callback: CasADi callback used to track incumbents and enforce ``max_time_s``.
     :var silent: Whether to suppress IPOPT and CasADi solver output.
     :var max_iter: Optional IPOPT iteration limit. ``None`` leaves IPOPT at its own default.
     """
@@ -215,28 +223,21 @@ class CasadiOptimizer(ContinuousPowerOptimizer):
     max_iter: int | None = None
     solver: ca.Function = field(init=False, repr=False)
     constraints: list[Constraint] = field(init=False, repr=False)
-    iteration_callback: TimeLimitCallback | None = field(init=False, repr=False)
+    update_callback: UpdateCallback = field(init=False, repr=False)
 
-    def __post_init__(self) -> None:
+    def __post_init__(self):
         """Builds reusable symbolic problem representation after initialization."""
-        params = ca.SX.sym("params", 2 * len(self.problem.generators) + 2 * len(self.problem.graph))
-        active_powers, reactive_powers, voltages, angles = self.problem.split_params(params)
+        vars = ca.SX.sym("params", 2 * len(self.problem.generators) + 2 * len(self.problem.graph))
+        active_powers, reactive_powers, voltages, angles = self.problem.split_params(vars)
         self.constraints = self._build_constraints(active_powers, reactive_powers, voltages, angles)
-        options = {"error_on_fail": False}
+        self.update_callback = UpdateCallback(self, vars.size1(), len(self.constraints))
+        options = {"error_on_fail": False, "iteration_callback": self.update_callback, "iteration_callback_step": 1}
         if self.silent:
             options |= {"ipopt.print_level": 0, "print_time": 0, "ipopt.sb": "yes"}
         if self.max_iter is not None:
             options["ipopt.max_iter"] = self.max_iter
-        self.iteration_callback = None
-        if self.max_time_s is not None:
-            self.iteration_callback = TimeLimitCallback(self, params.size1(), len(self.constraints))
-            options |= {"iteration_callback": self.iteration_callback, "iteration_callback_step": 1}
-        self.solver = ca.nlpsol(
-            "continuous_power_optimizer",
-            "ipopt",
-            {"x": params, "f": self._build_objective(active_powers, voltages), "g": ca.vertcat(*(constraint.expression for constraint in self.constraints))},
-            options
-        )
+        problem = {"x": vars, "f": self._build_objective(active_powers, voltages), "g": ca.vertcat(*(constraint.expression for constraint in self.constraints))}
+        self.solver = ca.nlpsol("casadi", "ipopt", problem, options)
 
     def _build_constraints(self, active_powers: ca.SX, reactive_powers: ca.SX, voltages: ca.SX, angles: ca.SX) -> list[Constraint]:
         """Builds CasADi constraints that mirror the numeric power-flow model.
@@ -280,22 +281,16 @@ class CasadiOptimizer(ContinuousPowerOptimizer):
         voltage_deviation_cost = self.problem.voltage_deviation_mult * sum(((voltages[i] - 1) ** 2 for i in range(len(self.problem.graph))), ca.SX(0))
         return generation_cost + voltage_deviation_cost
 
-    def _optimize(self, generator_statuses: str) -> None:
+    def _optimize(self, generator_statuses: str):
         """Runs IPOPT for a given set of enabled generators.
         :param generator_statuses: Binary generator on/off bitstring.
         """
         bounds = self.problem.get_bounds(generator_statuses)
         initial_point = self.get_initial_point(bounds)
-        if self.iteration_callback is not None:
-            self.tracking_start_time = time.perf_counter()
-            self.iteration_callback.generator_statuses = generator_statuses
-        solution = self.solver(
-            x0=initial_point,
-            lbx=[bound[0] for bound in bounds],
-            ubx=[bound[1] for bound in bounds],
-            lbg=[constraint.lb for constraint in self.constraints],
-            ubg=[constraint.ub for constraint in self.constraints]
-        )
+        self.tracking_start_time = time.perf_counter()
+        self.update_callback.generator_statuses = generator_statuses
+        solution = self.solver(x0=initial_point, lbx=[bound[0] for bound in bounds], ubx=[bound[1] for bound in bounds],
+                               lbg=[constraint.lb for constraint in self.constraints], ubg=[constraint.ub for constraint in self.constraints])
         stats = self.solver.stats()
         self.consider_candidate(generator_statuses, solution["x"])
         if stats["return_status"] == "User_Requested_Stop":

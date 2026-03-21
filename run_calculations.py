@@ -65,7 +65,7 @@ def run_single():
         history = solver.solve(problem, progress_path)
 
     print("\nSolution:")
-    debug.print_evaluation_result(problem, history[-1].evaluation_result)
+    debug.print_evaluation_result(problem, history[-1].result)
     print(f"Number of jobs: {history[-1].num_jobs}")
     if exact_final_expectation:
         print(f"Optimized probabilities: {my_format(extra["final_probs"])}")
@@ -113,7 +113,7 @@ def get_power_flow_ac_problem() -> PowerFlowProblem:
     return PowerFlowProblem(graph)
 
 
-def run_parallel() -> None:
+def run_parallel():
     """Runs selected instances in parallel and persists each completed result to CSV."""
     num_generators = 5
     data_folder = Path(f"data/{num_generators}/capacity_100")
@@ -175,7 +175,7 @@ def run_parallel() -> None:
                 log_path.unlink()
             row = {"history": None, "error": error}
             if history is not None:
-                last_result = history[-1].evaluation_result
+                last_result = history[-1].result
                 row |= {"generator_assignments": last_result.generator_statuses, "continuous_parameters": last_result.params, "cost": last_result.fun,
                         "penalty": last_result.penalty, "num_jobs": history[-1].num_jobs, "history": converter.dumps(history)}
             rows[index] = row

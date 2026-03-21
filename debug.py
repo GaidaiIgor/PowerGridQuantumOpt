@@ -114,7 +114,7 @@ def print_solution_from_csv(csv_path: str | Path, instance_index: int):
     for entry_ind, entry in enumerate(history):
         print(f"===========================================================================")
         print(f"History entry {entry_ind}: time={entry.time:.6g}, num_jobs={entry.num_jobs}")
-        print_evaluation_result(problem, entry.evaluation_result)
+        print_evaluation_result(problem, entry.result)
 
 
 def print_evaluation_result(problem: PowerFlowProblem, result: EvaluationResult):

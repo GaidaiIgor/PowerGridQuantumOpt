@@ -22,7 +22,7 @@ def plot_probability_distribution(probs: dict[str, float], y_max: float = 1):
     # save_figure()
 
 
-def plot_instance_objective_histories() -> None:
+def plot_instance_objective_histories():
     """Plots objective-over-time history lines for each instance from classical and hybrid runs."""
     data_path = Path(__file__).resolve().parent.parent / "data/5"
     classical_df = pd.read_csv(data_path / ".solutions_classical.csv")
@@ -36,7 +36,7 @@ def plot_instance_objective_histories() -> None:
         if len(history) == 0:
             continue
         xs = [entry.time for entry in history]
-        ys = [entry.evaluation_result.fun for entry in history]
+        ys = [entry.result.fun for entry in history]
         lines.append(Line(xs, ys, color="blue", label="Classical" if first_classical else "_nolabel_"))
         first_classical = False
 
@@ -46,7 +46,7 @@ def plot_instance_objective_histories() -> None:
         if len(history) == 0:
             continue
         xs = [entry.time for entry in history]
-        ys = [entry.evaluation_result.fun for entry in history]
+        ys = [entry.result.fun for entry in history]
         lines.append(Line(xs, ys, color="red", label="Hybrid" if first_hybrid else "_nolabel_"))
         first_hybrid = False
 
@@ -54,7 +54,7 @@ def plot_instance_objective_histories() -> None:
     save_figure()
 
 
-def plot_average_normalized_objective_histories() -> None:
+def plot_average_normalized_objective_histories():
     """Plots average normalized objective histories for configured solvers."""
     num_generators_list = [10, 11]
     grid_times = np.linspace(0, 1800, 50)
@@ -96,7 +96,7 @@ def _load_solver_histories(csv_path: Path, infeasible_tolerance: float) -> dict[
         if pd.isna(history_text):
             histories[instance] = None
             continue
-        histories[instance] = [entry for entry in converter.loads(history_text, list[HistoryEntry]) if entry.evaluation_result.penalty <= infeasible_tolerance]
+        histories[instance] = [entry for entry in converter.loads(history_text, list[HistoryEntry]) if entry.result.penalty <= infeasible_tolerance]
     return histories
 
 
@@ -108,7 +108,7 @@ def _get_best_objectives(instance_ids: list[int], solver_histories: dict[str, di
     """
     best_objectives = {}
     for instance in instance_ids:
-        solver_objectives = [history[-1].evaluation_result.fun for histories in solver_histories.values() if (history := histories.get(instance))]
+        solver_objectives = [history[-1].result.fun for histories in solver_histories.values() if (history := histories.get(instance))]
         best_objectives[instance] = min(solver_objectives) if len(solver_objectives) > 0 else None
     return best_objectives
 
@@ -132,7 +132,7 @@ def _get_average_normalized_curve(grid_times: np.ndarray, instance_ids: list[int
         if not history:
             continue
         history_times = np.array([entry.time for entry in history])
-        normalized_objectives = np.array([best_objective / entry.evaluation_result.fun for entry in history])
+        normalized_objectives = np.array([best_objective / entry.result.fun for entry in history])
         indices = np.searchsorted(history_times, grid_times, side="right") - 1
         totals[indices >= 0] += normalized_objectives[indices[indices >= 0]]
     return totals / feasible_count

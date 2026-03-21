@@ -40,7 +40,7 @@ class VariationalQuantumProgram:
                 # qc.barrier()
         return qc
 
-    def __init__(self, num_layers: int, layer_types: list[CircuitLayer], sampler: Sampler) -> None:
+    def __init__(self, num_layers: int, layer_types: list[CircuitLayer], sampler: Sampler):
         """Appends configured layer blocks and initializes program state.
         :param num_layers: Number of repeated ansatz blocks.
         :param layer_types: Layer templates composed once per block.

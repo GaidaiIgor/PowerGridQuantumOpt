@@ -58,7 +58,7 @@ class MySamplerV2(Sampler):
 class IonQSampler(Sampler):
     """Uses IonQ's hardware or cloud simulators to get probability distribution."""
 
-    def __init__(self, backend_name: str, shots: int = 1000, noise_model: str = None) -> None:
+    def __init__(self, backend_name: str, shots: int = 1000, noise_model: str = None):
         """Initializes an IonQ backend and optional noise model for sampling.
         :param backend_name: IonQ backend name, e.g. simulator or QPU identifier.
         :param shots: Number of shots used per sampling job.

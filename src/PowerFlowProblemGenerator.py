@@ -32,7 +32,7 @@ class LognormalSpec:
     _mu: float = field(init=False, repr=False)
     _sigma: float = field(init=False, repr=False)
 
-    def __post_init__(self) -> None:
+    def __post_init__(self):
         """Validates and precomputes normal-space parameters used for sampling."""
         assert self.mean > 0, f"lognormal.mean must be positive, got {self.mean}."
         assert self.spread_factor >= 1, f"lognormal spread_factor must be >= 1, got {self.spread_factor}."
@@ -160,7 +160,7 @@ class PowerFlowProblemGenerator:
         validate_bounds("degree_bias", degree_bias, min_value=0, max_value=1, include_min=True, include_max=True)
 
         load_s_spec = load_s_spec or LognormalSpec(1, 10)
-        generator_s_range_ref_spec = generator_s_range_ref_spec or LognormalSpec(load_s_spec.mean * 2, load_s_spec.spread_factor)
+        generator_s_range_ref_spec = generator_s_range_ref_spec or LognormalSpec(load_s_spec.mean * 1.2, load_s_spec.spread_factor)
         generator_s_range_len_spec = generator_s_range_len_spec or LognormalSpec(0.5, 1.2)
         num_nodes = max(1, int(math.ceil(num_generators / generator_density)))
         output_path = Path(output_folder)
@@ -204,9 +204,8 @@ class PowerFlowProblemGenerator:
             factor = (primitive(upper) - primitive(lower)) / (upper - lower)
         return apparent_mean * factor
 
-    def _resolve_cost_specs(
-        self, ref_power_mean: float, cost_a_spec: LognormalSpec | None, cost_b_spec: LognormalSpec | None, cost_c_spec: LognormalSpec | None
-    ) -> tuple[LognormalSpec, LognormalSpec, LognormalSpec]:
+    def _resolve_cost_specs(self, ref_power_mean: float, cost_a_spec: LognormalSpec | None, cost_b_spec: LognormalSpec | None,
+                            cost_c_spec: LognormalSpec | None) -> tuple[LognormalSpec, LognormalSpec, LognormalSpec]:
         """Resolves generator cost distribution specs, filling unspecified values with defaults.
         :param ref_power_mean: Mean reference power scale used to normalize cost defaults.
         :param cost_a_spec: Optional override for quadratic coefficient distribution.
@@ -267,7 +266,7 @@ class PowerFlowProblemGenerator:
             return -0.5 * radius ** 4 - 4 * radius ** 2 * math.atan(root) + 4 / 3 * (2 * radius ** 2 + 1) * root + (math.pi - 2) * radius ** 2 + 1 / 3
         return 1
 
-    def _connect_components(self, graph: Graph, positions: dict[int, tuple[float, float]]) -> None:
+    def _connect_components(self, graph: Graph, positions: dict[int, tuple[float, float]]):
         """Connects disconnected components with nearest-node bridging edges.
         :param graph: Graph to modify in place.
         :param positions: Node-position mapping used for nearest-distance checks.
@@ -313,7 +312,7 @@ class PowerFlowProblemGenerator:
         voltage_range: tuple[float, float],
         angle_range: tuple[float, float],
         symmetric_q_range: bool,
-    ) -> None:
+    ):
         """Annotates graph nodes with load, limits and sampled generators.
         :param graph: Graph whose nodes are updated in place.
         :param num_generators: Total number of generators to distribute over nodes.
@@ -397,14 +396,8 @@ class PowerFlowProblemGenerator:
         c = cost_specs[2].sample(self._rng)
         return Generator(power_range=(p_min, p_max), reactive_power_range=(q_min, q_max), cost_terms=(a, b, c))
 
-    def _annotate_edges(
-        self,
-        graph: Graph,
-        capacity_spec: LognormalSpec,
-        impedance_spec: LognormalSpec,
-        line_react_frac_range: tuple[float, float],
-        scale_lines: bool,
-    ) -> None:
+    def _annotate_edges(self, graph: Graph, capacity_spec: LognormalSpec, impedance_spec: LognormalSpec, line_react_frac_range: tuple[float, float],
+                        scale_lines: bool):
         """Annotates graph edges with admittance and current capacity attributes.
         :param graph: Graph whose edges are updated in place.
         :param capacity_spec: Distribution spec for edge current capacity.

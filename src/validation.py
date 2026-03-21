@@ -5,16 +5,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 
-def validate_bounds(
-    name: str,
-    value: float | Sequence[float],
-    *,
-    min_value: float | None = None,
-    max_value: float | None = None,
-    include_min: bool = True,
-    include_max: bool = False,
-    require_ordered: bool = True,
-) -> None:
+def validate_bounds(name: str, value: float | Sequence[float], *, min_value: float | None = None, max_value: float | None = None, include_min: bool = True,
+                    include_max: bool = False, require_ordered: bool = True):
     """Validates scalar values or numeric sequences against configurable bounds.
     :param name: Field name used in validation error messages.
     :param value: Scalar value or numeric sequence to validate.
@@ -27,7 +19,7 @@ def validate_bounds(
     lower_cmp = ">=" if include_min else ">"
     upper_cmp = "<=" if include_max else "<"
 
-    def _check_one(label: str, x: float) -> None:
+    def _check_one(label: str, x: float):
         if min_value is not None:
             lower_ok = x >= min_value if include_min else x > min_value
             if not lower_ok:
