@@ -58,13 +58,13 @@ class ContinuousPowerOptimizer(ABC):
         :param generator_statuses: Binary generator on/off bitstring.
         """
 
-    @staticmethod
-    def get_initial_point(bounds: Sequence[NDArray[float]]) -> list[float]:
+    def get_initial_point(self, bounds: Sequence[NDArray[float]]) -> list[float]:
         """Returns initial point for the optimization.
         :param bounds: Per-variable lower and upper bounds.
-        :return: Midpoint of each bound interval as initial parameter values.
+        :return: Midpoints for active/reactive-power bounds followed by all-ones voltages and all-zero angles.
         """
-        return [np.average(bound) for bound in bounds]
+        active_bounds, reactive_bounds, voltage_bounds, angle_bounds = self.problem.split_params(bounds)
+        return [np.average(bound) for bound in active_bounds + reactive_bounds] + [1] * len(voltage_bounds) + [0] * len(angle_bounds)
 
     def evaluate_equality_constraints(self, params: Sequence[float]) -> list[float]:
         """Returns equality constraints only.
