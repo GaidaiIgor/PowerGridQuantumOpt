@@ -90,10 +90,11 @@ class ContinuousPowerOptimizer(ABC):
         :param params: Full continuous optimization vector.
         :return: Result metrics for ``params``.
         """
+        eval_time = time.perf_counter() - self.tracking_start_time
         params = np.array(params).reshape(-1)
         objective = self.get_cost(generator_statuses, params)
         penalty = self.get_penalty(params)
-        result = EvaluationResult(generator_statuses, params.tolist(), objective, penalty, objective + penalty)
+        result = EvaluationResult(eval_time, generator_statuses, params.tolist(), objective, penalty, objective + penalty)
         if result.is_better_than(self.cache.get(generator_statuses), self.feasibility_tolerance):
             self.cache[generator_statuses] = result
             if result.is_better_than(self.best_result, self.feasibility_tolerance):

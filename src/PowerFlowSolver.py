@@ -149,7 +149,7 @@ class ClassicalSolver(PowerFlowSolver):
         voltages = np.array([model.getSolVal(best_solution, var) for var in variables["v"]])
         angles = np.array([model.getSolVal(best_solution, var) for var in variables["d"]])
         cost = model.getSolObjVal(best_solution)
-        return EvaluationResult(generator_statuses, np.concatenate((active_powers, reactive_powers, voltages, angles)).tolist(), cost, 0, cost)
+        return EvaluationResult(0, generator_statuses, np.concatenate((active_powers, reactive_powers, voltages, angles)).tolist(), cost, 0, cost)
 
     def solve(self, problem: PowerFlowProblem, progress_path: Path) -> list[HistoryEntry]:
         """Solves given problem and returns its incumbent history.

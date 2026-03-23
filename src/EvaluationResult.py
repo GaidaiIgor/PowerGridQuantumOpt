@@ -7,6 +7,7 @@ from typing import Self
 @dataclass
 class EvaluationResult:
     """Stores one evaluated continuous-parameter assignment and its metrics.
+    :var inner_optimization_time: Elapsed time in seconds from the start of the inner optimization when this result was found.
     :var generator_statuses: Binary generator on/off bitstring associated with this result.
     :var params: Full continuous optimization vector.
     :var fun: Objective value without constraint penalty.
@@ -16,6 +17,7 @@ class EvaluationResult:
     :var success: Whether the solver reported success for this result when ``final`` is true.
     :var message: Solver-status message for this result when ``final`` is true.
     """
+    inner_optimization_time: float
     generator_statuses: str
     params: list[float]
     fun: float
