@@ -62,11 +62,11 @@ class PowerFlowSolver(ABC):
     name: str
 
     @abstractmethod
-    def solve(self, problem: PowerFlowProblem, progress_path: Path) -> list[HistoryEntry]:
-        """Solves a given power grid optimization problem and returns its history.
+    def solve(self, problem: PowerFlowProblem, progress_path: Path) -> tuple[list[HistoryEntry], dict[str, Any]]:
+        """Solves a given power grid optimization problem and returns its history together with solver-specific extras.
         :param problem: Power-flow optimization problem to solve.
         :param progress_path: Path for persisting incumbent progress snapshots.
-        :return: Solver history whose last entry is the final incumbent.
+        :return: Solver history whose last entry is the final incumbent together with solver-specific extra information.
         """
         pass
 
@@ -149,13 +149,13 @@ class ClassicalSolver(PowerFlowSolver):
         voltages = np.array([model.getSolVal(best_solution, var) for var in variables["v"]])
         angles = np.array([model.getSolVal(best_solution, var) for var in variables["d"]])
         cost = model.getSolObjVal(best_solution)
-        return EvaluationResult(0, generator_statuses, np.concatenate((active_powers, reactive_powers, voltages, angles)).tolist(), cost, 0, cost)
+        return EvaluationResult(generator_statuses, np.concatenate((active_powers, reactive_powers, voltages, angles)).tolist(), cost, 0, cost)
 
-    def solve(self, problem: PowerFlowProblem, progress_path: Path) -> list[HistoryEntry]:
+    def solve(self, problem: PowerFlowProblem, progress_path: Path) -> tuple[list[HistoryEntry], dict[str, Any]]:
         """Solves given problem and returns its incumbent history.
         :param problem: Power-flow optimization problem to solve.
         :param progress_path: Path for persisting incumbent progress snapshots.
-        :return: Solver history whose last entry is the final incumbent.
+        :return: Solver history whose last entry is the final incumbent together with an extra-info dict.
         """
         t1 = time.perf_counter()
         model, variables = self.build_model_power_flow(problem)
@@ -164,7 +164,7 @@ class ClassicalSolver(PowerFlowSolver):
         model.optimize()
         assert str(model.getStatus()) != "infeasible", "Infeasible instance"
         pd.to_pickle(history_handler.history, progress_path)
-        return history_handler.history
+        return history_handler.history, {}
 
 
 @dataclass
@@ -187,17 +187,8 @@ class HybridSolver(PowerFlowSolver):
         inner_optimizer_type = self.inner_optimizer_factory.func if isinstance(self.inner_optimizer_factory, partial) else self.inner_optimizer_factory
         self.name = {"SLSQPOptimizer": "slsqp", "CasadiOptimizer": "casadi"}[inner_optimizer_type.__name__]
 
-    def solve(self, problem: PowerFlowProblem, progress_path: Path) -> list[HistoryEntry]:
+    def solve(self, problem: PowerFlowProblem, progress_path: Path, exact_final_expectation: bool = False) -> tuple[list[HistoryEntry], dict[str, Any]]:
         """Optimizes quantum parameters and returns the feasible incumbent history.
-        :param problem: Power-flow optimization problem to solve.
-        :param progress_path: Path for persisting incumbent progress snapshots.
-        :return: History of improving feasible incumbents.
-        """
-        return self.solve_with_extras(problem, progress_path)[0]
-
-    def solve_with_extras(self, problem: PowerFlowProblem, progress_path: Path, exact_final_expectation: bool = False) \
-            -> tuple[list[HistoryEntry], dict[str, Any]]:
-        """Optimizes quantum parameters and optionally computes exact final-distribution extras.
         :param problem: Power-flow optimization problem to solve.
         :param progress_path: Path for persisting incumbent progress snapshots.
         :param exact_final_expectation: Whether to compute the exact final bitstring distribution and expectation after optimization.
@@ -216,11 +207,12 @@ class HybridSolver(PowerFlowSolver):
         result = self.vqp.optimize_parameters(lambda generator_statuses: inner_optimizer.optimize(generator_statuses).total, initial_angles)
         assert result.success, f"Angle optimization failed: {result.message}"
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
+        extra = {"avg_inner": sum(result.extra["opt_time"] for result in inner_optimizer.cache.values()) / len(inner_optimizer.cache)}
 
         if exact_final_expectation:
             exact_sampler = ExactSampler()
             final_probs = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
             inner_optimizer.best_result_callback = None
             cost_expectation = utils.get_cost_expectation(lambda bitstring: inner_optimizer.optimize(bitstring).total, final_probs)
-            return history, {"final_probs": final_probs, "cost_expectation": cost_expectation}
-        return history, {}
+            extra |= {"final_probs": final_probs, "cost_expectation": cost_expectation}
+        return history, extra

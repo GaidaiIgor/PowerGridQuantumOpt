@@ -33,19 +33,17 @@ class ContinuousPowerOptimizer(ABC):
     :var penalty_mult: Multiplier applied to summed squared constraint violations.
     :var max_time_s: Wall-clock limit in seconds.
     :var feasibility_tolerance: Maximum penalty still treated as feasible when comparing candidates.
-    :var best_result_callback: Callback invoked whenever the best cached result across all assignments improves.
     :var cache: Map from generator-status bitstring to cached optimization result or the current incumbent during an active run.
     :var best_result: Best cached result across all assignments optimized by this object.
-    :var tracking_start_time: Wall-clock timestamp when the current tracked run started.
+    :var best_result_callback: Callback invoked whenever the best cached result across all assignments improves.
     """
     problem: PowerFlowProblem
     penalty_mult: float
     max_time_s: float
     feasibility_tolerance: float = 1e-10
-    best_result_callback: Callable[[EvaluationResult], None] | None = None
     cache: dict[str, EvaluationResult] = field(default_factory=dict)
     best_result: EvaluationResult | None = field(init=False, default=None)
-    tracking_start_time: float = field(init=False, repr=False, default=0)
+    best_result_callback: Callable[[EvaluationResult], None] | None = None
 
     def optimize(self, generator_statuses: str) -> EvaluationResult:
         """Returns cached result or runs the solver for the given generator statuses.
@@ -90,11 +88,10 @@ class ContinuousPowerOptimizer(ABC):
         :param params: Full continuous optimization vector.
         :return: Result metrics for ``params``.
         """
-        eval_time = time.perf_counter() - self.tracking_start_time
         params = np.array(params).reshape(-1)
         objective = self.get_cost(generator_statuses, params)
         penalty = self.get_penalty(params)
-        result = EvaluationResult(eval_time, generator_statuses, params.tolist(), objective, penalty, objective + penalty)
+        result = EvaluationResult(generator_statuses, params.tolist(), objective, penalty, objective + penalty)
         if result.is_better_than(self.cache.get(generator_statuses), self.feasibility_tolerance):
             self.cache[generator_statuses] = result
             if result.is_better_than(self.best_result, self.feasibility_tolerance):
@@ -130,22 +127,22 @@ class SLSQPOptimizer(ContinuousPowerOptimizer):
         """
         def cost_function(params: Sequence[float]) -> float:
             result = self.consider_candidate(generator_statuses, params)
-            if time.perf_counter() - self.tracking_start_time > self.max_time_s:
+            if time.perf_counter() - start_time > self.max_time_s:
                 raise TimeoutError
             return result.fun
 
         bounds = self.problem.get_bounds(generator_statuses)
         initial_point = self.get_initial_point(bounds)
         constraints = [NonlinearConstraint(self.evaluate_equality_constraints, 0, 0), NonlinearConstraint(self.evaluate_inequality_constraints, -np.inf, 0)]
-        self.tracking_start_time = time.perf_counter()
+        start_time = time.perf_counter()
         try:
             result = optimize.minimize(cost_function, initial_point, method="SLSQP", bounds=bounds, constraints=constraints, options={"maxiter": 2 ** 31 - 1})
         except TimeoutError:
+            self.cache[generator_statuses].extra["opt_time"] = self.max_time_s
             return
         self.consider_candidate(generator_statuses, result.x)
-        self.cache[generator_statuses].final = True
-        self.cache[generator_statuses].success = result.success
-        self.cache[generator_statuses].message = result.message
+        self.cache[generator_statuses].extra |= {"opt_time": time.perf_counter() - start_time, "final": True, "success": result.success,
+                                                 "message": result.message}
 
 
 class UpdateCallback(ca.Callback):
@@ -154,11 +151,13 @@ class UpdateCallback(ca.Callback):
     :var _num_params: Number of decision variables in the NLP.
     :var _num_constraints: Number of nonlinear constraints in the NLP.
     :var generator_statuses: Generator-status bitstring for the active solve.
+    :var start_time: Wall-clock timestamp when the current IPOPT solve started.
     """
     _optimizer: ContinuousPowerOptimizer
     _num_params: int
     _num_constraints: int
     generator_statuses: str | None
+    start_time: float
 
     def __init__(self, optimizer: ContinuousPowerOptimizer, num_params: int, num_constraints: int):
         """Constructs callback for one optimizer instance.
@@ -172,6 +171,7 @@ class UpdateCallback(ca.Callback):
         self._num_params = num_params
         self._num_constraints = num_constraints
         self.generator_statuses = None
+        self.start_time = 0
         self.construct(f"{type(optimizer).__name__.lower()}_callback")
 
     def get_n_in(self) -> int:
@@ -207,8 +207,9 @@ class UpdateCallback(ca.Callback):
         :return: One-element list whose value is nonzero when IPOPT should stop.
         """
         assert self.generator_statuses is not None, "Tracking must be initialized before callback evaluation."
+        elapsed_time = time.perf_counter() - self.start_time
         self._optimizer.consider_candidate(self.generator_statuses, args[0])
-        return [time.perf_counter() - self._optimizer.tracking_start_time >= self._optimizer.max_time_s]
+        return [elapsed_time >= self._optimizer.max_time_s]
 
 
 @dataclass
@@ -288,14 +289,13 @@ class CasadiOptimizer(ContinuousPowerOptimizer):
         """
         bounds = self.problem.get_bounds(generator_statuses)
         initial_point = self.get_initial_point(bounds)
-        self.tracking_start_time = time.perf_counter()
         self.update_callback.generator_statuses = generator_statuses
+        self.update_callback.start_time = time.perf_counter()
         solution = self.solver(x0=initial_point, lbx=[bound[0] for bound in bounds], ubx=[bound[1] for bound in bounds],
                                lbg=[constraint.lb for constraint in self.constraints], ubg=[constraint.ub for constraint in self.constraints])
         stats = self.solver.stats()
         self.consider_candidate(generator_statuses, solution["x"])
+        self.cache[generator_statuses].extra["opt_time"] = time.perf_counter() - self.update_callback.start_time
         if stats["return_status"] == "User_Requested_Stop":
             return
-        self.cache[generator_statuses].final = True
-        self.cache[generator_statuses].success = stats["success"]
-        self.cache[generator_statuses].message = stats["return_status"]
+        self.cache[generator_statuses].extra |= {"final": True, "success": stats["success"], "message": stats["return_status"]}

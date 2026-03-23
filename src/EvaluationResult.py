@@ -1,31 +1,25 @@
 """Evaluation-result data structure and incumbent-comparison logic for continuous solver candidates."""
 
-from dataclasses import dataclass
-from typing import Self
+from dataclasses import dataclass, field
+from typing import Any, Self
 
 
 @dataclass
 class EvaluationResult:
     """Stores one evaluated continuous-parameter assignment and its metrics.
-    :var inner_optimization_time: Elapsed time in seconds from the start of the inner optimization when this result was found.
     :var generator_statuses: Binary generator on/off bitstring associated with this result.
     :var params: Full continuous optimization vector.
     :var fun: Objective value without constraint penalty.
     :var penalty: Penalty from violated constraints.
     :var total: Penalized objective value.
-    :var final: Whether this result is considered final by the solver (will not be further improved).
-    :var success: Whether the solver reported success for this result when ``final`` is true.
-    :var message: Solver-status message for this result when ``final`` is true.
+    :var extra: Additional solver-specific metadata for this result.
     """
-    inner_optimization_time: float
     generator_statuses: str
     params: list[float]
     fun: float
     penalty: float
     total: float
-    final: bool = False
-    success: bool | None = None
-    message: str | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
 
     def is_better_than(self, other: Self | None, feasibility_tolerance: float) -> bool:
         """Returns whether this result should replace another incumbent.

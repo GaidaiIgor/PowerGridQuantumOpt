@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from functools import partial
 from concurrent.futures import TimeoutError as FutureTimeoutError, as_completed
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator
 
 import numpy as np
 import pandas as pd
@@ -54,15 +54,15 @@ def run_single():
     solver = get_hybrid_solver(len(problem.generators))
 
     inner_solver = solver.inner_optimizer_factory(problem)
-    result = inner_solver.optimize("11110")
+    inner_solver.optimize("11110")
 
     progress_folder = data_path / f".progress_{solver.name}"
     progress_folder.mkdir(exist_ok=True)
     progress_path = progress_folder / f"{index}.pkl"
-    if exact_final_expectation:
-        history, extra = solver.solve_with_extras(problem, progress_path, exact_final_expectation)
+    if isinstance(solver, HybridSolver):
+        history, extra = solver.solve(problem, progress_path, exact_final_expectation)
     else:
-        history = solver.solve(problem, progress_path)
+        history, extra = solver.solve(problem, progress_path)
 
     print("\nSolution:")
     debug.print_evaluation_result(problem, history[-1].result)
@@ -126,7 +126,7 @@ def run_parallel():
     solver = get_hybrid_solver(num_generators)
 
     solutions_path = data_folder / f".solutions_{solver.name}.csv"
-    columns = ["instance", "generator_assignments", "continuous_parameters", "cost", "penalty", "num_jobs", "history", "error"]
+    columns = ["instance", "generator_assignments", "continuous_parameters", "cost", "penalty", "num_jobs", "avg_inner", "history", "error"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generator_assignments": "string"})
         existing_df = existing_df.reindex(columns=columns)
@@ -160,10 +160,11 @@ def run_parallel():
             progress_path = progress_folder / f"{index}.pkl"
             log_path = progress_folder / f"{index}.txt"
             try:
-                history = future.result()
+                history, extra = future.result()
                 error = None
             except Exception as ex:
                 history = pd.read_pickle(progress_path) if progress_path.exists() else None
+                extra = {}
                 if isinstance(ex, FutureTimeoutError):
                     timeout_count += 1
                     error = f"Timeout after {timeout_s}s"
@@ -176,22 +177,28 @@ def run_parallel():
             row = {"history": None, "error": error}
             if history is not None:
                 last_result = history[-1].result
-                row |= {"generator_assignments": last_result.generator_statuses, "continuous_parameters": last_result.params, "cost": last_result.fun,
-                        "penalty": last_result.penalty, "num_jobs": history[-1].num_jobs, "history": converter.dumps(history)}
+                row |= {"generator_assignments": last_result.generator_statuses,
+                        "continuous_parameters": last_result.params,
+                        "cost": last_result.fun,
+                        "penalty": last_result.penalty,
+                        "num_jobs": history[-1].num_jobs,
+                        "avg_inner": extra.get("avg_inner"),
+                        "history": converter.dumps(history)}
             rows[index] = row
             output_df = pd.DataFrame.from_dict(rows, orient="index").rename_axis("instance").reset_index().reindex(columns=columns).sort_values("instance")
             output_df["num_jobs"] = output_df["num_jobs"].astype("Int64")
             output_df.to_csv(solutions_path, index=False)
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
+    print(f"Average inner optimization time: {pd.to_numeric(output_df["avg_inner"], errors="coerce").mean()}")
 
 
-def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver, voltage_deviation_mult: float) -> list[HistoryEntry]:
-    """Solves one instance and returns its solver history.
+def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver, voltage_deviation_mult: float) -> tuple[list[HistoryEntry], dict[str, Any]]:
+    """Solves one instance and returns its solver history and extras.
     :param data_folder: Path to the dataset folder.
     :param index: Instance index to solve.
     :param solver: Solver used for the instance.
     :param voltage_deviation_mult: Multiplier applied to squared voltage deviation from ``1`` in the objective.
-    :return: Solver history whose last entry is the final incumbent.
+    :return: Solver history whose last entry is the final incumbent together with solver-specific extras.
     """
     progress_folder = data_folder / f".progress_{solver.name}"
     log_path = progress_folder / f"{index}.txt"
