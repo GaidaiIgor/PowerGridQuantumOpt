@@ -66,7 +66,9 @@ def run_single():
 
     print("\nSolution:")
     debug.print_evaluation_result(problem, history[-1].result)
-    print(f"Number of jobs: {history[-1].num_jobs}")
+    print(f"Job found: {history[-1].num_jobs}")
+    if "total_jobs" in extra:
+        print(f"Total jobs: {extra["total_jobs"]}")
     if exact_final_expectation:
         print(f"Optimized probabilities: {my_format(extra["final_probs"])}")
         print(f"Optimized expectation: {extra["cost_expectation"]}")
@@ -126,7 +128,7 @@ def run_parallel():
     solver = get_hybrid_solver(num_generators)
 
     solutions_path = data_folder / f".solutions_{solver.name}.csv"
-    columns = ["instance", "generator_assignments", "continuous_parameters", "cost", "penalty", "num_jobs", "avg_inner", "history", "error"]
+    columns = ["instance", "generator_assignments", "continuous_parameters", "cost", "penalty", "job_found", "total_jobs", "avg_inner", "history", "error"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generator_assignments": "string"})
         existing_df = existing_df.reindex(columns=columns)
@@ -181,15 +183,21 @@ def run_parallel():
                         "continuous_parameters": last_result.params,
                         "cost": last_result.fun,
                         "penalty": last_result.penalty,
-                        "num_jobs": history[-1].num_jobs,
+                        "job_found": history[-1].num_jobs,
+                        "total_jobs": extra.get("total_jobs"),
                         "avg_inner": extra.get("avg_inner"),
                         "history": converter.dumps(history)}
             rows[index] = row
             output_df = pd.DataFrame.from_dict(rows, orient="index").rename_axis("instance").reset_index().reindex(columns=columns).sort_values("instance")
-            output_df["num_jobs"] = output_df["num_jobs"].astype("Int64")
+            output_df["job_found"] = output_df["job_found"].astype("Int64")
+            output_df["total_jobs"] = output_df["total_jobs"].astype("Int64")
             output_df.to_csv(solutions_path, index=False)
+            
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
-    print(f"Average inner optimization time: {pd.to_numeric(output_df["avg_inner"], errors="coerce").mean()}")
+    avg_inner_values = pd.to_numeric(output_df["avg_inner"], errors="coerce")
+    total_jobs_values = pd.to_numeric(output_df["total_jobs"], errors="coerce")
+    print(f"Inner optimization time: avg={avg_inner_values.mean()}, min={avg_inner_values.min()}, max={avg_inner_values.max()}")
+    print(f"Total jobs: avg={total_jobs_values.mean()}, min={total_jobs_values.min()}, max={total_jobs_values.max()}")
 
 
 def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver, voltage_deviation_mult: float) -> tuple[list[HistoryEntry], dict[str, Any]]:

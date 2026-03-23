@@ -207,7 +207,8 @@ class HybridSolver(PowerFlowSolver):
         result = self.vqp.optimize_parameters(lambda generator_statuses: inner_optimizer.optimize(generator_statuses).total, initial_angles)
         assert result.success, f"Angle optimization failed: {result.message}"
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
-        extra = {"avg_inner": sum(result.extra["opt_time"] for result in inner_optimizer.cache.values()) / len(inner_optimizer.cache)}
+        extra = {"avg_inner": sum(result.extra["opt_time"] for result in inner_optimizer.cache.values()) / len(inner_optimizer.cache),
+                 "total_jobs": self.vqp.num_jobs}
 
         if exact_final_expectation:
             exact_sampler = ExactSampler()
