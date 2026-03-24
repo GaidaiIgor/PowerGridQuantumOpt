@@ -1,5 +1,6 @@
 """Plotting helpers for power-grid optimization outputs."""
 from pathlib import Path
+from typing import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -54,17 +55,30 @@ def plot_instance_objective_histories():
     save_figure()
 
 
+def plot_polar_vs_rectangular():
+    """Plots normalized objective histories for polar and rectangular CasADi results on the 5-generator dataset."""
+    plot_histories([5], np.linspace(0, 1800, 50).tolist(), ["casadi", "casadi_rectangular"], ["Polar", "Rectangular"])
+
+
 def plot_average_normalized_objective_histories():
-    """Plots average normalized objective histories for configured solvers."""
-    num_generators_list = [10, 11]
-    grid_times = np.linspace(0, 1800, 50)
-    solver_ids = ["scip", "slsqp", "casadi"]
+    """Plots average normalized objective histories for the default solver comparison."""
+    plot_histories([10, 11], np.linspace(0, 1800, 50).tolist(), ["scip", "slsqp", "casadi"])
+
+
+def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], solver_ids: Sequence[str], solver_names: Sequence[str] | None = None):
+    """Plots average normalized objective histories for configured solvers.
+    :param num_generators: Generator counts whose datasets should be plotted together.
+    :param grid_times: Uniform time grid used to align objective histories.
+    :param solver_ids: Solver ids whose CSV files should be loaded from each dataset folder.
+    :param solver_names: Optional display names used for solver legend labels in the same order as ``solver_ids``.
+    """
+    solver_names = {solver_id: solver_name for solver_id, solver_name in zip(solver_ids, solver_names)} if solver_names is not None else \
+                   {"scip": "SCIP", "slsqp": "SLSQP", "casadi": "CasADi"}
     infeasible_tolerance = 1e-10
-    solver_names = {"scip": "SCIP", "slsqp": "SLSQP", "casadi": "CasADi"}
     instance_ids = list(range(100))
     lines = []
     labeled_solvers = set()
-    for num_gens_ind, num_gens in enumerate(num_generators_list):
+    for num_gens_ind, num_gens in enumerate(num_generators):
         data_path = Path(__file__).resolve().parent.parent / f"data/{num_gens}"
         solver_histories = {}
         for solver_id in solver_ids:
@@ -79,7 +93,7 @@ def plot_average_normalized_objective_histories():
             label = solver_names[solver_id] if solver_id not in labeled_solvers else "_nolabel_"
             lines.append(Line(grid_times, curve, color=solver_index, marker=num_gens_ind, label=label))
             labeled_solvers.add(solver_id)
-    plot_general(lines, axis_labels=("Time [s]", "Normalized Objective"), boundaries=(None, None, 0, 1))
+    plot_general(lines, axis_labels=("Time [s]", "Normalized Objective"), boundaries=(None, None, -0.025, 1.025))
     save_figure()
 
 
@@ -113,7 +127,7 @@ def _get_best_objectives(instance_ids: list[int], solver_histories: dict[str, di
     return best_objectives
 
 
-def _get_average_normalized_curve(grid_times: np.ndarray, instance_ids: list[int], solver_histories: dict[int, list[HistoryEntry] | None],
+def _get_average_normalized_curve(grid_times: Sequence[float], instance_ids: list[int], solver_histories: dict[int, list[HistoryEntry] | None],
                                   best_objectives: dict[int, float]) -> np.ndarray:
     """Computes average normalized objective curve on a uniform time grid.
     :param grid_times: Uniform time grid used for alignment.
@@ -140,5 +154,5 @@ def _get_average_normalized_curve(grid_times: np.ndarray, instance_ids: list[int
 
 if __name__ == "__main__":
     # plot_instance_objective_histories()
-    plot_average_normalized_objective_histories()
+    plot_polar_vs_rectangular()
     plt.show()

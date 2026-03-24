@@ -20,7 +20,7 @@ from tqdm import tqdm
 import debug
 from src import PowerFlowProblemGenerator, LognormalSpec
 from src.CircuitLayer import AllToAllEntangler, ZXMixer
-from src.ContinuousPowerOptimizer import CasadiOptimizer
+from src.ContinuousPowerOptimizer import CasadiOptimizer, CasadiOptimizerRectangular
 from src.HistoryEntry import HistoryEntry
 from src.Generator import Generator
 from src.PowerFlowProblem import PowerFlowProblem
@@ -78,7 +78,7 @@ def get_hybrid_solver(num_generators: int) -> HybridSolver:
     penalty_mult = 10
     seed = 0
     vqp = get_variational_quantum_program(num_generators)
-    inner_optimizer_factory = partial(CasadiOptimizer, penalty_mult=penalty_mult, max_time_s=max_inner_time_s, silent=True)
+    inner_optimizer_factory = partial(CasadiOptimizerRectangular, penalty_mult=penalty_mult, max_time_s=max_inner_time_s, silent=True)
     return HybridSolver(vqp, inner_optimizer_factory, seed)
 
 
