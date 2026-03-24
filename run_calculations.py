@@ -33,8 +33,7 @@ from src.utils import my_format
 def generate_dataset():
     num_generators = 5
     problem_generator = PowerFlowProblemGenerator()
-    problem_generator.generate_instances(num_generators, 100, voltage_range=(0, 100), output_folder=f"data/{num_generators}/capacity_100",
-                                         strictness_factor=1.2, capacity_spec=LognormalSpec(100, 2))
+    problem_generator.generate_instances(num_generators, 100, voltage_range=(0, 100), output_folder=f"data/{num_generators}", strictness_factor=1.2)
 
 
 def run_single():
@@ -118,7 +117,7 @@ def get_power_flow_ac_problem() -> PowerFlowProblem:
 def run_parallel():
     """Runs selected instances in parallel and persists each completed result to CSV."""
     num_generators = 5
-    data_folder = Path(f"data/{num_generators}/capacity_100")
+    data_folder = Path(f"data/{num_generators}")
     instance_indices = list(range(100))
     voltage_deviation_mult = 10
     absent_only = True
@@ -196,8 +195,10 @@ def run_parallel():
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
     avg_inner_values = pd.to_numeric(output_df["avg_inner"], errors="coerce")
     total_jobs_values = pd.to_numeric(output_df["total_jobs"], errors="coerce")
+    infeasible_count = (pd.to_numeric(output_df["penalty"], errors="coerce") > solver.feasibility_tolerance).sum()
     print(f"Inner optimization time: avg={avg_inner_values.mean()}, min={avg_inner_values.min()}, max={avg_inner_values.max()}")
     print(f"Total jobs: avg={total_jobs_values.mean()}, min={total_jobs_values.min()}, max={total_jobs_values.max()}")
+    print(f"Unfeasible instances: {infeasible_count}")
 
 
 def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver, voltage_deviation_mult: float) -> tuple[list[HistoryEntry], dict[str, Any]]:
@@ -249,8 +250,8 @@ if __name__ == "__main__":
     # debug.print_solution_from_csv("data/5/capacity_100/.solutions_casadi.csv", 49)
 
     # generate_dataset()
-    run_single()
-    # run_parallel()
+    # run_single()
+    run_parallel()
 
     t2 = time.perf_counter()
     print(f"Elapsed time {t2 - t1} seconds")
