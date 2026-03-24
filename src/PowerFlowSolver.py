@@ -76,9 +76,11 @@ class ClassicalSolver(PowerFlowSolver):
     """Uses SCIP library to solve power grid problems classically.
     :var name: Canonical solver name used in file naming.
     :var silent: Whether SCIP output is suppressed while solving.
+    :var feasibility_tolerance: SCIP primal feasibility tolerance used internally during solving.
     """
     name: str = "scip"
     silent: bool = False
+    feasibility_tolerance: float = 1e-10
 
     def build_model_power_flow(self, problem: PowerFlowProblem) -> tuple[Model, dict[str, list]]:
         """Builds model based on problem description.
@@ -86,6 +88,7 @@ class ClassicalSolver(PowerFlowSolver):
         :return: SCIP model and grouped variable containers.
         """
         model = Model("PowerFlowAC")
+        model.setRealParam("numerics/feastol", self.feasibility_tolerance)
         if self.silent:
             model.hideOutput()
         cost_terms = []
