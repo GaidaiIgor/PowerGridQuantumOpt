@@ -185,7 +185,7 @@ class HybridSolver(PowerFlowSolver):
     def __post_init__(self):
         """Initializes derived solver metadata."""
         inner_optimizer_type = self.inner_optimizer_factory.func if isinstance(self.inner_optimizer_factory, partial) else self.inner_optimizer_factory
-        self.name = {"SLSQPOptimizer": "slsqp", "CasadiOptimizer": "casadi"}[inner_optimizer_type.__name__]
+        self.name = {"SLSQPOptimizer": "slsqp", "CasadiOptimizer": "casadi", "CasadiOptimizerRectangular": "casadi_rectangular"}[inner_optimizer_type.__name__]
 
     def solve(self, problem: PowerFlowProblem, progress_path: Path, exact_final_expectation: bool = False) -> tuple[list[HistoryEntry], dict[str, Any]]:
         """Optimizes quantum parameters and returns the feasible incumbent history.

@@ -192,7 +192,7 @@ def run_parallel():
             output_df["job_found"] = output_df["job_found"].astype("Int64")
             output_df["total_jobs"] = output_df["total_jobs"].astype("Int64")
             output_df.to_csv(solutions_path, index=False)
-            
+
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
     avg_inner_values = pd.to_numeric(output_df["avg_inner"], errors="coerce")
     total_jobs_values = pd.to_numeric(output_df["total_jobs"], errors="coerce")
