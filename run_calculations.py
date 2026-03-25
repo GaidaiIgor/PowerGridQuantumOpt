@@ -65,7 +65,7 @@ def run_single():
 
     print("\nSolution:")
     debug.print_evaluation_result(problem, history[-1].result)
-    print(f"Job found: {history[-1].num_jobs}")
+    print(f"Job index: {history[-1].job_ind}")
     if "total_jobs" in extra:
         print(f"Total jobs: {extra["total_jobs"]}")
     if exact_final_expectation:
@@ -127,7 +127,7 @@ def run_parallel():
     solver = get_hybrid_solver(num_generators)
 
     solutions_path = data_folder / f".solutions_{solver.name}.csv"
-    columns = ["instance", "generator_assignments", "continuous_parameters", "cost", "penalty", "job_found", "total_jobs", "avg_inner", "history", "error"]
+    columns = ["instance", "generator_assignments", "continuous_parameters", "cost", "penalty", "job_ind", "total_jobs", "avg_inner", "history", "error"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generator_assignments": "string"})
         existing_df = existing_df.reindex(columns=columns)
@@ -182,13 +182,13 @@ def run_parallel():
                         "continuous_parameters": last_result.params,
                         "cost": last_result.fun,
                         "penalty": last_result.penalty,
-                        "job_found": history[-1].num_jobs,
+                        "job_ind": history[-1].job_ind,
                         "total_jobs": extra.get("total_jobs"),
                         "avg_inner": extra.get("avg_inner"),
                         "history": converter.dumps(history)}
             rows[index] = row
             output_df = pd.DataFrame.from_dict(rows, orient="index").rename_axis("instance").reset_index().reindex(columns=columns).sort_values("instance")
-            output_df["job_found"] = output_df["job_found"].astype("Int64")
+            output_df["job_ind"] = output_df["job_ind"].astype("Int64")
             output_df["total_jobs"] = output_df["total_jobs"].astype("Int64")
             output_df.to_csv(solutions_path, index=False)
 

@@ -113,7 +113,7 @@ def print_solution_from_csv(csv_path: str | Path, instance_index: int):
     history = converter.loads(solution_row["history"], list[HistoryEntry])
     for entry_ind, entry in enumerate(history):
         print(f"===========================================================================")
-        print(f"History entry {entry_ind}: time={entry.time:.6g}, num_jobs={entry.num_jobs}")
+        print(f"History entry {entry_ind}: time={entry.time:.6g}, job_ind={entry.job_ind}")
         print_evaluation_result(problem, entry.result)
 
 

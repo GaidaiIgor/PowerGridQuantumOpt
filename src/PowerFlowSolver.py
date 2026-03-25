@@ -179,16 +179,11 @@ class HybridSolver(PowerFlowSolver):
     :var seed: Optional random seed for initial quantum-parameter sampling.
     :var feasibility_tolerance: Feasibility tolerance; history stores only entries with penalty below this threshold.
     """
-    name: str = field(init=False)
     vqp: VariationalQuantumProgram
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
     seed: int = None
     feasibility_tolerance: float = 1e-10
-
-    def __post_init__(self):
-        """Initializes derived solver metadata."""
-        inner_optimizer_type = self.inner_optimizer_factory.func if isinstance(self.inner_optimizer_factory, partial) else self.inner_optimizer_factory
-        self.name = {"SLSQPOptimizer": "slsqp", "CasadiOptimizer": "casadi", "CasadiOptimizerRectangular": "casadi_rectangular"}[inner_optimizer_type.__name__]
+    name: str = "hybrid"
 
     def solve(self, problem: PowerFlowProblem, progress_path: Path, exact_final_expectation: bool = False) -> tuple[list[HistoryEntry], dict[str, Any]]:
         """Optimizes quantum parameters and returns the feasible incumbent history.
@@ -220,3 +215,42 @@ class HybridSolver(PowerFlowSolver):
             cost_expectation = utils.get_cost_expectation(lambda bitstring: inner_optimizer.optimize(bitstring).total, final_probs)
             extra |= {"final_probs": final_probs, "cost_expectation": cost_expectation}
         return history, extra
+
+
+@dataclass
+class UniformSolver(PowerFlowSolver):
+    """Samples generator assignments uniformly and optimizes them classically until all assignments are seen.
+    :var name: Canonical solver name used in file naming.
+    :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
+    :var seed: Optional random seed for uniform bitstring sampling.
+    :var feasibility_tolerance: Feasibility tolerance passed through to the inner optimizer.
+    """
+    inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
+    seed: int = None
+    feasibility_tolerance: float = 1e-10
+    name: str = "uniform"
+
+    def solve(self, problem: PowerFlowProblem, progress_path: Path) -> tuple[list[HistoryEntry], dict[str, Any]]:
+        """Samples bitstrings uniformly and returns the incumbent history.
+        :param problem: Power-flow optimization problem to solve.
+        :param progress_path: Path for persisting incumbent progress snapshots.
+        :return: Solver history whose last entry is the final incumbent together with solver-specific extra information.
+        """
+        def update_history(new_result: EvaluationResult):
+            history.append(HistoryEntry(time.perf_counter() - start_time, None, new_result))
+            pd.to_pickle(history, progress_path)
+
+        history = []
+        inner_optimizer = self.inner_optimizer_factory(problem)
+        inner_optimizer.feasibility_tolerance = self.feasibility_tolerance
+        inner_optimizer.best_result_callback = update_history
+        num_bitstrings = 2 ** len(problem.generators)
+        rng = random.default_rng(self.seed)
+        start_time = time.perf_counter()
+        while len(inner_optimizer.cache) < num_bitstrings:
+            generator_statuses = format(rng.integers(num_bitstrings), f"0{len(problem.generators)}b")
+            if generator_statuses in inner_optimizer.cache:
+                continue
+            inner_optimizer.optimize(generator_statuses)
+        assert len(history) > 0, "Uniform solver did not record any history entry."
+        return history, {"avg_inner": sum(result.extra["opt_time"] for result in inner_optimizer.cache.values()) / len(inner_optimizer.cache)}

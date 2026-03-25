@@ -9,9 +9,9 @@ from .EvaluationResult import EvaluationResult
 class HistoryEntry:
     """Stores one history record for solver progress tracking.
     :var time: Elapsed classical optimization time in seconds.
-    :var num_jobs: Number of quantum jobs used up to this history point, or ``None`` for classical runs.
+    :var job_ind: Job index where this history point was found when that concept exists, or ``None`` otherwise.
     :var result: Objective, penalty, and parameter data for this history point.
     """
     time: float
-    num_jobs: int | None
+    job_ind: int | None
     result: EvaluationResult
