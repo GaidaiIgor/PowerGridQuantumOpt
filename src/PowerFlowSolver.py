@@ -1,5 +1,6 @@
 """Classical and hybrid solvers for ``PowerFlowProblem`` instances."""
 
+import shutil
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
@@ -10,9 +11,12 @@ from typing import Callable, Any
 
 import numpy as np
 import pandas as pd
+from ConfigSpace import Configuration, ConfigurationSpace, Categorical
 from numpy import random
 from pyscipopt import Eventhdlr, Model, SCIP_EVENTTYPE, sin, cos, quicksum
 from pyscipopt.recipes.nonlinear import set_nonlinear_objective
+from smac import AlgorithmConfigurationFacade, Scenario
+from smac.runhistory import TrialValue
 
 from . import utils
 from .ContinuousPowerOptimizer import ContinuousPowerOptimizer
@@ -254,3 +258,85 @@ class UniformSolver(PowerFlowSolver):
             inner_optimizer.optimize(generator_statuses)
         assert len(history) > 0, "Uniform solver did not record any history entry."
         return history, {"avg_inner": sum(result.extra["opt_time"] for result in inner_optimizer.cache.values()) / len(inner_optimizer.cache)}
+
+
+@dataclass
+class SmacSolver(PowerFlowSolver):
+    """Optimizes binary generator assignments with SMAC3 and continuous variables with the inner optimizer.
+    :var name: Canonical solver name used in file naming.
+    :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
+    :var seed: Optional random seed for SMAC3.
+    :var feasibility_tolerance: Feasibility tolerance passed through to the inner optimizer.
+    :var silent: Whether SMAC3 output is suppressed.
+    """
+    inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
+    seed: int = None
+    feasibility_tolerance: float = 1e-10
+    silent: bool = False
+    name: str = "smac"
+
+    def solve(self, problem: PowerFlowProblem, progress_path: Path) -> tuple[list[HistoryEntry], dict[str, Any]]:
+        """Optimizes binary assignments with SMAC3 and returns the incumbent history.
+        :param problem: Power-flow optimization problem to solve.
+        :param progress_path: Path for persisting incumbent progress snapshots.
+        :return: Solver history whose last entry is the final incumbent together with solver-specific extra information.
+        """
+        def update_history(new_result: EvaluationResult):
+            history.append(HistoryEntry(time.perf_counter() - start_time, None, new_result))
+            pd.to_pickle(history, progress_path)
+
+        history = []
+        inner_optimizer = self.inner_optimizer_factory(problem)
+        inner_optimizer.feasibility_tolerance = self.feasibility_tolerance
+        inner_optimizer.best_result_callback = update_history
+        num_bitstrings = 2 ** len(problem.generators)
+        start_time = time.perf_counter()
+        output_directory = progress_path.parent / f".smac_{progress_path.stem}"
+        shutil.rmtree(output_directory, ignore_errors=True)
+        optimizer = self._build_optimizer(problem, output_directory)
+        while len(inner_optimizer.cache) < num_bitstrings:
+            trial = optimizer.ask()
+            generator_statuses = self._config_to_generator_statuses(trial.config, len(problem.generators))
+            result = inner_optimizer.optimize(generator_statuses)
+            optimizer.tell(trial, TrialValue(cost=result.total))
+        assert len(history) > 0, "SMAC solver did not record any history entry."
+        return history, {"avg_inner": sum(result.extra["opt_time"] for result in inner_optimizer.cache.values()) / len(inner_optimizer.cache)}
+
+    def _build_optimizer(self, problem: PowerFlowProblem, output_directory: Path) -> AlgorithmConfigurationFacade:
+        """Builds the SMAC3 optimizer for binary generator assignments.
+        :param problem: Power-flow optimization problem whose generators define the binary search space.
+        :param output_directory: Temporary SMAC3 output directory.
+        :return: Configured SMAC3 optimizer instance.
+        """
+        scenario = Scenario(self._get_configspace(problem), deterministic=True, n_trials=2 ** 31 - 1, output_directory=output_directory, seed=self.seed or 0)
+        kwargs = {}
+        if self.silent:
+            kwargs["logging_level"] = False
+        return AlgorithmConfigurationFacade(scenario, self._dummy_target_function, **kwargs)
+
+    def _get_configspace(self, problem: PowerFlowProblem) -> ConfigurationSpace:
+        """Builds the binary configuration space for generator commitment variables.
+        :param problem: Power-flow optimization problem whose generators define the binary variables.
+        :return: Configuration space with one categorical ``{0, 1}`` variable per generator.
+        """
+        configspace = ConfigurationSpace(seed=self.seed)
+        configspace.add([Categorical(f"u_{i}", [0, 1]) for i in range(len(problem.generators))])
+        return configspace
+
+    @staticmethod
+    def _dummy_target_function(config: Configuration, seed: int = 0) -> float:
+        """Raises if SMAC3 tries to use the target-function path instead of ask/tell.
+        :param config: Unused configuration.
+        :param seed: Unused seed value.
+        :return: Never returns.
+        """
+        raise RuntimeError("SMAC target function should not be called in ask/tell mode.")
+
+    @staticmethod
+    def _config_to_generator_statuses(config: Configuration, num_generators: int) -> str:
+        """Converts a SMAC3 configuration to the generator-status bitstring used by the inner optimizer.
+        :param config: Binary configuration sampled by SMAC3.
+        :param num_generators: Number of generator-status bits.
+        :return: Generator-status bitstring.
+        """
+        return "".join(str(int(config[f"u_{i}"])) for i in range(num_generators))
