@@ -214,11 +214,24 @@ class SmacSolver(PowerFlowSolver):
         output_directory = progress_path.parent / f".smac_{progress_path.stem}"
         shutil.rmtree(output_directory, ignore_errors=True)
         optimizer = self._build_optimizer(problem, output_directory)
+        rebuild_count = 0
         while len(inner_optimizer.cache) < num_bitstrings:
-            trial = optimizer.ask()
-            generator_statuses = self._config_to_generator_statuses(trial.config, len(problem.generators))
-            result = inner_optimizer.optimize(generator_statuses)
-            optimizer.tell(trial, TrialValue(cost=result.total))
+            new_since_rebuild = 0
+            while True:
+                try:
+                    trial = optimizer.ask()
+                except StopIteration:
+                    break
+                generator_statuses = self._config_to_generator_statuses(trial.config, len(problem.generators))
+                assert generator_statuses not in inner_optimizer.cache, "SMAC solver asked for an already known bitstring."
+                new_since_rebuild += 1
+                result = inner_optimizer.optimize(generator_statuses)
+                optimizer.tell(trial, TrialValue(cost=result.total))
+            if len(inner_optimizer.cache) == num_bitstrings:
+                break
+            assert rebuild_count == 0 or new_since_rebuild > 0, "SMAC solver got stuck without sampling a new bitstring after restart."
+            optimizer = self._build_optimizer(problem, output_directory)
+            rebuild_count += 1
         assert len(history) > 0, "SMAC solver did not record any history entry."
         return history, {"avg_inner": sum(result.extra["opt_time"] for result in inner_optimizer.cache.values()) / len(inner_optimizer.cache)}
 

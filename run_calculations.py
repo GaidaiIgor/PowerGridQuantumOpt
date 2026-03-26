@@ -83,8 +83,8 @@ def get_solver(num_generators: int) -> PowerFlowSolver:
     vqp = get_variational_quantum_program(num_generators)
     inner_optimizer_factory = partial(CasadiOptimizer, penalty_mult=penalty_mult, max_time_s=max_inner_time_s, silent=True)
 
-    solver = SCIPSolver(feasibility_tolerance, silent, seed)
-    # solver = SmacSolver(inner_optimizer_factory, feasibility_tolerance, silent, seed)
+    # solver = SCIPSolver(feasibility_tolerance, silent, seed)
+    solver = SmacSolver(inner_optimizer_factory, feasibility_tolerance, silent, seed)
     # solver = UniformSolver(inner_optimizer_factory, feasibility_tolerance, seed)
     # solver = HybridSolver(vqp, inner_optimizer_factory, feasibility_tolerance, seed)
     return solver
