@@ -24,7 +24,7 @@ from src.ContinuousPowerOptimizer import CasadiOptimizer
 from src.HistoryEntry import HistoryEntry
 from src.Generator import Generator
 from src.PowerFlowProblem import PowerFlowProblem
-from src.PowerFlowSolver import ClassicalSolver, HybridSolver, PowerFlowSolver
+from src.PowerFlowSolver import SCIPSolver, HybridSolver, PowerFlowSolver, SmacSolver, UniformSolver
 from src.Sampler import MySamplerV2
 from src.VariationalQuantumProgram import VariationalQuantumProgram
 from src.utils import my_format
@@ -50,7 +50,7 @@ def run_single():
     # debug.set_all_generator_p_min(problem, 0)
 
     # solver = ClassicalSolver()
-    solver = get_hybrid_solver(len(problem.generators))
+    solver = get_solver(len(problem.generators))
 
     inner_solver = solver.inner_optimizer_factory(problem)
     inner_solver.optimize("11110")
@@ -73,13 +73,21 @@ def run_single():
         print(f"Optimized expectation: {extra["cost_expectation"]}")
 
 
-def get_hybrid_solver(num_generators: int) -> HybridSolver:
+def get_solver(num_generators: int) -> PowerFlowSolver:
     max_inner_time_s = 30
     penalty_mult = 10
+    feasibility_tolerance = 1e-10
+    silent = True
     seed = 0
+
     vqp = get_variational_quantum_program(num_generators)
     inner_optimizer_factory = partial(CasadiOptimizer, penalty_mult=penalty_mult, max_time_s=max_inner_time_s, silent=True)
-    return HybridSolver(vqp, inner_optimizer_factory, seed)
+
+    solver = SCIPSolver(feasibility_tolerance, silent, seed)
+    # solver = SmacSolver(inner_optimizer_factory, feasibility_tolerance, silent, seed)
+    # solver = UniformSolver(inner_optimizer_factory, feasibility_tolerance, seed)
+    # solver = HybridSolver(vqp, inner_optimizer_factory, feasibility_tolerance, seed)
+    return solver
 
 
 def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgram:
@@ -122,9 +130,7 @@ def run_parallel():
     voltage_deviation_mult = 10
     absent_only = True
     timeout_s = 1800
-
-    # solver = ClassicalSolver(silent=True)
-    solver = get_hybrid_solver(num_generators)
+    solver = get_solver(num_generators)
 
     solutions_path = data_folder / f".solutions_{solver.name}.csv"
     columns = ["instance", "generator_assignments", "continuous_parameters", "cost", "penalty", "job_ind", "total_jobs", "avg_inner", "history", "error"]
