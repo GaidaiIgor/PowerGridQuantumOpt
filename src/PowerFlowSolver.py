@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import partial
+from math import inf
 from pathlib import Path
 from typing import Callable, Any
 
@@ -16,6 +17,7 @@ from numpy import random
 from pyscipopt import Eventhdlr, Model, SCIP_EVENTTYPE, sin, cos, quicksum
 from pyscipopt.recipes.nonlinear import set_nonlinear_objective
 from smac import AlgorithmConfigurationFacade, Scenario
+from smac.main.config_selector import ConfigSelector
 from smac.runhistory import TrialValue
 
 from . import utils
@@ -214,24 +216,12 @@ class SmacSolver(PowerFlowSolver):
         output_directory = progress_path.parent / f".smac_{progress_path.stem}"
         shutil.rmtree(output_directory, ignore_errors=True)
         optimizer = self._build_optimizer(problem, output_directory)
-        rebuild_count = 0
         while len(inner_optimizer.cache) < num_bitstrings:
-            new_since_rebuild = 0
-            while True:
-                try:
-                    trial = optimizer.ask()
-                except StopIteration:
-                    break
-                generator_statuses = self._config_to_generator_statuses(trial.config, len(problem.generators))
-                assert generator_statuses not in inner_optimizer.cache, "SMAC solver asked for an already known bitstring."
-                new_since_rebuild += 1
-                result = inner_optimizer.optimize(generator_statuses)
-                optimizer.tell(trial, TrialValue(cost=result.total))
-            if len(inner_optimizer.cache) == num_bitstrings:
-                break
-            assert rebuild_count == 0 or new_since_rebuild > 0, "SMAC solver got stuck without sampling a new bitstring after restart."
-            optimizer = self._build_optimizer(problem, output_directory)
-            rebuild_count += 1
+            trial = optimizer.ask()
+            generator_statuses = self._config_to_generator_statuses(trial.config, len(problem.generators))
+            assert generator_statuses not in inner_optimizer.cache, "SMAC solver asked for an already known bitstring."
+            result = inner_optimizer.optimize(generator_statuses)
+            optimizer.tell(trial, TrialValue(cost=result.total))
         assert len(history) > 0, "SMAC solver did not record any history entry."
         return history, {"avg_inner": sum(result.extra["opt_time"] for result in inner_optimizer.cache.values()) / len(inner_optimizer.cache)}
 
@@ -245,6 +235,7 @@ class SmacSolver(PowerFlowSolver):
         kwargs = {}
         if self.silent:
             kwargs["logging_level"] = False
+        kwargs["config_selector"] = ConfigSelector(scenario, retries=inf)
         return AlgorithmConfigurationFacade(scenario, self._dummy_target_function, **kwargs)
 
     def _get_configspace(self, problem: PowerFlowProblem) -> ConfigurationSpace:
