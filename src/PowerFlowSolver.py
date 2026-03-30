@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 from ConfigSpace import Configuration, ConfigurationSpace, Categorical
 from numpy import random
-from pyscipopt import Eventhdlr, Model, SCIP_EVENTTYPE, sin, cos, quicksum
+from pyscipopt import Eventhdlr, Model, SCIP_EVENTTYPE, SCIP_PARAMEMPHASIS, SCIP_PARAMSETTING, sin, cos, quicksum
 from pyscipopt.recipes.nonlinear import set_nonlinear_objective
 from smac import AlgorithmConfigurationFacade, Scenario
 from smac.main.config_selector import ConfigSelector
@@ -65,6 +65,7 @@ class PowerFlowSolver(ABC):
     """Base class for power grid problem solvers.
     :var name: Canonical solver name used in file naming.
     """
+    feasibility_tolerance: float
     name: str
 
     @abstractmethod
@@ -97,6 +98,11 @@ class SCIPSolver(PowerFlowSolver):
         """
         model = Model("PowerFlowAC")
         model.setRealParam("numerics/feastol", self.feasibility_tolerance)
+        model.setStringParam("nlp/solver", "ipopt")
+        model.setEmphasis(SCIP_PARAMEMPHASIS.FEASIBILITY)
+        model.setHeuristics(SCIP_PARAMSETTING.AGGRESSIVE)
+        model.setSeparating(SCIP_PARAMSETTING.FAST)
+        model.setPresolve(SCIP_PARAMSETTING.FAST)
         if self.silent:
             model.hideOutput()
         if self.seed:
