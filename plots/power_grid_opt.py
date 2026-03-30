@@ -57,23 +57,23 @@ def plot_instance_objective_histories():
 
 def plot_polar_vs_rectangular():
     """Plots normalized objective histories for polar and rectangular CasADi results on the 5-generator dataset."""
-    plot_histories([5], np.linspace(0, 1800, 50).tolist(), ["casadi", "casadi_rectangular"], ["Polar", "Rectangular"])
+    plot_histories([5], np.linspace(0, 1800, 50).tolist(), ["casadi", "casadi_rectangular"])
 
 
 def plot_average_normalized_objective_histories():
     """Plots average normalized objective histories for the default solver comparison."""
-    plot_histories([10, 11], np.linspace(0, 1800, 50).tolist(), ["scip", "slsqp", "casadi"])
+    # ["smac", "scip", "scip_adaptive", "scip_branching", "scip_FAAA", "scip_FAFF", "scip_ipopt", "scip_numerics", "scip_phaseimprove"]
+    # ["scip", "smac", "uniform", "hybrid", "scip_FAFF", "scip_ipopt", "scip_adaptive"]
+    plot_histories([5], np.linspace(0, 1800, 50).tolist(), ["scip", "smac", "uniform", "hybrid"])
 
 
-def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], solver_ids: Sequence[str], solver_names: Sequence[str] | None = None):
+def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], solver_ids: Sequence[str]):
     """Plots average normalized objective histories for configured solvers.
     :param num_generators: Generator counts whose datasets should be plotted together.
     :param grid_times: Uniform time grid used to align objective histories.
     :param solver_ids: Solver ids whose CSV files should be loaded from each dataset folder.
-    :param solver_names: Optional display names used for solver legend labels in the same order as ``solver_ids``.
     """
-    solver_names = {solver_id: solver_name for solver_id, solver_name in zip(solver_ids, solver_names)} if solver_names is not None else \
-                   {"scip": "SCIP", "slsqp": "SLSQP", "casadi": "CasADi"}
+    solver_names = {"scip": "SCIP", "smac": "SMAC", "uniform": "Uniform", "hybrid": "Hybrid"}
     infeasible_tolerance = 1e-10
     instance_ids = list(range(100))
     lines = []
@@ -90,7 +90,7 @@ def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], s
             if solver_id not in solver_histories:
                 continue
             curve = _get_average_normalized_curve(grid_times, instance_ids, solver_histories[solver_id], best_objectives)
-            label = solver_names[solver_id] if solver_id not in labeled_solvers else "_nolabel_"
+            label = solver_names.get(solver_id, solver_id) if solver_id not in labeled_solvers else "_nolabel_"
             lines.append(Line(grid_times, curve, color=solver_index, marker=num_gens_ind, label=label))
             labeled_solvers.add(solver_id)
     plot_general(lines, axis_labels=("Time [s]", "Normalized Objective"), boundaries=(None, None, -0.025, 1.025))
@@ -154,5 +154,6 @@ def _get_average_normalized_curve(grid_times: Sequence[float], instance_ids: lis
 
 if __name__ == "__main__":
     # plot_instance_objective_histories()
-    plot_polar_vs_rectangular()
+    # plot_polar_vs_rectangular()
+    plot_average_normalized_objective_histories()
     plt.show()

@@ -1,128 +1,27 @@
+"""Runs multiple stored power-flow instances in parallel."""
+
 import os
 import pickle
 import shutil
 import sys
-import time
-from contextlib import contextmanager
-from functools import partial
+from collections.abc import Iterator
 from concurrent.futures import TimeoutError as FutureTimeoutError, as_completed
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
-import numpy as np
 import pandas as pd
-from networkx import Graph
-from pebble import ProcessPool
 from cattrs.preconf.json import make_converter
-from qiskit.primitives import StatevectorSampler
+from pebble import ProcessPool
 from tqdm import tqdm
 
-import debug
-from src import PowerFlowProblemGenerator, LognormalSpec
-from src.CircuitLayer import AllToAllEntangler, ZXMixer
-from src.ContinuousPowerOptimizer import CasadiOptimizer
+from run_single import get_solver
 from src.HistoryEntry import HistoryEntry
-from src.Generator import Generator
 from src.PowerFlowProblem import PowerFlowProblem
-from src.PowerFlowSolver import SCIPSolver, HybridSolver, PowerFlowSolver, SmacSolver, UniformSolver
-from src.Sampler import MySamplerV2
-from src.VariationalQuantumProgram import VariationalQuantumProgram
-from src.utils import my_format
+from src.PowerFlowSolver import PowerFlowSolver
 
 
-def generate_dataset():
-    num_generators = 5
-    problem_generator = PowerFlowProblemGenerator()
-    problem_generator.generate_instances(num_generators, 100, voltage_range=(0, 100), output_folder=f"data/{num_generators}", strictness_factor=1.2)
-
-
-def run_single():
-    # problem = get_power_flow_ac_problem()
-    index = 49
-    voltage_deviation_mult = 10
-    exact_final_expectation = False
-    data_path = Path(f"data/5/capacity_100")
-    with (data_path / f"{index}.pkl").open("rb") as file:
-        problem = PowerFlowProblem(pickle.load(file), voltage_deviation_mult)
-
-    # debug.set_all_edge_capacities(problem, 100)
-    # debug.set_all_node_voltage_ranges(problem, (1, 100))
-    # debug.set_all_generator_p_min(problem, 0)
-
-    # solver = ClassicalSolver()
-    solver = get_solver(len(problem.generators))
-
-    inner_solver = solver.inner_optimizer_factory(problem)
-    inner_solver.optimize("11110")
-
-    progress_folder = data_path / f".progress_{solver.name}"
-    progress_folder.mkdir(exist_ok=True)
-    progress_path = progress_folder / f"{index}.pkl"
-    if isinstance(solver, HybridSolver):
-        history, extra = solver.solve(problem, progress_path, exact_final_expectation)
-    else:
-        history, extra = solver.solve(problem, progress_path)
-
-    print("\nSolution:")
-    debug.print_evaluation_result(problem, history[-1].result)
-    print(f"Job index: {history[-1].job_ind}")
-    if "total_jobs" in extra:
-        print(f"Total jobs: {extra["total_jobs"]}")
-    if exact_final_expectation:
-        print(f"Optimized probabilities: {my_format(extra["final_probs"])}")
-        print(f"Optimized expectation: {extra["cost_expectation"]}")
-
-
-def get_solver(num_generators: int) -> PowerFlowSolver:
-    max_inner_time_s = 30
-    penalty_mult = 10
-    feasibility_tolerance = 1e-10
-    silent = True
-    seed = 0
-
-    vqp = get_variational_quantum_program(num_generators)
-    inner_optimizer_factory = partial(CasadiOptimizer, penalty_mult=penalty_mult, max_time_s=max_inner_time_s, silent=True)
-
-    # solver = SCIPSolver(feasibility_tolerance, silent, seed)
-    solver = SmacSolver(inner_optimizer_factory, feasibility_tolerance, silent, seed)
-    # solver = UniformSolver(inner_optimizer_factory, feasibility_tolerance, seed)
-    # solver = HybridSolver(vqp, inner_optimizer_factory, feasibility_tolerance, seed)
-    return solver
-
-
-def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgram:
-    entangler = AllToAllEntangler(num_qubits)
-    mixer = ZXMixer(num_qubits)
-    num_layers = 1
-
-    # sampler = ExactSampler()
-    sampler = MySamplerV2(StatevectorSampler(default_shots=1000))
-    # sampler = IonQSampler("simulator", 1000, None)
-    # sampler = IonQSampler("qpu.forte-enterprise-1", 1000, None)
-
-    return VariationalQuantumProgram(num_layers, [entangler, mixer], sampler)
-
-
-def get_power_flow_ac_problem() -> PowerFlowProblem:
-    voltage_range = (0, 10)
-    angle_range = (-np.pi, np.pi)
-    graph = Graph()
-
-    graph.add_node(0, generators=[Generator((0, 100), (-100, 100), (0, 1, 1))], load=0, voltage_range=voltage_range, angle_range=angle_range)
-    graph.add_node(1, generators=[], load=10, voltage_range=voltage_range, angle_range=angle_range)
-    graph.add_edge(0, 1, capacity=100, admittance=1 + 1j)
-
-    # graph.add_node(0, generators=[Generator((0, 30), (0, 0), (0, 10, 1))], load=0, voltage_range=voltage_range, angle_range=angle_range)
-    # graph.add_node(1, generators=[Generator((0, 10), (0, 0), (0, 20, 1))], load=10, voltage_range=voltage_range, angle_range=angle_range)
-    # graph.add_node(2, generators=[], load=10, voltage_range=voltage_range, angle_range=angle_range)
-    # graph.add_edge(0, 1, capacity=10, admittance=1)
-    # graph.add_edge(0, 2, capacity=5, admittance=1)
-    # graph.add_edge(1, 2, capacity=10, admittance=1)
-
-    return PowerFlowProblem(graph)
-
-
-def run_parallel():
+def run_parallel() -> None:
     """Runs selected instances in parallel and persists each completed result to CSV."""
     num_generators = 5
     data_folder = Path(f"data/{num_generators}")
@@ -135,8 +34,7 @@ def run_parallel():
     solutions_path = data_folder / f".solutions_{solver.name}.csv"
     columns = ["instance", "generator_assignments", "continuous_parameters", "cost", "penalty", "job_ind", "total_jobs", "avg_inner", "history", "error"]
     if solutions_path.exists():
-        existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generator_assignments": "string"})
-        existing_df = existing_df.reindex(columns=columns)
+        existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generator_assignments": "string"}).reindex(columns=columns)
     else:
         existing_df = pd.DataFrame(columns=columns)
 
@@ -145,7 +43,7 @@ def run_parallel():
         filled_index_set = set(existing_df.loc[filled_mask, "instance"].astype(int).tolist())
         instance_indices = [index for index in instance_indices if index not in filled_index_set]
 
-    if len(instance_indices) == 0:
+    if not instance_indices:
         print("No instance indices selected for run_parallel.")
         return
 
@@ -161,8 +59,9 @@ def run_parallel():
     error_count = 0
     with ProcessPool(max_workers=workers) as pool:
         future_to_metadata = \
-            {pool.schedule(run_instance, args=(data_folder, index, solver, voltage_deviation_mult), timeout=timeout_s): index for index in instance_indices}
-        for future in tqdm(as_completed(future_to_metadata), total=len(future_to_metadata), smoothing=0.0):
+            {pool.schedule(run_instance, args=(data_folder, index, solver, voltage_deviation_mult), timeout=timeout_s): index
+             for index in instance_indices}
+        for future in tqdm(as_completed(future_to_metadata), total=len(future_to_metadata), smoothing=0):
             index = future_to_metadata[future]
             progress_path = progress_folder / f"{index}.pkl"
             log_path = progress_folder / f"{index}.txt"
@@ -250,14 +149,4 @@ def redirect_worker_output(log_path: Path) -> Iterator[None]:
 
 
 if __name__ == "__main__":
-    t1 = time.perf_counter()
-
-    # debug.save_instance_human_readable("data/5/5.pkl")
-    # debug.print_solution_from_csv("data/5/capacity_100/.solutions_casadi.csv", 49)
-
-    # generate_dataset()
-    # run_single()
     run_parallel()
-
-    t2 = time.perf_counter()
-    print(f"Elapsed time {t2 - t1} seconds")
