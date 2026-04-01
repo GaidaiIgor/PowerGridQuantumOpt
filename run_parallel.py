@@ -1,5 +1,6 @@
 """Runs multiple stored power-flow instances in parallel."""
 
+import argparse
 import os
 import pickle
 import shutil
@@ -15,7 +16,7 @@ from cattrs.preconf.json import make_converter
 from pebble import ProcessPool
 from tqdm import tqdm
 
-from common.utils import get_solver
+from common.utils import SOLVER_IDS, get_solver
 from src.HistoryEntry import HistoryEntry
 from src.PowerFlowProblem import PowerFlowProblem
 from src.PowerFlowSolver import PowerFlowSolver
@@ -23,13 +24,13 @@ from src.PowerFlowSolver import PowerFlowSolver
 
 def run_parallel() -> None:
     """Runs selected instances in parallel and persists each completed result to CSV."""
-    num_generators = 5
-    data_folder = Path(f"data/{num_generators}")
-    instance_indices = list(range(100))
+    data_folder, solver_id = parse_cli_args()
+    instance_indices = list(range(120))
     voltage_deviation_mult = 10
     absent_only = True
     timeout_s = 1800
-    solver = get_solver(num_generators)
+    num_generators = read_num_generators(data_folder)
+    solver = get_solver(num_generators, solver_id)
 
     solutions_path = data_folder / f".solutions_{solver.name}.csv"
     columns = ["instance", "generator_assignments", "continuous_parameters", "cost", "penalty", "job_ind", "total_jobs", "avg_inner", "history", "error"]
@@ -104,6 +105,29 @@ def run_parallel() -> None:
     print(f"Inner optimization time: avg={avg_inner_values.mean()}, min={avg_inner_values.min()}, max={avg_inner_values.max()}")
     print(f"Total jobs: avg={total_jobs_values.mean()}, min={total_jobs_values.min()}, max={total_jobs_values.max()}")
     print(f"Unfeasible instances: {infeasible_count}")
+
+
+def parse_cli_args() -> tuple[Path, str]:
+    """Parses command-line arguments for ``run_parallel``.
+    :return: Dataset folder together with the selected solver identifier.
+    """
+    parser = argparse.ArgumentParser(description="Runs multiple stored power-flow instances in parallel.")
+    parser.add_argument("data_folder", type=Path, help="Folder containing stored power-flow instance pickle files.")
+    parser.add_argument("solver", choices=SOLVER_IDS, help="Solver to run.")
+    args = parser.parse_args()
+    return args.data_folder, args.solver
+
+
+def read_num_generators(data_folder: Path) -> int:
+    """Reads generator count from the first stored instance in a dataset folder.
+    :param data_folder: Path to the dataset folder.
+    :return: Number of generators stored in the dataset.
+    """
+    first_instance_path = next(data_folder.glob("*.pkl"), None)
+    assert first_instance_path is not None, f"No instance files found in {data_folder}."
+    with first_instance_path.open("rb") as file:
+        problem = PowerFlowProblem(pickle.load(file), 0)
+    return len(problem.generators)
 
 
 def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver, voltage_deviation_mult: float) -> tuple[list[HistoryEntry], dict[str, Any]]:

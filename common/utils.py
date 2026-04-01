@@ -6,14 +6,17 @@ from qiskit.primitives import StatevectorSampler
 
 from src.CircuitLayer import AllToAllEntangler, ZXMixer
 from src.ContinuousPowerOptimizer import CasadiOptimizer
-from src.PowerFlowSolver import PowerFlowSolver, SCIPSolver
+from src.PowerFlowSolver import PowerFlowSolver, SCIPSolver, SmacSolver, UniformSolver, HybridSolver
 from src.Sampler import MySamplerV2
 from src.VariationalQuantumProgram import VariationalQuantumProgram
 
+SOLVER_IDS = ("scip", "smac", "uniform", "hybrid")
 
-def get_solver(num_generators: int) -> PowerFlowSolver:
+
+def get_solver(num_generators: int, solver_id: str) -> PowerFlowSolver:
     """Builds the configured solver for a problem size.
     :param num_generators: Number of generators or qubits in the target instance.
+    :param solver_id: Solver identifier. Must be one of ``"scip"``, ``"smac"``, ``"uniform"``, or ``"hybrid"``.
     :return: Solver configured for the current experiment.
     """
     max_inner_time_s = 30
@@ -22,14 +25,18 @@ def get_solver(num_generators: int) -> PowerFlowSolver:
     silent = True
     seed = 0
 
-    vqp = get_variational_quantum_program(num_generators)
-    inner_optimizer_factory = partial(CasadiOptimizer, penalty_mult=penalty_mult, max_time_s=max_inner_time_s, silent=True)
+    if solver_id == "scip":
+        return SCIPSolver(feasibility_tolerance, silent, seed)
 
-    solver = SCIPSolver(feasibility_tolerance, silent, seed, "scip_adaptive")
-    # solver = SmacSolver(inner_optimizer_factory, feasibility_tolerance, silent, seed)
-    # solver = UniformSolver(inner_optimizer_factory, feasibility_tolerance, seed)
-    # solver = HybridSolver(vqp, inner_optimizer_factory, feasibility_tolerance, seed)
-    return solver
+    inner_optimizer_factory = partial(CasadiOptimizer, penalty_mult=penalty_mult, max_time_s=max_inner_time_s, silent=True)
+    if solver_id == "smac":
+        return SmacSolver(inner_optimizer_factory, feasibility_tolerance, silent, seed)
+    if solver_id == "uniform":
+        return UniformSolver(inner_optimizer_factory, feasibility_tolerance, seed)
+    if solver_id == "hybrid":
+        vqp = get_variational_quantum_program(num_generators)
+        return HybridSolver(vqp, inner_optimizer_factory, feasibility_tolerance, seed)
+    raise ValueError(f"Unsupported solver {solver_id!r}. Expected one of {', '.join(SOLVER_IDS)}.")
 
 
 def get_variational_quantum_program(num_qubits: int) -> VariationalQuantumProgram:
