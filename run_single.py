@@ -18,6 +18,7 @@ def run_single() -> None:
     """Runs the configured solver on one stored problem instance."""
     # problem = get_power_flow_ac_problem()
     index = 49
+    solver_id = "hybrid"
     voltage_deviation_mult = 10
     exact_final_expectation = False
     data_path = Path("data/5/capacity_100")
@@ -29,12 +30,12 @@ def run_single() -> None:
     # debug.set_all_generator_p_min(problem, 0)
 
     # solver = ClassicalSolver()
-    solver = get_solver(len(problem.generators))
+    solver = get_solver(len(problem.generators), solver_id)
 
     inner_solver = solver.inner_optimizer_factory(problem)
     inner_solver.optimize("11110")
 
-    progress_folder = data_path / f".progress_{solver.name}"
+    progress_folder = Path(".progress")
     progress_folder.mkdir(exist_ok=True)
     progress_path = progress_folder / f"{index}.pkl"
     if isinstance(solver, HybridSolver):

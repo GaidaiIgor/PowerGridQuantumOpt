@@ -26,8 +26,8 @@ def plot_probability_distribution(probs: dict[str, float], y_max: float = 1):
 def plot_instance_objective_histories():
     """Plots objective-over-time history lines for each instance from classical and hybrid runs."""
     data_path = Path(__file__).resolve().parent.parent / "data/5"
-    classical_df = pd.read_csv(data_path / ".solutions_classical.csv")
-    hybrid_df = pd.read_csv(data_path / ".solutions_hybrid.csv")
+    classical_df = pd.read_csv(data_path / "scip" / ".solutions.csv")
+    hybrid_df = pd.read_csv(data_path / "hybrid" / ".solutions.csv")
     converter = make_converter()
 
     lines = []
@@ -71,7 +71,7 @@ def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], s
     """Plots average normalized objective histories for configured solvers.
     :param num_generators: Generator counts whose datasets should be plotted together.
     :param grid_times: Uniform time grid used to align objective histories.
-    :param solver_ids: Solver ids whose CSV files should be loaded from each dataset folder.
+    :param solver_ids: Solver ids whose CSV files should be loaded from subfolders inside each dataset folder.
     """
     solver_names = {"scip": "SCIP", "smac": "SMAC", "uniform": "Uniform", "hybrid": "Hybrid"}
     infeasible_tolerance = 1e-10
@@ -82,7 +82,7 @@ def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], s
         data_path = Path(__file__).resolve().parent.parent / f"data/{num_gens}"
         solver_histories = {}
         for solver_id in solver_ids:
-            csv_path = data_path / f".solutions_{solver_id}.csv"
+            csv_path = data_path / solver_id / ".solutions.csv"
             if csv_path.exists():
                 solver_histories[solver_id] = _load_solver_histories(csv_path, infeasible_tolerance)
         best_objectives = _get_best_objectives(instance_ids, solver_histories)

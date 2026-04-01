@@ -32,7 +32,7 @@ def run_parallel() -> None:
     num_generators = read_num_generators(data_folder)
     solver = get_solver(num_generators, solver_id)
 
-    solutions_path = data_folder / f".solutions_{solver.name}.csv"
+    solutions_path = Path(".solutions.csv")
     columns = ["instance", "generator_assignments", "continuous_parameters", "cost", "penalty", "job_ind", "total_jobs", "avg_inner", "history", "error"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generator_assignments": "string"}).reindex(columns=columns)
@@ -48,11 +48,11 @@ def run_parallel() -> None:
         print("No instance indices selected for run_parallel.")
         return
 
-    progress_folder = data_folder / f".progress_{solver.name}"
+    progress_folder = Path(".progress")
     shutil.rmtree(progress_folder, ignore_errors=True)
     progress_folder.mkdir()
 
-    workers = min(max(1, (os.cpu_count() or 1) // 2), len(instance_indices))
+    workers = min(os.cpu_count(), len(instance_indices))
     print(f"Using {workers} worker(s).")
     rows = existing_df.set_index("instance").to_dict(orient="index")
     converter = make_converter()
@@ -138,7 +138,7 @@ def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver, voltage
     :param voltage_deviation_mult: Multiplier applied to squared voltage deviation from ``1`` in the objective.
     :return: Solver history whose last entry is the final incumbent together with solver-specific extras.
     """
-    progress_folder = data_folder / f".progress_{solver.name}"
+    progress_folder = Path(".progress")
     log_path = progress_folder / f"{index}.txt"
     with redirect_worker_output(log_path):
         with (data_folder / f"{index}.pkl").open("rb") as file:
