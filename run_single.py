@@ -47,10 +47,12 @@ def run_single() -> None:
     debug.print_evaluation_result(problem, history[-1].result)
     print(f"Job index: {history[-1].job_ind}")
     if "total_jobs" in extra:
-        print(f"Total jobs: {extra['total_jobs']}")
+        print(f"Total jobs: {extra["total_jobs"]}")
+    if "optimized_bitstrings" in extra:
+        print(f"Optimized bitstrings: {extra["optimized_bitstrings"]}")
     if exact_final_expectation:
-        print(f"Optimized probabilities: {my_format(extra['final_probs'])}")
-        print(f"Optimized expectation: {extra['cost_expectation']}")
+        print(f"Optimized probabilities: {my_format(extra["final_probs"])}")
+        print(f"Optimized expectation: {extra["cost_expectation"]}")
 
 
 def get_power_flow_ac_problem() -> PowerFlowProblem:

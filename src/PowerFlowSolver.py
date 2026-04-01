@@ -78,6 +78,15 @@ class PowerFlowSolver(ABC):
         pass
 
 
+def get_inner_optimizer_extra(inner_optimizer: ContinuousPowerOptimizer) -> dict[str, float | int]:
+    """Returns common summary metrics for solvers backed by the inner continuous optimizer.
+    :param inner_optimizer: Inner continuous optimizer whose cache holds one entry per optimized bitstring.
+    :return: Average inner optimization time together with the number of optimized bitstrings.
+    """
+    return {"avg_inner": sum(result.extra["opt_time"] for result in inner_optimizer.cache.values()) / len(inner_optimizer.cache),
+            "optimized_bitstrings": len(inner_optimizer.cache)}
+
+
 @dataclass
 class SCIPSolver(PowerFlowSolver):
     """Uses SCIP library to solve power grid problems classically.
@@ -229,7 +238,7 @@ class SmacSolver(PowerFlowSolver):
             result = inner_optimizer.optimize(generator_statuses)
             optimizer.tell(trial, TrialValue(cost=result.total))
         assert len(history) > 0, "SMAC solver did not record any history entry."
-        return history, {"avg_inner": sum(result.extra["opt_time"] for result in inner_optimizer.cache.values()) / len(inner_optimizer.cache)}
+        return history, get_inner_optimizer_extra(inner_optimizer)
 
     def _build_optimizer(self, problem: PowerFlowProblem, output_directory: Path) -> AlgorithmConfigurationFacade:
         """Builds the SMAC3 optimizer for binary generator assignments.
@@ -308,7 +317,7 @@ class UniformSolver(PowerFlowSolver):
                 continue
             inner_optimizer.optimize(generator_statuses)
         assert len(history) > 0, "Uniform solver did not record any history entry."
-        return history, {"avg_inner": sum(result.extra["opt_time"] for result in inner_optimizer.cache.values()) / len(inner_optimizer.cache)}
+        return history, get_inner_optimizer_extra(inner_optimizer)
 
 
 @dataclass
@@ -346,8 +355,7 @@ class HybridSolver(PowerFlowSolver):
         result = self.vqp.optimize_parameters(lambda generator_statuses: inner_optimizer.optimize(generator_statuses).total, initial_angles)
         assert result.success, f"Angle optimization failed: {result.message}"
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
-        extra = {"avg_inner": sum(result.extra["opt_time"] for result in inner_optimizer.cache.values()) / len(inner_optimizer.cache),
-                 "total_jobs": self.vqp.num_jobs}
+        extra = get_inner_optimizer_extra(inner_optimizer) | {"total_jobs": self.vqp.num_jobs}
 
         if exact_final_expectation:
             exact_sampler = ExactSampler()
