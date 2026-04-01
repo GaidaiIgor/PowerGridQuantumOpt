@@ -15,7 +15,7 @@ from cattrs.preconf.json import make_converter
 from pebble import ProcessPool
 from tqdm import tqdm
 
-from run_single import get_solver
+from common.utils import get_solver
 from src.HistoryEntry import HistoryEntry
 from src.PowerFlowProblem import PowerFlowProblem
 from src.PowerFlowSolver import PowerFlowSolver
