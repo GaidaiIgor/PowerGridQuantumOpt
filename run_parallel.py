@@ -33,7 +33,7 @@ def run_parallel() -> None:
     solver = get_solver(num_generators, solver_id)
 
     solutions_path = Path(".solutions.csv")
-    columns = ["instance", "generators", "cont_params", "cost", "penalty", "job_ind", "total_jobs", "optimized_bitstrings", "avg_inner", "max_inner", "error",
+    columns = ["instance", "generators", "cont_params", "cost", "penalty", "job_ind", "total_jobs", "optimized_bitstrings", "total_inner", "max_inner", "error",
                "history"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generators": "string"}).reindex(columns=columns)
@@ -95,7 +95,7 @@ def run_parallel() -> None:
                         "penalty": last_result.penalty,
                         "job_ind": history[-1].job_ind,
                         "total_jobs": extra.get("total_jobs"),
-                        "avg_inner": extra.get("avg_inner"),
+                        "total_inner": extra.get("total_inner"),
                         "max_inner": extra.get("max_inner"),
                         "optimized_bitstrings": extra.get("optimized_bitstrings"),
                         "history": converter.dumps(history)}
@@ -109,12 +109,13 @@ def run_parallel() -> None:
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
     total_jobs_values = pd.to_numeric(output_df["total_jobs"], errors="coerce")
     optimized_bitstring_values = pd.to_numeric(output_df["optimized_bitstrings"], errors="coerce")
-    avg_inner_values = pd.to_numeric(output_df["avg_inner"], errors="coerce")
+    total_inner_values = pd.to_numeric(output_df["total_inner"], errors="coerce")
     max_inner_values = pd.to_numeric(output_df["max_inner"], errors="coerce")
     infeasible_count = (pd.to_numeric(output_df["penalty"], errors="coerce") > solver.feasibility_tolerance).sum()
     print(f"Total jobs: avg={total_jobs_values.mean()}, max={total_jobs_values.max()}")
     print(f"Optimized bitstrings: avg={optimized_bitstring_values.mean()}, max={optimized_bitstring_values.max()}")
-    print(f"Inner optimization time: avg={avg_inner_values.mean()}, max={max_inner_values.max()}")
+    print(f"Total inner optimization time: avg={total_inner_values.mean()}, max={total_inner_values.max()}")
+    print(f"Max inner optimization time: avg={max_inner_values.mean()}, max={max_inner_values.max()}")
     print(f"Unfeasible instances: {infeasible_count}")
 
 
