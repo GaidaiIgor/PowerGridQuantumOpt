@@ -107,7 +107,7 @@ def print_solution_from_csv(csv_path: str | Path, instance_index: int):
     with (dataset_path / f"{instance_index}.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file))
 
-    solutions_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generator_assignments": "string"})
+    solutions_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generators": "string"})
     solution_row = solutions_df.loc[solutions_df["instance"].astype(int) == instance_index].iloc[0]
     converter = make_converter()
     history = converter.loads(solution_row["history"], list[HistoryEntry])

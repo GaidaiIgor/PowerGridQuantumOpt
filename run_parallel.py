@@ -33,15 +33,15 @@ def run_parallel() -> None:
     solver = get_solver(num_generators, solver_id)
 
     solutions_path = Path(".solutions.csv")
-    columns = ["instance", "generator_assignments", "continuous_parameters", "cost", "penalty", "job_ind", "total_jobs", "avg_inner", "optimized_bitstrings",
-               "history", "error"]
+    columns = ["instance", "generators", "cont_params", "cost", "penalty", "job_ind", "total_jobs", "optimized_bitstrings", "avg_inner", "max_inner", "error",
+               "history"]
     if solutions_path.exists():
-        existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generator_assignments": "string"}).reindex(columns=columns)
+        existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generators": "string"}).reindex(columns=columns)
     else:
         existing_df = pd.DataFrame(columns=columns)
 
     if absent_only:
-        filled_mask = existing_df["generator_assignments"].notna()
+        filled_mask = existing_df["generators"].notna()
         filled_index_set = set(existing_df.loc[filled_mask, "instance"].astype(int).tolist())
         instance_indices = [index for index in instance_indices if index not in filled_index_set]
 
@@ -71,8 +71,12 @@ def run_parallel() -> None:
                 history, extra = future.result()
                 error = None
             except Exception as ex:
-                history = pd.read_pickle(progress_path) if progress_path.exists() else None
-                extra = {}
+                if progress_path.exists():
+                    history = pd.read_pickle(progress_path)
+                    extra = history[-1].optimizer_stats
+                else:
+                    history = None
+                    extra = {}
                 if isinstance(ex, FutureTimeoutError):
                     timeout_count += 1
                     error = f"Timeout after {timeout_s}s"
@@ -85,13 +89,14 @@ def run_parallel() -> None:
             row = {"history": None, "error": error}
             if history is not None:
                 last_result = history[-1].result
-                row |= {"generator_assignments": last_result.generator_statuses,
-                        "continuous_parameters": last_result.params,
+                row |= {"generators": last_result.generator_statuses,
+                        "cont_params": last_result.params,
                         "cost": last_result.fun,
                         "penalty": last_result.penalty,
                         "job_ind": history[-1].job_ind,
                         "total_jobs": extra.get("total_jobs"),
                         "avg_inner": extra.get("avg_inner"),
+                        "max_inner": extra.get("max_inner"),
                         "optimized_bitstrings": extra.get("optimized_bitstrings"),
                         "history": converter.dumps(history)}
             rows[index] = row
@@ -102,13 +107,14 @@ def run_parallel() -> None:
             output_df.to_csv(solutions_path, index=False)
 
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
-    avg_inner_values = pd.to_numeric(output_df["avg_inner"], errors="coerce")
     total_jobs_values = pd.to_numeric(output_df["total_jobs"], errors="coerce")
     optimized_bitstring_values = pd.to_numeric(output_df["optimized_bitstrings"], errors="coerce")
+    avg_inner_values = pd.to_numeric(output_df["avg_inner"], errors="coerce")
+    max_inner_values = pd.to_numeric(output_df["max_inner"], errors="coerce")
     infeasible_count = (pd.to_numeric(output_df["penalty"], errors="coerce") > solver.feasibility_tolerance).sum()
-    print(f"Inner optimization time: avg={avg_inner_values.mean()}, max={avg_inner_values.max()}")
     print(f"Total jobs: avg={total_jobs_values.mean()}, max={total_jobs_values.max()}")
     print(f"Optimized bitstrings: avg={optimized_bitstring_values.mean()}, max={optimized_bitstring_values.max()}")
+    print(f"Inner optimization time: avg={avg_inner_values.mean()}, max={max_inner_values.max()}")
     print(f"Unfeasible instances: {infeasible_count}")
 
 

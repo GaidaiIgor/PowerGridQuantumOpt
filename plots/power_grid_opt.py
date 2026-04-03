@@ -62,9 +62,7 @@ def plot_polar_vs_rectangular():
 
 def plot_average_normalized_objective_histories():
     """Plots average normalized objective histories for the default solver comparison."""
-    # ["smac", "scip", "scip_adaptive", "scip_branching", "scip_FAAA", "scip_FAFF", "scip_ipopt", "scip_numerics", "scip_phaseimprove"]
-    # ["scip", "smac", "uniform", "hybrid", "scip_FAFF", "scip_ipopt", "scip_adaptive"]
-    plot_histories([5], np.linspace(0, 1800, 50).tolist(), ["scip", "smac", "uniform", "hybrid"])
+    plot_histories([12], np.linspace(0, 1800, 50).tolist(), ["scip", "smac", "uniform", "hybrid"])
 
 
 def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], solver_ids: Sequence[str]):
@@ -93,7 +91,7 @@ def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], s
             label = solver_names.get(solver_id, solver_id) if solver_id not in labeled_solvers else "_nolabel_"
             lines.append(Line(grid_times, curve, color=solver_index, marker=num_gens_ind, label=label))
             labeled_solvers.add(solver_id)
-    plot_general(lines, axis_labels=("Time [s]", "Normalized Objective"), boundaries=(None, None, -0.025, 1.025))
+    plot_general(lines, axis_labels=("Time [s]", "Normalized Objective"), boundaries=(None, None, 0.9, 1.01))
     save_figure()
 
 

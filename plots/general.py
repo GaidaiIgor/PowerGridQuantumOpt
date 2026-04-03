@@ -18,7 +18,7 @@ from numpy import ndarray
 colors = [(0, 0, 1), (1, 0, 0), (0, 0.5, 0), (0, 0, 0), (0, 0.75, 0.75), (0.75, 0, 0.75), (0.75, 0.75, 0)]
 colors += distinctipy.get_colors(10, colors + [(1, 1, 1)])
 markers = "o*Xvs"
-marker_sizes = {"o": 7, "*": 10, "X": 10, "v": 10, "s": 7, "none": 0}
+marker_sizes = {"o": 7, "*": 8, "X": 8, "v": 10, "s": 7, "none": 0}
 styles = ["-", "--", "-."]
 annotation_facecolor = (1.0, 0.7, 0.7)
 annotation_textcolor = "black"

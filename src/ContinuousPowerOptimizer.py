@@ -15,6 +15,17 @@ from .EvaluationResult import EvaluationResult
 from .PowerFlowProblem import PowerFlowProblem
 
 
+def get_optimizer_stats(inner_optimizer: ContinuousPowerOptimizer) -> dict[str, int | float]:
+    """Returns summary statistics for completed inner optimizations.
+    :param inner_optimizer: Inner continuous optimizer whose cache holds one entry per optimized bitstring.
+    :return: Completed-bitstring count together with average and maximum inner optimization time.
+    """
+    opt_times = [result.extra["opt_time"] for result in inner_optimizer.cache.values() if "opt_time" in result.extra]
+    if len(opt_times) == 0:
+        return {"optimized_bitstrings": 0, "avg_inner": 0, "max_inner": 0}
+    return {"optimized_bitstrings": len(opt_times), "avg_inner": sum(opt_times) / len(opt_times), "max_inner": max(opt_times)}
+
+
 @dataclass
 class Constraint:
     """Stores one symbolic constraint together with its valid range.
@@ -117,6 +128,7 @@ class ContinuousPowerOptimizer(ABC):
         """
         equality_constraints, inequality_constraints = self.problem.evaluate_constraints_split(*self.problem.split_params(params))
         return self.penalty_mult * (np.sum(np.square(equality_constraints)) + np.sum(np.square(np.maximum(inequality_constraints, 0))))
+
 
 class UpdateCallback(ca.Callback):
     """Tracks IPOPT iterates and requests termination after the configured time limit.

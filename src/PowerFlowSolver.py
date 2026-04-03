@@ -21,12 +21,29 @@ from smac.main.config_selector import ConfigSelector
 from smac.runhistory import TrialValue
 
 from . import utils
-from .ContinuousPowerOptimizer import ContinuousPowerOptimizer
+from .ContinuousPowerOptimizer import ContinuousPowerOptimizer, get_optimizer_stats
 from .EvaluationResult import EvaluationResult
 from .HistoryEntry import HistoryEntry
 from .PowerFlowProblem import PowerFlowProblem
 from .Sampler import ExactSampler
 from .VariationalQuantumProgram import VariationalQuantumProgram
+
+
+class PowerFlowSolver(ABC):
+    """Base class for power grid problem solvers.
+    :var name: Canonical solver name used in file naming.
+    """
+    feasibility_tolerance: float
+    name: str
+
+    @abstractmethod
+    def solve(self, problem: PowerFlowProblem, progress_path: Path) -> tuple[list[HistoryEntry], dict[str, Any]]:
+        """Solves a given power grid optimization problem and returns its history together with solver-specific extras.
+        :param problem: Power-flow optimization problem to solve.
+        :param progress_path: Path for persisting incumbent progress snapshots.
+        :return: Solver history whose last entry is the final incumbent together with solver-specific extra information.
+        """
+        pass
 
 
 class HistoryEventHandler(Eventhdlr):
@@ -57,34 +74,8 @@ class HistoryEventHandler(Eventhdlr):
         :param event: Event payload provided by SCIP.
         """
         current_time = time.perf_counter() - self.start_time
-        self.history.append(HistoryEntry(current_time, None, SCIPSolver.extract_evaluation_result(self.model, self.variables)))
+        self.history.append(HistoryEntry(current_time, None, {}, SCIPSolver.extract_evaluation_result(self.model, self.variables)))
         pd.to_pickle(self.history, self.progress_path)
-
-
-class PowerFlowSolver(ABC):
-    """Base class for power grid problem solvers.
-    :var name: Canonical solver name used in file naming.
-    """
-    feasibility_tolerance: float
-    name: str
-
-    @abstractmethod
-    def solve(self, problem: PowerFlowProblem, progress_path: Path) -> tuple[list[HistoryEntry], dict[str, Any]]:
-        """Solves a given power grid optimization problem and returns its history together with solver-specific extras.
-        :param problem: Power-flow optimization problem to solve.
-        :param progress_path: Path for persisting incumbent progress snapshots.
-        :return: Solver history whose last entry is the final incumbent together with solver-specific extra information.
-        """
-        pass
-
-
-def get_inner_optimizer_extra(inner_optimizer: ContinuousPowerOptimizer) -> dict[str, float | int]:
-    """Returns common summary metrics for solvers backed by the inner continuous optimizer.
-    :param inner_optimizer: Inner continuous optimizer whose cache holds one entry per optimized bitstring.
-    :return: Average inner optimization time together with the number of optimized bitstrings.
-    """
-    return {"avg_inner": sum(result.extra["opt_time"] for result in inner_optimizer.cache.values()) / len(inner_optimizer.cache),
-            "optimized_bitstrings": len(inner_optimizer.cache)}
 
 
 @dataclass
@@ -219,7 +210,9 @@ class SmacSolver(PowerFlowSolver):
         :return: Solver history whose last entry is the final incumbent together with solver-specific extra information.
         """
         def update_history(new_result: EvaluationResult):
-            history.append(HistoryEntry(time.perf_counter() - start_time, None, new_result))
+            current_time = time.perf_counter()
+            stats = get_optimizer_stats(inner_optimizer)
+            history.append(HistoryEntry(current_time - start_time, None, stats.copy(), new_result))
             pd.to_pickle(history, progress_path)
 
         history = []
@@ -238,7 +231,7 @@ class SmacSolver(PowerFlowSolver):
             result = inner_optimizer.optimize(generator_statuses)
             optimizer.tell(trial, TrialValue(cost=result.total))
         assert len(history) > 0, "SMAC solver did not record any history entry."
-        return history, get_inner_optimizer_extra(inner_optimizer)
+        return history, get_optimizer_stats(inner_optimizer)
 
     def _build_optimizer(self, problem: PowerFlowProblem, output_directory: Path) -> AlgorithmConfigurationFacade:
         """Builds the SMAC3 optimizer for binary generator assignments.
@@ -301,7 +294,9 @@ class UniformSolver(PowerFlowSolver):
         :return: Solver history whose last entry is the final incumbent together with solver-specific extra information.
         """
         def update_history(new_result: EvaluationResult):
-            history.append(HistoryEntry(time.perf_counter() - start_time, None, new_result))
+            current_time = time.perf_counter()
+            stats = get_optimizer_stats(inner_optimizer)
+            history.append(HistoryEntry(current_time - start_time, None, stats.copy(), new_result))
             pd.to_pickle(history, progress_path)
 
         history = []
@@ -317,7 +312,7 @@ class UniformSolver(PowerFlowSolver):
                 continue
             inner_optimizer.optimize(generator_statuses)
         assert len(history) > 0, "Uniform solver did not record any history entry."
-        return history, get_inner_optimizer_extra(inner_optimizer)
+        return history, get_optimizer_stats(inner_optimizer)
 
 
 @dataclass
@@ -343,7 +338,8 @@ class HybridSolver(PowerFlowSolver):
         :return: Tuple of feasible incumbent history and optional extra hybrid-run information.
         """
         def update_history(new_result: EvaluationResult):
-            history.append(HistoryEntry(self.vqp.get_current_classical_time(), self.vqp.num_jobs, new_result))
+            stats = get_optimizer_stats(inner_optimizer)
+            history.append(HistoryEntry(self.vqp.get_current_classical_time(), self.vqp.num_jobs, stats.copy(), new_result))
             pd.to_pickle(history, progress_path)
 
         history = []
@@ -355,7 +351,7 @@ class HybridSolver(PowerFlowSolver):
         result = self.vqp.optimize_parameters(lambda generator_statuses: inner_optimizer.optimize(generator_statuses).total, initial_angles)
         assert result.success, f"Angle optimization failed: {result.message}"
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
-        extra = get_inner_optimizer_extra(inner_optimizer) | {"total_jobs": self.vqp.num_jobs}
+        extra = get_optimizer_stats(inner_optimizer) | {"total_jobs": self.vqp.num_jobs}
 
         if exact_final_expectation:
             exact_sampler = ExactSampler()
