@@ -24,11 +24,11 @@ from src.PowerFlowSolver import PowerFlowSolver
 
 def run_parallel() -> None:
     """Runs selected instances in parallel and persists each completed result to CSV."""
-    data_folder, solver_id = parse_cli_args()
+    data_folder, solver_id, timeout_h = parse_cli_args()
     instance_indices = list(range(120))
     voltage_deviation_mult = 10
     absent_only = True
-    timeout_s = 1800
+    timeout_s = timeout_h * 3600
     num_generators = read_num_generators(data_folder)
     solver = get_solver(num_generators, solver_id)
 
@@ -116,18 +116,19 @@ def run_parallel() -> None:
     print(f"Optimized bitstrings: avg={optimized_bitstring_values.mean()}, max={optimized_bitstring_values.max()}")
     print(f"Total inner optimization time: avg={total_inner_values.mean()}, max={total_inner_values.max()}")
     print(f"Max inner optimization time: avg={max_inner_values.mean()}, max={max_inner_values.max()}")
-    print(f"Unfeasible instances: {infeasible_count}")
+    print(f"Infeasible instances: {infeasible_count}")
 
 
-def parse_cli_args() -> tuple[Path, str]:
+def parse_cli_args() -> tuple[Path, str, float]:
     """Parses command-line arguments for ``run_parallel``.
-    :return: Dataset folder together with the selected solver identifier.
+    :return: Dataset folder, selected solver identifier, and per-instance timeout in hours.
     """
     parser = argparse.ArgumentParser(description="Runs multiple stored power-flow instances in parallel.")
-    parser.add_argument("data_folder", type=Path, help="Folder containing stored power-flow instance pickle files.")
-    parser.add_argument("solver", choices=SOLVER_IDS, help="Solver to run.")
+    parser.add_argument("-d", "--data-folder", required=True, type=Path, help="Folder containing stored power-flow instance pickle files.")
+    parser.add_argument("-s", "--solver", required=True, choices=SOLVER_IDS, help="Solver to run.")
+    parser.add_argument("-t", "--timeout", required=True, type=float, help="Per-instance timeout in hours.")
     args = parser.parse_args()
-    return args.data_folder, args.solver
+    return args.data_folder, args.solver, args.timeout
 
 
 def read_num_generators(data_folder: Path) -> int:
