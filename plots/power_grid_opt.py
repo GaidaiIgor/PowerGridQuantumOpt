@@ -62,18 +62,19 @@ def plot_polar_vs_rectangular():
 
 def plot_average_normalized_objective_histories():
     """Plots average normalized objective histories for the default solver comparison."""
-    plot_histories([13], np.linspace(0, 1800, 50).tolist(), ["scip", "smac", "uniform", "hybrid"])
+    plot_histories([10], np.linspace(0, 1800, 50).tolist(), ["scip", "smac", "uniform", "hybrid"], "hybrid")
 
 
-def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], solver_ids: Sequence[str]):
+def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], solver_ids: Sequence[str], ref_solver: str | None = None):
     """Plots average normalized objective histories for configured solvers.
     :param num_generators: Generator counts whose datasets should be plotted together.
     :param grid_times: Uniform time grid used to align objective histories.
     :param solver_ids: Solver ids whose CSV files should be loaded from subfolders inside each dataset folder.
+    :param ref_solver: Solver whose per-instance last history time limits the compared solvers, or ``None`` to disable trimming.
     """
     solver_names = {"scip": "SCIP", "smac": "SMAC", "uniform": "Uniform", "hybrid": "Hybrid"}
     infeasible_tolerance = 1e-10
-    instance_ids = list(range(100))
+    instance_ids = list(range(120))
     lines = []
     labeled_solvers = set()
     for num_gens_ind, num_gens in enumerate(num_generators):
@@ -83,6 +84,7 @@ def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], s
             csv_path = data_path / solver_id / ".solutions.csv"
             if csv_path.exists():
                 solver_histories[solver_id] = _load_solver_histories(csv_path, infeasible_tolerance)
+        _trim_histories_to_ref_solver(solver_histories, ref_solver)
         best_objectives = _get_best_objectives(instance_ids, solver_histories)
         for solver_index, solver_id in enumerate(solver_ids):
             if solver_id not in solver_histories:
@@ -110,6 +112,22 @@ def _load_solver_histories(csv_path: Path, infeasible_tolerance: float) -> dict[
             continue
         histories[instance] = [entry for entry in converter.loads(history_text, list[HistoryEntry]) if entry.result.penalty <= infeasible_tolerance]
     return histories
+
+
+def _trim_histories_to_ref_solver(solver_histories: dict[str, dict[int, list[HistoryEntry] | None]], ref_solver: str | None) -> None:
+    """Trims non-reference histories to the reference solver's last per-instance timestamp.
+    :param solver_histories: Histories grouped by solver name and then by instance.
+    :param ref_solver: Solver whose last per-instance timestamp defines the cutoff, or ``None`` to disable trimming.
+    """
+    if ref_solver is None or ref_solver not in solver_histories:
+        return
+    ref_cutoff_times = {instance: history[-1].time for instance, history in solver_histories[ref_solver].items() if history}
+    for solver_id, histories in solver_histories.items():
+        if solver_id == ref_solver:
+            continue
+        for instance, history in histories.items():
+            if history and instance in ref_cutoff_times:
+                histories[instance] = [entry for entry in history if entry.time <= ref_cutoff_times[instance]]
 
 
 def _get_best_objectives(instance_ids: list[int], solver_histories: dict[str, dict[int, list[HistoryEntry] | None]]) -> dict[int, float | None]:
