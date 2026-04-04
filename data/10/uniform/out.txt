@@ -1,6 +1,0 @@
-Using 120 worker(s).
-Run complete: 0 timeout(s), 0 other failure(s).
-Inner optimization time: avg=0.232321295841975, max=0.6395809636003378
-Total jobs: avg=<NA>, max=<NA>
-Optimized bitstrings: avg=1024.0, max=1024
-Unfeasible instances: 0
