@@ -19,6 +19,7 @@ def run_single() -> None:
     # problem = get_power_flow_ac_problem()
     index = 49
     solver_id = "hybrid"
+    num_layers = 1
     voltage_deviation_mult = 10
     exact_final_expectation = False
     data_path = Path("data/5/capacity_100")
@@ -30,7 +31,7 @@ def run_single() -> None:
     # debug.set_all_generator_p_min(problem, 0)
 
     # solver = ClassicalSolver()
-    solver = get_solver(len(problem.generators), solver_id)
+    solver = get_solver(len(problem.generators), solver_id, num_layers)
 
     inner_solver = solver.inner_optimizer_factory(problem)
     inner_solver.optimize("11110")

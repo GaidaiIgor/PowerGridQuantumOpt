@@ -62,7 +62,7 @@ def plot_polar_vs_rectangular():
 
 def plot_average_normalized_objective_histories():
     """Plots average normalized objective histories for the default solver comparison."""
-    plot_histories([10], np.linspace(0, 1800, 50).tolist(), ["scip", "smac", "uniform", "hybrid"], "hybrid")
+    plot_histories([13], np.linspace(0, 3600, 50).tolist(), ["scip", "smac", "uniform", "hybrid"], "hybrid")
 
 
 def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], solver_ids: Sequence[str], ref_solver: str | None = None):
