@@ -57,44 +57,68 @@ def plot_instance_objective_histories():
 
 def plot_polar_vs_rectangular():
     """Plots normalized objective histories for polar and rectangular CasADi results on the 5-generator dataset."""
-    plot_histories([5], np.linspace(0, 1800, 50).tolist(), ["casadi", "casadi_rectangular"])
+    plot_histories([5], np.linspace(0, 1800, 50).tolist(), list(range(120)), ["casadi", "casadi_rectangular"])
 
 
 def plot_average_normalized_objective_histories():
     """Plots average normalized objective histories for the default solver comparison."""
-    plot_histories([13], np.linspace(0, 3600, 50).tolist(), ["scip", "smac", "uniform", "hybrid"], "hybrid")
+    plot_histories([13], np.linspace(0, 3600, 50).tolist(), list(range(120)), ["scip", "smac", "uniform", "hybrid/nl_1"])
 
 
-def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], solver_ids: Sequence[str], ref_solver: str | None = None):
+def plot_history_diff():
+    """Plots differences between the first configured solver curve and all remaining configured solver curves."""
+    num_generators = [10, 11, 12, 13]
+    grid_times = np.linspace(0, 1800, 50).tolist()
+    instance_ids = list(range(120))
+    solver_ids = ["hybrid/nl_2", "uniform"]
+    lines = []
+    for num_gens_ind, num_gens in enumerate(num_generators):
+        curves = get_history_curves(num_gens, grid_times, instance_ids, solver_ids)
+        for solver_id in solver_ids[1:]:
+            label = str(num_gens)
+            lines.append(Line(grid_times, curves[solver_ids[0]] - curves[solver_id], color=num_gens_ind, marker=0, label=label))
+    lines.append(Line([grid_times[0], grid_times[-1]], [0, 0], color="black", marker="none", style="--"))
+    plot_general(lines, axis_labels=("Time [s]", "Normalized Objective Difference"), boundaries=(None, None, -0.05, 0.05))
+    save_figure()
+
+
+def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], instance_ids: Sequence[int], solver_ids: Sequence[str]):
     """Plots average normalized objective histories for configured solvers.
     :param num_generators: Generator counts whose datasets should be plotted together.
     :param grid_times: Uniform time grid used to align objective histories.
+    :param instance_ids: Instance ids included in the average normalized objective curves.
     :param solver_ids: Solver ids whose CSV files should be loaded from subfolders inside each dataset folder.
-    :param ref_solver: Solver whose per-instance last history time limits the compared solvers, or ``None`` to disable trimming.
     """
-    solver_names = {"scip": "SCIP", "smac": "SMAC", "uniform": "Uniform", "hybrid": "Hybrid"}
-    infeasible_tolerance = 1e-10
-    instance_ids = list(range(120))
+    solver_names = {"scip": "SCIP", "smac": "SMAC", "uniform": "Uniform", "hybrid/nl_1": "Hybrid", "hybrid/nl_2": "Hybrid L2"}
     lines = []
     labeled_solvers = set()
     for num_gens_ind, num_gens in enumerate(num_generators):
-        data_path = Path(__file__).resolve().parent.parent / f"data/{num_gens}"
-        solver_histories = {}
-        for solver_id in solver_ids:
-            csv_path = data_path / solver_id / ".solutions.csv"
-            if csv_path.exists():
-                solver_histories[solver_id] = _load_solver_histories(csv_path, infeasible_tolerance)
-        _trim_histories_to_ref_solver(solver_histories, ref_solver)
-        best_objectives = _get_best_objectives(instance_ids, solver_histories)
+        curves = get_history_curves(num_gens, grid_times, instance_ids, solver_ids)
         for solver_index, solver_id in enumerate(solver_ids):
-            if solver_id not in solver_histories:
-                continue
-            curve = _get_average_normalized_curve(grid_times, instance_ids, solver_histories[solver_id], best_objectives)
             label = solver_names.get(solver_id, solver_id) if solver_id not in labeled_solvers else "_nolabel_"
-            lines.append(Line(grid_times, curve, color=solver_index, marker=num_gens_ind, label=label))
+            lines.append(Line(grid_times, curves[solver_id], color=solver_index, marker=num_gens_ind, label=label))
             labeled_solvers.add(solver_id)
     plot_general(lines, axis_labels=("Time [s]", "Normalized Objective"), boundaries=(None, None, 0.9, 1.01))
     save_figure()
+
+
+def get_history_curves(num_generators: int, grid_times: Sequence[float], instance_ids: Sequence[int], solver_ids: Sequence[str]) -> dict[str, np.ndarray]:
+    """Computes average normalized objective curves for one dataset.
+    :param num_generators: Generator count whose dataset folder should be loaded.
+    :param grid_times: Uniform time grid used to align objective histories.
+    :param instance_ids: Instance ids included in the average normalized objective curves.
+    :param solver_ids: Solver ids whose CSV files should be loaded from subfolders inside the dataset folder.
+    :return: Average normalized objective curve for each loaded solver keyed by solver id.
+    """
+    infeasible_tolerance = 1e-10
+    data_path = Path(__file__).resolve().parent.parent / f"data/{num_generators}"
+    solver_histories = {}
+    for solver_id in solver_ids:
+        csv_path = data_path / solver_id / ".solutions.csv"
+        if csv_path.exists():
+            solver_histories[solver_id] = _load_solver_histories(csv_path, infeasible_tolerance)
+    best_objectives = _get_best_objectives(instance_ids, solver_histories)
+    return {solver_id: _get_average_normalized_curve(grid_times, instance_ids, histories, best_objectives) for solver_id, histories in solver_histories.items()}
 
 
 def _load_solver_histories(csv_path: Path, infeasible_tolerance: float) -> dict[int, list[HistoryEntry] | None]:
@@ -114,23 +138,7 @@ def _load_solver_histories(csv_path: Path, infeasible_tolerance: float) -> dict[
     return histories
 
 
-def _trim_histories_to_ref_solver(solver_histories: dict[str, dict[int, list[HistoryEntry] | None]], ref_solver: str | None) -> None:
-    """Trims non-reference histories to the reference solver's last per-instance timestamp.
-    :param solver_histories: Histories grouped by solver name and then by instance.
-    :param ref_solver: Solver whose last per-instance timestamp defines the cutoff, or ``None`` to disable trimming.
-    """
-    if ref_solver is None or ref_solver not in solver_histories:
-        return
-    ref_cutoff_times = {instance: history[-1].time for instance, history in solver_histories[ref_solver].items() if history}
-    for solver_id, histories in solver_histories.items():
-        if solver_id == ref_solver:
-            continue
-        for instance, history in histories.items():
-            if history and instance in ref_cutoff_times:
-                histories[instance] = [entry for entry in history if entry.time <= ref_cutoff_times[instance]]
-
-
-def _get_best_objectives(instance_ids: list[int], solver_histories: dict[str, dict[int, list[HistoryEntry] | None]]) -> dict[int, float | None]:
+def _get_best_objectives(instance_ids: Sequence[int], solver_histories: dict[str, dict[int, list[HistoryEntry] | None]]) -> dict[int, float | None]:
     """Finds the best known feasible objective per instance.
     :param instance_ids: Instance ids to include in aggregation.
     :param solver_histories: Histories grouped by solver name and then by instance.
@@ -143,7 +151,7 @@ def _get_best_objectives(instance_ids: list[int], solver_histories: dict[str, di
     return best_objectives
 
 
-def _get_average_normalized_curve(grid_times: Sequence[float], instance_ids: list[int], solver_histories: dict[int, list[HistoryEntry] | None],
+def _get_average_normalized_curve(grid_times: Sequence[float], instance_ids: Sequence[int], solver_histories: dict[int, list[HistoryEntry] | None],
                                   best_objectives: dict[int, float]) -> np.ndarray:
     """Computes average normalized objective curve on a uniform time grid.
     :param grid_times: Uniform time grid used for alignment.
@@ -171,5 +179,6 @@ def _get_average_normalized_curve(grid_times: Sequence[float], instance_ids: lis
 if __name__ == "__main__":
     # plot_instance_objective_histories()
     # plot_polar_vs_rectangular()
-    plot_average_normalized_objective_histories()
+    # plot_average_normalized_objective_histories()
+    plot_history_diff()
     plt.show()
