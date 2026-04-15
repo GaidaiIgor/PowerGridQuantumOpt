@@ -31,7 +31,7 @@ def run_single() -> None:
     # debug.set_all_generator_p_min(problem, 0)
 
     # solver = ClassicalSolver()
-    solver = get_solver(len(problem.generators), solver_id, num_layers)
+    solver = get_solver(len(problem.generators), solver_id, num_layers, exact_final_expectation)
 
     inner_solver = solver.inner_optimizer_factory(problem)
     inner_solver.optimize("11110")
@@ -39,10 +39,7 @@ def run_single() -> None:
     progress_folder = Path(".progress")
     progress_folder.mkdir(exist_ok=True)
     progress_path = progress_folder / f"{index}.pkl"
-    if isinstance(solver, HybridSolver):
-        history, extra = solver.solve(problem, progress_path, exact_final_expectation)
-    else:
-        history, extra = solver.solve(problem, progress_path)
+    history, extra = solver.solve(problem, progress_path)
 
     print("\nSolution:")
     debug.print_evaluation_result(problem, history[-1].result)
@@ -51,7 +48,7 @@ def run_single() -> None:
         print(f"Total jobs: {extra["total_jobs"]}")
     if "optimized_bitstrings" in extra:
         print(f"Optimized bitstrings: {extra["optimized_bitstrings"]}")
-    if exact_final_expectation:
+    if isinstance(solver, HybridSolver) and solver.exact_final_expectation:
         print(f"Optimized probabilities: {my_format(extra["final_probs"])}")
         print(f"Optimized expectation: {extra["cost_expectation"]}")
 

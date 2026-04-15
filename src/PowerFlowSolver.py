@@ -321,20 +321,21 @@ class HybridSolver(PowerFlowSolver):
     :var name: Canonical solver name used in file naming.
     :var vqp: Variational quantum program used for binary-variable search.
     :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
+    :var exact_final_expectation: Whether to compute the exact final bitstring distribution and expectation after optimization.
     :var seed: Optional random seed for initial quantum-parameter sampling.
     :var feasibility_tolerance: Feasibility tolerance; history stores only entries with penalty below this threshold.
     """
     vqp: VariationalQuantumProgram
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
+    exact_final_expectation: bool = False
     feasibility_tolerance: float = 1e-10
     seed: int | None = None
     name: str = "hybrid"
 
-    def solve(self, problem: PowerFlowProblem, progress_path: Path, exact_final_expectation: bool = False) -> tuple[list[HistoryEntry], dict[str, Any]]:
+    def solve(self, problem: PowerFlowProblem, progress_path: Path) -> tuple[list[HistoryEntry], dict[str, Any]]:
         """Optimizes quantum parameters and returns the feasible incumbent history.
         :param problem: Power-flow optimization problem to solve.
         :param progress_path: Path for persisting incumbent progress snapshots.
-        :param exact_final_expectation: Whether to compute the exact final bitstring distribution and expectation after optimization.
         :return: Tuple of feasible incumbent history and optional extra hybrid-run information.
         """
         def update_history(new_result: EvaluationResult):
@@ -353,7 +354,7 @@ class HybridSolver(PowerFlowSolver):
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
         extra = get_optimizer_stats(inner_optimizer) | {"total_jobs": self.vqp.num_jobs}
 
-        if exact_final_expectation:
+        if self.exact_final_expectation:
             exact_sampler = ExactSampler()
             final_probs = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
             inner_optimizer.best_result_callback = None

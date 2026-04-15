@@ -13,11 +13,12 @@ from src.VariationalQuantumProgram import VariationalQuantumProgram
 SOLVER_IDS = ("scip", "smac", "uniform", "hybrid")
 
 
-def get_solver(num_generators: int, solver_id: str, num_layers: int = 1) -> PowerFlowSolver:
+def get_solver(num_generators: int, solver_id: str, num_layers: int = 1, exact_final_expectation: bool = False) -> PowerFlowSolver:
     """Builds the configured solver for a problem size.
     :param num_generators: Number of generators or qubits in the target instance.
     :param solver_id: Solver identifier. Must be one of ``"scip"``, ``"smac"``, ``"uniform"``, or ``"hybrid"``.
     :param num_layers: Number of repeated ansatz blocks used by the hybrid solver.
+    :param exact_final_expectation: Whether hybrid solvers should compute the exact final bitstring distribution and expectation after optimization.
     :return: Solver configured for the current experiment.
     """
     max_inner_time_s = 30
@@ -36,7 +37,7 @@ def get_solver(num_generators: int, solver_id: str, num_layers: int = 1) -> Powe
         return UniformSolver(inner_optimizer_factory, feasibility_tolerance, seed)
     if solver_id == "hybrid":
         vqp = get_variational_quantum_program(num_generators, num_layers)
-        return HybridSolver(vqp, inner_optimizer_factory, feasibility_tolerance, seed)
+        return HybridSolver(vqp, inner_optimizer_factory, exact_final_expectation, feasibility_tolerance, seed)
     raise ValueError(f"Unsupported solver {solver_id!r}. Expected one of {', '.join(SOLVER_IDS)}.")
 
 

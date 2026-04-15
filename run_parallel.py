@@ -24,17 +24,17 @@ from src.PowerFlowSolver import PowerFlowSolver
 
 def run_parallel() -> None:
     """Runs selected instances in parallel and persists each completed result to CSV."""
-    data_folder, solver_id, timeout_h, num_layers = parse_cli_args()
+    args = parse_cli_args()
     instance_indices = list(range(120))
     voltage_deviation_mult = 10
     absent_only = True
-    timeout_s = timeout_h * 3600
-    num_generators = read_num_generators(data_folder)
-    solver = get_solver(num_generators, solver_id, num_layers)
+    timeout_s = args.timeout * 3600
+    num_generators = read_num_generators(args.data_folder)
+    solver = get_solver(num_generators, args.solver, args.num_layers, args.exact_final_expectation)
 
     solutions_path = Path(".solutions.csv")
-    columns = ["instance", "generators", "cont_params", "cost", "penalty", "job_ind", "total_jobs", "optimized_bitstrings", "total_inner", "max_inner", "error",
-               "history"]
+    columns = ["instance", "generators", "cont_params", "cost", "penalty", "job_ind", "total_jobs", "optimized_bitstrings", "total_inner", "max_inner",
+               "cost_expectation", "error", "history"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generators": "string"}).reindex(columns=columns)
     else:
@@ -61,7 +61,7 @@ def run_parallel() -> None:
     error_count = 0
     with ProcessPool(max_workers=workers) as pool:
         future_to_metadata = \
-            {pool.schedule(run_instance, args=(data_folder, index, solver, voltage_deviation_mult), timeout=timeout_s): index
+            {pool.schedule(run_instance, args=(args.data_folder, index, solver, voltage_deviation_mult), timeout=timeout_s): index
              for index in instance_indices}
         for future in tqdm(as_completed(future_to_metadata), total=len(future_to_metadata), smoothing=0):
             index = future_to_metadata[future]
@@ -95,9 +95,10 @@ def run_parallel() -> None:
                         "penalty": last_result.penalty,
                         "job_ind": history[-1].job_ind,
                         "total_jobs": extra.get("total_jobs"),
+                        "optimized_bitstrings": extra.get("optimized_bitstrings"),
                         "total_inner": extra.get("total_inner"),
                         "max_inner": extra.get("max_inner"),
-                        "optimized_bitstrings": extra.get("optimized_bitstrings"),
+                        "cost_expectation": extra.get("cost_expectation"),
                         "history": converter.dumps(history)}
             rows[index] = row
             output_df = pd.DataFrame.from_dict(rows, orient="index").rename_axis("instance").reset_index().reindex(columns=columns).sort_values("instance")
@@ -119,17 +120,18 @@ def run_parallel() -> None:
     print(f"Infeasible instances: {infeasible_count}")
 
 
-def parse_cli_args() -> tuple[Path, str, float, int]:
+def parse_cli_args() -> argparse.Namespace:
     """Parses command-line arguments for ``run_parallel``.
-    :return: Dataset folder, selected solver identifier, per-instance timeout in hours, and hybrid ansatz layer count.
+    :return: Parsed command-line arguments.
     """
     parser = argparse.ArgumentParser(description="Runs multiple stored power-flow instances in parallel.")
     parser.add_argument("-df", "--data-folder", required=True, type=Path, help="Folder containing stored power-flow instance pickle files.")
     parser.add_argument("-s", "--solver", required=True, choices=SOLVER_IDS, help="Solver to run.")
     parser.add_argument("-nl", "--num-layers", default=1, type=int, help="Number of repeated ansatz blocks for the hybrid solver.")
+    parser.add_argument("-efe", "--exact-final-expectation", action="store_true",
+                        help="Enables exact final bitstring distribution and expectation calculation for hybrid runs.")
     parser.add_argument("-t", "--timeout", required=True, type=float, help="Per-instance timeout in hours.")
-    args = parser.parse_args()
-    return args.data_folder, args.solver, args.timeout, args.num_layers
+    return parser.parse_args()
 
 
 def read_num_generators(data_folder: Path) -> int:
