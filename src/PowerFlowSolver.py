@@ -210,6 +210,9 @@ class SmacSolver(PowerFlowSolver):
         :return: Solver history whose last entry is the final incumbent together with solver-specific extra information.
         """
         def update_history(new_result: EvaluationResult):
+            """Appends a new incumbent history entry.
+            :param new_result: Improved incumbent returned by the inner optimizer.
+            """
             current_time = time.perf_counter()
             stats = get_optimizer_stats(inner_optimizer)
             history.append(HistoryEntry(current_time - start_time, None, stats.copy(), new_result))
@@ -294,6 +297,9 @@ class UniformSolver(PowerFlowSolver):
         :return: Solver history whose last entry is the final incumbent together with solver-specific extra information.
         """
         def update_history(new_result: EvaluationResult):
+            """Appends a new incumbent history entry.
+            :param new_result: Improved incumbent returned by the inner optimizer.
+            """
             current_time = time.perf_counter()
             stats = get_optimizer_stats(inner_optimizer)
             history.append(HistoryEntry(current_time - start_time, None, stats.copy(), new_result))
@@ -322,12 +328,14 @@ class HybridSolver(PowerFlowSolver):
     :var vqp: Variational quantum program used for binary-variable search.
     :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
     :var exact_final_expectation: Whether to compute the exact final bitstring distribution and expectation after optimization.
+    :var max_classical_time: Maximum total classical time in seconds for the hybrid run.
     :var seed: Optional random seed for initial quantum-parameter sampling.
     :var feasibility_tolerance: Feasibility tolerance; history stores only entries with penalty below this threshold.
     """
     vqp: VariationalQuantumProgram
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
     exact_final_expectation: bool = False
+    max_classical_time: float = 0
     feasibility_tolerance: float = 1e-10
     seed: int | None = None
     name: str = "hybrid"
@@ -339,6 +347,9 @@ class HybridSolver(PowerFlowSolver):
         :return: Tuple of feasible incumbent history and optional extra hybrid-run information.
         """
         def update_history(new_result: EvaluationResult):
+            """Appends a new incumbent history entry.
+            :param new_result: Improved incumbent returned by the inner optimizer.
+            """
             stats = get_optimizer_stats(inner_optimizer)
             classical_time = time.perf_counter() - start_time - self.vqp.quantum_time
             history.append(HistoryEntry(classical_time, self.vqp.num_jobs, stats.copy(), new_result))
@@ -347,12 +358,16 @@ class HybridSolver(PowerFlowSolver):
         inner_optimizer = self.inner_optimizer_factory(problem)
         inner_optimizer.feasibility_tolerance = self.feasibility_tolerance
         inner_optimizer.best_result_callback = update_history
+        cost_function = lambda generator_statuses: inner_optimizer.optimize(generator_statuses).total
         rng = random.default_rng(self.seed)
         initial_angles = rng.uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
+
         history = []
         start_time = time.perf_counter()
-        result = self.vqp.optimize_parameters(lambda generator_statuses: inner_optimizer.optimize(generator_statuses).total, initial_angles)
+        result = self.vqp.optimize_parameters(cost_function, initial_angles)
         assert result.success, f"Angle optimization failed: {result.message}"
+        while len(inner_optimizer.cache) < 2 ** len(problem.generators) and time.perf_counter() - start_time - self.vqp.quantum_time < self.max_classical_time:
+            self.vqp.get_cost_expectation(cost_function, result.x)
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
         extra = get_optimizer_stats(inner_optimizer) | {"total_jobs": self.vqp.num_jobs}
 
@@ -360,6 +375,6 @@ class HybridSolver(PowerFlowSolver):
             exact_sampler = ExactSampler()
             final_probs = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
             inner_optimizer.best_result_callback = None
-            cost_expectation = utils.get_cost_expectation(lambda bitstring: inner_optimizer.optimize(bitstring).total, final_probs)
+            cost_expectation = utils.get_cost_expectation(cost_function, final_probs)
             extra |= {"final_probs": final_probs, "cost_expectation": cost_expectation}
         return history, extra

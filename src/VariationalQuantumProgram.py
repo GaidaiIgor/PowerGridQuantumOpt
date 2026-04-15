@@ -52,16 +52,24 @@ class VariationalQuantumProgram:
                 # qc.barrier()
         return qc
 
+    def get_probabilities(self, param_vals: Sequence[float]) -> dict[str, float]:
+        """Evaluates output probabilities for given circuit parameter values.
+        :param param_vals: Parameter values assigned to the ansatz circuit.
+        :return: Bitstring-probability mapping returned by the configured sampler.
+        """
+        t1 = time.perf_counter()
+        probabilities = self.sampler.get_sample_probabilities(self.circuit, param_vals)
+        self.quantum_time += time.perf_counter() - t1
+        self.num_jobs += 1
+        return probabilities
+
     def get_cost_expectation(self, cost_function: Callable[[str], float], param_vals: Sequence[float]) -> float:
         """Evaluates expectation of the cost function for given circuit parameter values.
         :param cost_function: Function mapping sampled bitstrings to costs.
         :param param_vals: Parameter values assigned to the ansatz circuit.
         :return: Expected cost for the sampled output distribution.
         """
-        t1 = time.perf_counter()
-        probabilities = self.sampler.get_sample_probabilities(self.circuit, param_vals)
-        self.quantum_time += time.perf_counter() - t1
-        self.num_jobs += 1
+        probabilities = self.get_probabilities(param_vals)
         return utils.get_cost_expectation(cost_function, probabilities)
 
     def optimize_parameters(self, cost_function: Callable[[str], float], initial_angles: ndarray) -> OptimizeResult:
