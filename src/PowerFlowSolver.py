@@ -340,15 +340,17 @@ class HybridSolver(PowerFlowSolver):
         """
         def update_history(new_result: EvaluationResult):
             stats = get_optimizer_stats(inner_optimizer)
-            history.append(HistoryEntry(self.vqp.get_current_classical_time(), self.vqp.num_jobs, stats.copy(), new_result))
+            classical_time = time.perf_counter() - start_time - self.vqp.quantum_time
+            history.append(HistoryEntry(classical_time, self.vqp.num_jobs, stats.copy(), new_result))
             pd.to_pickle(history, progress_path)
 
-        history = []
         inner_optimizer = self.inner_optimizer_factory(problem)
         inner_optimizer.feasibility_tolerance = self.feasibility_tolerance
         inner_optimizer.best_result_callback = update_history
         rng = random.default_rng(self.seed)
         initial_angles = rng.uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
+        history = []
+        start_time = time.perf_counter()
         result = self.vqp.optimize_parameters(lambda generator_statuses: inner_optimizer.optimize(generator_statuses).total, initial_angles)
         assert result.success, f"Angle optimization failed: {result.message}"
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
