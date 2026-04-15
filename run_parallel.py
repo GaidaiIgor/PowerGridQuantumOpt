@@ -109,20 +109,11 @@ def run_parallel() -> None:
             output_df.to_csv(solutions_path, index=False)
 
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
-    total_jobs_values = pd.to_numeric(output_df["total_jobs"], errors="coerce")
-    optimized_bitstring_values = pd.to_numeric(output_df["optimized_bitstrings"], errors="coerce")
-    total_inner = pd.to_numeric(output_df["total_inner"], errors="coerce") / 3600
-    total_inner_100 = total_inner.dropna().nsmallest(100)
-    max_inner = pd.to_numeric(output_df["max_inner"], errors="coerce")
-    max_inner_100 = max_inner.loc[total_inner_100.index]
-    infeasible_count = (pd.to_numeric(output_df["penalty"], errors="coerce") > solver.feasibility_tolerance).sum()
-    print(f"Total jobs: avg={total_jobs_values.mean()}, max={total_jobs_values.max()}")
-    print(f"Optimized bitstrings: avg={optimized_bitstring_values.mean()}, max={optimized_bitstring_values.max()}")
-    print(f"Total inner optimization time (h): avg={total_inner.mean()}, max={total_inner.max()}")
-    print(f"Max inner optimization time (s): avg={max_inner.mean()}, max={max_inner.max()}")
-    print(f"Fastest 100: Total inner optimization time (h): avg={total_inner_100.mean()}, max={total_inner_100.max()}")
-    print(f"Fastest 100: Max inner optimization time (s): avg={max_inner_100.mean()}, max={max_inner_100.max()}")
-    print(f"Infeasible instances: {infeasible_count}")
+    print("\nAll instances:")
+    print_stats(output_df, solver.feasibility_tolerance)
+    print("\nFastest 100 instances:")
+    fastest_100_df = output_df.loc[pd.to_numeric(output_df["total_inner"], errors="coerce").nsmallest(100).index]
+    print_stats(fastest_100_df, solver.feasibility_tolerance)
 
 
 def parse_cli_args() -> argparse.Namespace:
@@ -192,6 +183,23 @@ def redirect_worker_output(log_path: Path) -> Iterator[None]:
         os.dup2(stderr_fd, 2)
         os.close(stdout_fd)
         os.close(stderr_fd)
+
+
+def print_stats(df: pd.DataFrame, feasibility_tolerance: float):
+    """Prints summary statistics for a result dataframe.
+    :param df: Result dataframe whose summary statistics are printed.
+    :param feasibility_tolerance: Penalty threshold above which an instance is considered infeasible.
+    """
+    total_jobs_values = pd.to_numeric(df["total_jobs"], errors="coerce")
+    optimized_bitstring_values = pd.to_numeric(df["optimized_bitstrings"], errors="coerce")
+    total_inner_values = pd.to_numeric(df["total_inner"], errors="coerce") / 3600
+    max_inner_values = pd.to_numeric(df["max_inner"], errors="coerce")
+    infeasible_count = (pd.to_numeric(df["penalty"], errors="coerce") > feasibility_tolerance).sum()
+    print(f"Total jobs: avg={total_jobs_values.mean()}, max={total_jobs_values.max()}")
+    print(f"Optimized bitstrings: avg={optimized_bitstring_values.mean()}, max={optimized_bitstring_values.max()}")
+    print(f"Total inner optimization time (h): avg={total_inner_values.mean()}, max={total_inner_values.max()}")
+    print(f"Max inner optimization time (s): avg={max_inner_values.mean()}, max={max_inner_values.max()}")
+    print(f"Infeasible instances: {infeasible_count}")
 
 
 if __name__ == "__main__":
