@@ -327,14 +327,14 @@ class HybridSolver(PowerFlowSolver):
     :var name: Canonical solver name used in file naming.
     :var vqp: Variational quantum program used for binary-variable search.
     :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
-    :var exact_final_expectation: Whether to compute the exact final bitstring distribution and expectation after optimization.
+    :var analyze_expectations: Whether to compute post-optimization expectation analysis.
     :var max_classical_time: Maximum total classical time in seconds for the hybrid run.
     :var seed: Optional random seed for initial quantum-parameter sampling.
     :var feasibility_tolerance: Feasibility tolerance; history stores only entries with penalty below this threshold.
     """
     vqp: VariationalQuantumProgram
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
-    exact_final_expectation: bool = False
+    analyze_expectations: bool = False
     max_classical_time: float = 0
     feasibility_tolerance: float = 1e-10
     seed: int | None = None
@@ -359,6 +359,7 @@ class HybridSolver(PowerFlowSolver):
         inner_optimizer.feasibility_tolerance = self.feasibility_tolerance
         inner_optimizer.best_result_callback = update_history
         cost_function = lambda generator_statuses: inner_optimizer.optimize(generator_statuses).total
+        num_bitstrings = 2 ** len(problem.generators)
         rng = random.default_rng(self.seed)
         initial_angles = rng.uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
 
@@ -366,15 +367,46 @@ class HybridSolver(PowerFlowSolver):
         start_time = time.perf_counter()
         result = self.vqp.optimize_parameters(cost_function, initial_angles)
         assert result.success, f"Angle optimization failed: {result.message}"
-        while len(inner_optimizer.cache) < 2 ** len(problem.generators) and time.perf_counter() - start_time - self.vqp.quantum_time < self.max_classical_time:
+
+        while len(inner_optimizer.cache) < num_bitstrings and time.perf_counter() - start_time - self.vqp.quantum_time < self.max_classical_time:
             self.vqp.get_cost_expectation(cost_function, result.x)
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
-        extra = get_optimizer_stats(inner_optimizer) | {"total_jobs": self.vqp.num_jobs}
+        best_result = min(inner_optimizer.cache.values(), key=lambda cached_result: cached_result.total)
+        assert np.isclose(best_result.total, history[-1].result.total), \
+            f"Lowest total: fun={best_result.fun}; penalty={best_result.penalty}. Lowest feasible total={history[-1].result.total}."
 
-        if self.exact_final_expectation:
-            exact_sampler = ExactSampler()
-            final_probs = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
+        extra = get_optimizer_stats(inner_optimizer) | {"total_jobs": self.vqp.num_jobs}
+        if self.analyze_expectations:
             inner_optimizer.best_result_callback = None
-            cost_expectation = utils.get_cost_expectation(cost_function, final_probs)
-            extra |= {"final_probs": final_probs, "cost_expectation": cost_expectation}
+            uniform_probs = {format(i, f"0{len(problem.generators)}b"): 1 / num_bitstrings for i in range(num_bitstrings)}
+            uniform_total_expectation = utils.get_cost_expectation(cost_function, uniform_probs)
+            best_total = min(cached_result.total for cached_result in inner_optimizer.cache.values())
+
+            feasible_bitstrings = {generator_statuses for generator_statuses, cached_result in inner_optimizer.cache.items()
+                                   if cached_result.penalty <= self.feasibility_tolerance}
+            feasible_uniform_probs = self.get_feasible_probs(feasible_bitstrings, uniform_probs)
+            uniform_fun_expectation = utils.get_cost_expectation(cost_function, feasible_uniform_probs)
+
+            exact_sampler = ExactSampler()
+            opt_probs = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
+            opt_total_expectation = utils.get_cost_expectation(cost_function, opt_probs)
+
+            feasible_opt_probs = self.get_feasible_probs(feasible_bitstrings, opt_probs)
+            opt_fun_expectation = utils.get_cost_expectation(cost_function, feasible_opt_probs)
+
+            extra |= {"final_probs": opt_probs,
+                      "ar_uniform_total": best_total / uniform_total_expectation,
+                      "ar_uniform_fun": best_total / uniform_fun_expectation,
+                      "ar_opt_total": best_total / opt_total_expectation,
+                      "ar_opt_fun": best_total / opt_fun_expectation}
         return history, extra
+
+    def get_feasible_probs(self, feasible_bitstrings: set[str], probs: dict[str, float]) -> dict[str, float]:
+        """Removes infeasible bitstrings from a probability distribution and renormalizes it.
+        :param feasible_bitstrings: Bitstrings that should be kept in the distribution.
+        :param probs: Probability distribution over bitstrings.
+        :return: Feasible-only renormalized probability distribution.
+        """
+        feasible_probs = {generator_statuses: probability for generator_statuses, probability in probs.items() if generator_statuses in feasible_bitstrings}
+        total_probability = sum(feasible_probs.values())
+        return {generator_statuses: probability / total_probability for generator_statuses, probability in feasible_probs.items()}

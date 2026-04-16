@@ -31,11 +31,11 @@ def run_parallel() -> None:
     timeout_s = args.timeout * 3600
     max_classical_time_s = args.max_classical_time * 3600
     num_generators = read_num_generators(args.data_folder)
-    solver = get_solver(num_generators, args.solver, args.num_layers, args.exact_final_expectation, max_classical_time_s)
+    solver = get_solver(num_generators, args.solver, args.num_layers, args.analyze_expectations, max_classical_time_s)
 
     solutions_path = Path(".solutions.csv")
     columns = ["instance", "generators", "cont_params", "cost", "penalty", "job_ind", "total_jobs", "optimized_bitstrings", "total_inner", "max_inner",
-               "cost_expectation", "error", "history"]
+               "ar_uniform_total", "ar_uniform_fun", "ar_opt_total", "ar_opt_fun", "error", "history"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generators": "string"}).reindex(columns=columns)
     else:
@@ -99,7 +99,10 @@ def run_parallel() -> None:
                         "optimized_bitstrings": extra.get("optimized_bitstrings"),
                         "total_inner": extra.get("total_inner"),
                         "max_inner": extra.get("max_inner"),
-                        "cost_expectation": extra.get("cost_expectation"),
+                        "ar_uniform_total": extra.get("ar_uniform_total"),
+                        "ar_uniform_fun": extra.get("ar_uniform_fun"),
+                        "ar_opt_total": extra.get("ar_opt_total"),
+                        "ar_opt_fun": extra.get("ar_opt_fun"),
                         "history": converter.dumps(history)}
             rows[index] = row
             output_df = pd.DataFrame.from_dict(rows, orient="index").rename_axis("instance").reset_index().reindex(columns=columns).sort_values("instance")
@@ -124,8 +127,7 @@ def parse_cli_args() -> argparse.Namespace:
     parser.add_argument("-df", "--data-folder", required=True, type=Path, help="Folder containing stored power-flow instance pickle files.")
     parser.add_argument("-s", "--solver", required=True, choices=SOLVER_IDS, help="Solver to run.")
     parser.add_argument("-nl", "--num-layers", default=1, type=int, help="Number of repeated ansatz blocks for the hybrid solver.")
-    parser.add_argument("-efe", "--exact-final-expectation", action="store_true",
-                        help="Enables exact final bitstring distribution and expectation calculation for hybrid runs.")
+    parser.add_argument("-ae", "--analyze-expectations", action="store_true", help="Enables post-optimization expectation analysis for hybrid runs.")
     parser.add_argument("-mct", "--max-classical-time", default=0, type=float, help="Maximum total classical time in hours for hybrid runs.")
     parser.add_argument("-t", "--timeout", required=True, type=float, help="Per-instance timeout in hours.")
     return parser.parse_args()

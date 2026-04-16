@@ -21,7 +21,7 @@ def run_single() -> None:
     solver_id = "hybrid"
     num_layers = 1
     voltage_deviation_mult = 10
-    exact_final_expectation = False
+    analyze_expectations = False
     data_path = Path("data/5/capacity_100")
     with (data_path / f"{index}.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file), voltage_deviation_mult)
@@ -31,7 +31,7 @@ def run_single() -> None:
     # debug.set_all_generator_p_min(problem, 0)
 
     # solver = ClassicalSolver()
-    solver = get_solver(len(problem.generators), solver_id, num_layers, exact_final_expectation)
+    solver = get_solver(len(problem.generators), solver_id, num_layers, analyze_expectations)
 
     inner_solver = solver.inner_optimizer_factory(problem)
     inner_solver.optimize("11110")
@@ -48,9 +48,12 @@ def run_single() -> None:
         print(f"Total jobs: {extra["total_jobs"]}")
     if "optimized_bitstrings" in extra:
         print(f"Optimized bitstrings: {extra["optimized_bitstrings"]}")
-    if isinstance(solver, HybridSolver) and solver.exact_final_expectation:
+    if isinstance(solver, HybridSolver) and solver.analyze_expectations:
         print(f"Optimized probabilities: {my_format(extra["final_probs"])}")
-        print(f"Optimized expectation: {extra["cost_expectation"]}")
+        print(f"AR uniform total: {extra["ar_uniform_total"]}")
+        print(f"AR uniform fun: {extra["ar_uniform_fun"]}")
+        print(f"AR opt total: {extra["ar_opt_total"]}")
+        print(f"AR opt fun: {extra["ar_opt_fun"]}")
 
 
 def get_power_flow_ac_problem() -> PowerFlowProblem:
