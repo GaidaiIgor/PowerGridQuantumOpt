@@ -24,7 +24,7 @@ def get_solver(num_generators: int, solver_id: str, num_layers: int = 1, analyze
     :return: Solver configured for the current experiment.
     """
     max_inner_time_s = 30
-    penalty_mult = 10
+    penalty_mult = 10 ** 4
     feasibility_tolerance = 1e-10
     silent = True
     seed = 0
