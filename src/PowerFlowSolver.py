@@ -373,8 +373,7 @@ class HybridSolver(PowerFlowSolver):
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
         best_result = min(inner_optimizer.cache.values(), key=lambda cached_result: cached_result.total)
         assert np.isclose(best_result.total, history[-1].result.total), \
-            f"Lowest overall: fun={best_result.fun}; violation={best_result.violation}. " \
-            f"Lowest feasible: fun={history[-1].result.fun}; violation={history[-1].result.violation}."
+            f"Lowest overall: fun={best_result.fun}; violation={best_result.violation}. Lowest feasible: fun={history[-1].result.fun}."
 
         extra = get_optimizer_stats(inner_optimizer) | {"total_jobs": self.vqp.num_jobs}
         if self.analyze_expectations:
