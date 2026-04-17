@@ -24,22 +24,22 @@ def get_solver(num_generators: int, solver_id: str, num_layers: int = 1, analyze
     :return: Solver configured for the current experiment.
     """
     max_inner_time_s = 30
-    penalty_mult = 10 ** 4
-    feasibility_tolerance = 1e-10
+    violation_mult = 10 ** 4
+    violation_tolerance = 1e-10
     silent = True
     seed = 0
 
     if solver_id == "scip":
-        return SCIPSolver(feasibility_tolerance, silent, seed)
+        return SCIPSolver(violation_tolerance, silent, seed)
 
-    inner_optimizer_factory = partial(CasadiOptimizer, penalty_mult=penalty_mult, max_time_s=max_inner_time_s, silent=True)
+    inner_optimizer_factory = partial(CasadiOptimizer, violation_mult=violation_mult, max_time_s=max_inner_time_s, silent=True)
     if solver_id == "smac":
-        return SmacSolver(inner_optimizer_factory, feasibility_tolerance, silent, seed)
+        return SmacSolver(inner_optimizer_factory, violation_tolerance, silent, seed)
     if solver_id == "uniform":
-        return UniformSolver(inner_optimizer_factory, feasibility_tolerance, seed)
+        return UniformSolver(inner_optimizer_factory, violation_tolerance, seed)
     if solver_id == "hybrid":
         vqp = get_variational_quantum_program(num_generators, num_layers)
-        return HybridSolver(vqp, inner_optimizer_factory, analyze_expectations, max_classical_time, feasibility_tolerance, seed)
+        return HybridSolver(vqp, inner_optimizer_factory, analyze_expectations, max_classical_time, violation_tolerance, seed)
     raise ValueError(f"Unsupported solver {solver_id}. Expected one of " + ", ".join(SOLVER_IDS) + ".")
 
 

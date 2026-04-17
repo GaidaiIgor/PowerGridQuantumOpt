@@ -133,7 +133,7 @@ def print_evaluation_result(problem: PowerFlowProblem, result: EvaluationResult)
     total_generation_q_min = sum(reactive_bounds[0] for reactive_bounds in bounds_reactive)
     total_generation_q_max = sum(reactive_bounds[1] for reactive_bounds in bounds_reactive)
     print(f"Objective: {result.fun:.3g}")
-    print(f"Penalty: {result.penalty:.3g}")
+    print(f"Violation: {result.violation:.3g}")
     print(f"Generator assignments: {result.generator_statuses}")
     print(f"Total load: P: {total_load.real}, Q: {total_load.imag}")
     print(f"Total generation range: P: {total_generation_p_min:.3g} <= total <= {total_generation_p_max:.3g}, "

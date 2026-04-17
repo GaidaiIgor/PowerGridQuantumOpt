@@ -34,7 +34,7 @@ def run_parallel() -> None:
     solver = get_solver(num_generators, args.solver, args.num_layers, args.analyze_expectations, max_classical_time_s)
 
     solutions_path = Path(".solutions.csv")
-    columns = ["instance", "generators", "cont_params", "cost", "penalty", "job_ind", "total_jobs", "optimized_bitstrings", "total_inner", "max_inner",
+    columns = ["instance", "generators", "cont_params", "cost", "violation", "job_ind", "total_jobs", "optimized_bitstrings", "total_inner", "max_inner",
                "ar_uniform_total", "ar_uniform_fun", "ar_opt_total", "ar_opt_fun", "error", "history"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generators": "string"}).reindex(columns=columns)
@@ -93,7 +93,7 @@ def run_parallel() -> None:
                 row |= {"generators": last_result.generator_statuses,
                         "cont_params": last_result.params,
                         "cost": last_result.fun,
-                        "penalty": last_result.penalty,
+                        "violation": last_result.violation,
                         "job_ind": history[-1].job_ind,
                         "total_jobs": extra.get("total_jobs"),
                         "optimized_bitstrings": extra.get("optimized_bitstrings"),
@@ -113,10 +113,10 @@ def run_parallel() -> None:
 
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
     print("\nAll instances:")
-    print_stats(output_df, solver.feasibility_tolerance)
+    print_stats(output_df, solver.violation_tolerance)
     print("\nFastest 100 instances:")
     fastest_100_df = output_df.loc[pd.to_numeric(output_df["total_inner"], errors="coerce").nsmallest(100).index]
-    print_stats(fastest_100_df, solver.feasibility_tolerance)
+    print_stats(fastest_100_df, solver.violation_tolerance)
 
 
 def parse_cli_args() -> argparse.Namespace:
@@ -187,16 +187,16 @@ def redirect_worker_output(log_path: Path) -> Iterator[None]:
         os.close(stderr_fd)
 
 
-def print_stats(df: pd.DataFrame, feasibility_tolerance: float):
+def print_stats(df: pd.DataFrame, violation_tolerance: float):
     """Prints summary statistics for a result dataframe.
     :param df: Result dataframe whose summary statistics are printed.
-    :param feasibility_tolerance: Penalty threshold above which an instance is considered infeasible.
+    :param violation_tolerance: Violation threshold above which an instance is considered infeasible.
     """
     total_jobs_values = pd.to_numeric(df["total_jobs"], errors="coerce")
     optimized_bitstring_values = pd.to_numeric(df["optimized_bitstrings"], errors="coerce")
     total_inner_values = pd.to_numeric(df["total_inner"], errors="coerce") / 3600
     max_inner_values = pd.to_numeric(df["max_inner"], errors="coerce")
-    infeasible_count = (pd.to_numeric(df["penalty"], errors="coerce") > feasibility_tolerance).sum()
+    infeasible_count = (pd.to_numeric(df["violation"], errors="coerce") > violation_tolerance).sum()
     print(f"Total jobs: avg={total_jobs_values.mean()}, max={total_jobs_values.max()}")
     print(f"Optimized bitstrings: avg={optimized_bitstring_values.mean()}, max={optimized_bitstring_values.max()}")
     print(f"Total inner optimization time (h): avg={total_inner_values.mean()}, max={total_inner_values.max()}")

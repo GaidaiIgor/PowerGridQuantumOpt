@@ -33,7 +33,7 @@ class PowerFlowSolver(ABC):
     """Base class for power grid problem solvers.
     :var name: Canonical solver name used in file naming.
     """
-    feasibility_tolerance: float
+    violation_tolerance: float
     name: str
 
     @abstractmethod
@@ -84,9 +84,9 @@ class SCIPSolver(PowerFlowSolver):
     :var name: Canonical solver name used in file naming.
     :var silent: Whether SCIP output is suppressed while solving.
     :var seed: Randomization seed passed to SCIP.
-    :var feasibility_tolerance: SCIP primal feasibility tolerance used internally during solving.
+    :var violation_tolerance: SCIP primal feasibility tolerance used internally during solving.
     """
-    feasibility_tolerance: float = 1e-10
+    violation_tolerance: float = 1e-10
     silent: bool = False
     seed: int | None = None
     name: str = "scip"
@@ -97,7 +97,7 @@ class SCIPSolver(PowerFlowSolver):
         :return: SCIP model and grouped variable containers.
         """
         model = Model("PowerFlowAC")
-        model.setRealParam("numerics/feastol", self.feasibility_tolerance)
+        model.setRealParam("numerics/feastol", self.violation_tolerance)
         model.setStringParam("nlp/solver", "ipopt")
         model.setEmphasis(SCIP_PARAMEMPHASIS.FEASIBILITY)
         model.setHeuristics(SCIP_PARAMSETTING.AGGRESSIVE)
@@ -194,11 +194,11 @@ class SmacSolver(PowerFlowSolver):
     :var name: Canonical solver name used in file naming.
     :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
     :var seed: Optional random seed for SMAC3.
-    :var feasibility_tolerance: Feasibility tolerance passed through to the inner optimizer.
+    :var violation_tolerance: Violation tolerance passed through to the inner optimizer.
     :var silent: Whether SMAC3 output is suppressed.
     """
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
-    feasibility_tolerance: float = 1e-10
+    violation_tolerance: float = 1e-10
     silent: bool = False
     seed: int | None = None
     name: str = "smac"
@@ -220,7 +220,7 @@ class SmacSolver(PowerFlowSolver):
 
         history = []
         inner_optimizer = self.inner_optimizer_factory(problem)
-        inner_optimizer.feasibility_tolerance = self.feasibility_tolerance
+        inner_optimizer.violation_tolerance = self.violation_tolerance
         inner_optimizer.best_result_callback = update_history
         num_bitstrings = 2 ** len(problem.generators)
         start_time = time.perf_counter()
@@ -283,10 +283,10 @@ class UniformSolver(PowerFlowSolver):
     :var name: Canonical solver name used in file naming.
     :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
     :var seed: Optional random seed for uniform bitstring sampling.
-    :var feasibility_tolerance: Feasibility tolerance passed through to the inner optimizer.
+    :var violation_tolerance: Violation tolerance passed through to the inner optimizer.
     """
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
-    feasibility_tolerance: float = 1e-10
+    violation_tolerance: float = 1e-10
     seed: int | None = None
     name: str = "uniform"
 
@@ -307,7 +307,7 @@ class UniformSolver(PowerFlowSolver):
 
         history = []
         inner_optimizer = self.inner_optimizer_factory(problem)
-        inner_optimizer.feasibility_tolerance = self.feasibility_tolerance
+        inner_optimizer.violation_tolerance = self.violation_tolerance
         inner_optimizer.best_result_callback = update_history
         num_bitstrings = 2 ** len(problem.generators)
         rng = random.default_rng(self.seed)
@@ -330,13 +330,13 @@ class HybridSolver(PowerFlowSolver):
     :var analyze_expectations: Whether to compute post-optimization expectation analysis.
     :var max_classical_time: Maximum total classical time in seconds for the hybrid run.
     :var seed: Optional random seed for initial quantum-parameter sampling.
-    :var feasibility_tolerance: Feasibility tolerance; history stores only entries with penalty below this threshold.
+    :var violation_tolerance: Violation tolerance; history stores only entries with violation below this threshold.
     """
     vqp: VariationalQuantumProgram
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
     analyze_expectations: bool = False
     max_classical_time: float = 0
-    feasibility_tolerance: float = 1e-10
+    violation_tolerance: float = 1e-10
     seed: int | None = None
     name: str = "hybrid"
 
@@ -356,7 +356,7 @@ class HybridSolver(PowerFlowSolver):
             pd.to_pickle(history, progress_path)
 
         inner_optimizer = self.inner_optimizer_factory(problem)
-        inner_optimizer.feasibility_tolerance = self.feasibility_tolerance
+        inner_optimizer.violation_tolerance = self.violation_tolerance
         inner_optimizer.best_result_callback = update_history
         cost_function = lambda generator_statuses: inner_optimizer.optimize(generator_statuses).total
         num_bitstrings = 2 ** len(problem.generators)
@@ -373,7 +373,7 @@ class HybridSolver(PowerFlowSolver):
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
         best_result = min(inner_optimizer.cache.values(), key=lambda cached_result: cached_result.total)
         assert np.isclose(best_result.total, history[-1].result.total), \
-            f"Lowest total: fun={best_result.fun}; penalty={best_result.penalty}. Lowest feasible total={history[-1].result.total}."
+            f"Lowest total: fun={best_result.fun}; violation={best_result.violation}. Lowest feasible total={history[-1].result.total}."
 
         extra = get_optimizer_stats(inner_optimizer) | {"total_jobs": self.vqp.num_jobs}
         if self.analyze_expectations:
@@ -383,7 +383,7 @@ class HybridSolver(PowerFlowSolver):
             best_total = min(cached_result.total for cached_result in inner_optimizer.cache.values())
 
             feasible_bitstrings = {generator_statuses for generator_statuses, cached_result in inner_optimizer.cache.items()
-                                   if cached_result.penalty <= self.feasibility_tolerance}
+                                   if cached_result.violation <= self.violation_tolerance}
             feasible_uniform_probs = self.get_feasible_probs(feasible_bitstrings, uniform_probs)
             uniform_fun_expectation = utils.get_cost_expectation(cost_function, feasible_uniform_probs)
 

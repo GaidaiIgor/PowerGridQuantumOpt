@@ -42,17 +42,17 @@ class Constraint:
 class ContinuousPowerOptimizer(ABC):
     """Base class for continuous parameter optimization for fixed generator assignments.
     :var problem: Power-flow instance that provides constraints, bounds, and generation costs.
-    :var penalty_mult: Multiplier applied to summed squared constraint violations.
     :var max_time_s: Wall-clock limit in seconds.
-    :var feasibility_tolerance: Maximum penalty still treated as feasible when comparing candidates.
+    :var violation_mult: Multiplier applied to raw constraint violation when forming penalized objective values.
+    :var violation_tolerance: Maximum violation still treated as feasible when comparing candidates.
     :var cache: Map from generator-status bitstring to cached optimization result or the current incumbent during an active run.
     :var best_result: Best cached result across all assignments optimized by this object.
     :var best_result_callback: Callback invoked whenever the best cached result across all assignments improves.
     """
     problem: PowerFlowProblem
-    penalty_mult: float
     max_time_s: float
-    feasibility_tolerance: float = 1e-10
+    violation_mult: float
+    violation_tolerance: float = 1e-10
     cache: dict[str, EvaluationResult] = field(default_factory=dict)
     best_result: EvaluationResult | None = field(init=False, default=None)
     best_result_callback: Callable[[EvaluationResult], None] | None = None
@@ -102,11 +102,11 @@ class ContinuousPowerOptimizer(ABC):
         """
         params = np.array(params).reshape(-1)
         objective = self.get_cost(generator_statuses, params)
-        penalty = self.get_penalty(params)
-        result = EvaluationResult(generator_statuses, params.tolist(), objective, penalty, objective + penalty)
-        if result.is_better_than(self.cache.get(generator_statuses), self.feasibility_tolerance):
+        violation = self.get_violation(params)
+        result = EvaluationResult(generator_statuses, params.tolist(), objective, violation, objective + self.violation_mult * violation)
+        if result.is_better_than(self.cache.get(generator_statuses), self.violation_tolerance):
             self.cache[generator_statuses] = result
-            if result.is_better_than(self.best_result, self.feasibility_tolerance):
+            if result.is_better_than(self.best_result, self.violation_tolerance):
                 self.best_result = result
                 if self.best_result_callback is not None:
                     self.best_result_callback(result)
@@ -121,13 +121,13 @@ class ContinuousPowerOptimizer(ABC):
         active_powers, _, voltages, _ = self.problem.split_params(params)
         return self.problem.get_total_cost(generator_statuses, active_powers, voltages)
 
-    def get_penalty(self, params: Sequence[float]) -> float:
-        """Evaluates penalty term for a parameter vector from the full constraint list.
+    def get_violation(self, params: Sequence[float]) -> float:
+        """Evaluates constraint violation for a parameter vector from the full constraint list.
         :param params: Full continuous optimization vector.
-        :return: Penalty value for violated constraints.
+        :return: Raw summed squared constraint violation.
         """
         equality_constraints, inequality_constraints = self.problem.evaluate_constraints_split(*self.problem.split_params(params))
-        return self.penalty_mult * (np.sum(np.square(equality_constraints)) + np.sum(np.square(np.maximum(inequality_constraints, 0))))
+        return np.sum(np.square(equality_constraints)) + np.sum(np.square(np.maximum(inequality_constraints, 0)))
 
 
 class UpdateCallback(ca.Callback):
@@ -195,6 +195,7 @@ class UpdateCallback(ca.Callback):
         elapsed_time = time.perf_counter() - self.start_time
         self._optimizer.consider_candidate(self.generator_statuses, args[0])
         return [elapsed_time >= self._optimizer.max_time_s]
+
 
 @dataclass
 class CasadiOptimizer(ContinuousPowerOptimizer):

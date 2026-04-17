@@ -110,21 +110,21 @@ def get_history_curves(num_generators: int, grid_times: Sequence[float], instanc
     :param solver_ids: Solver ids whose CSV files should be loaded from subfolders inside the dataset folder.
     :return: Average normalized objective curve for each loaded solver keyed by solver id.
     """
-    infeasible_tolerance = 1e-10
+    violation_tolerance = 1e-10
     data_path = Path(__file__).resolve().parent.parent / f"data/{num_generators}"
     solver_histories = {}
     for solver_id in solver_ids:
         csv_path = data_path / solver_id / ".solutions.csv"
         if csv_path.exists():
-            solver_histories[solver_id] = _load_solver_histories(csv_path, infeasible_tolerance)
+            solver_histories[solver_id] = _load_solver_histories(csv_path, violation_tolerance)
     best_objectives = _get_best_objectives(instance_ids, solver_histories)
     return {solver_id: _get_average_normalized_curve(grid_times, instance_ids, histories, best_objectives) for solver_id, histories in solver_histories.items()}
 
 
-def _load_solver_histories(csv_path: Path, infeasible_tolerance: float) -> dict[int, list[HistoryEntry] | None]:
+def _load_solver_histories(csv_path: Path, violation_tolerance: float) -> dict[int, list[HistoryEntry] | None]:
     """Loads solver histories grouped by instance from a CSV file.
     :param csv_path: Path to the solver CSV file.
-    :param infeasible_tolerance: Maximum penalty still treated as feasible.
+    :param violation_tolerance: Maximum violation still treated as feasible.
     :return: Mapping from instance id to sorted history entries, or ``None`` when the CSV history is null.
     """
     df = pd.read_csv(csv_path)
@@ -134,7 +134,7 @@ def _load_solver_histories(csv_path: Path, infeasible_tolerance: float) -> dict[
         if pd.isna(history_text):
             histories[instance] = None
             continue
-        histories[instance] = [entry for entry in converter.loads(history_text, list[HistoryEntry]) if entry.result.penalty <= infeasible_tolerance]
+        histories[instance] = [entry for entry in converter.loads(history_text, list[HistoryEntry]) if entry.result.violation <= violation_tolerance]
     return histories
 
 
