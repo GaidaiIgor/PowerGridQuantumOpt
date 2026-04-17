@@ -197,11 +197,19 @@ def print_stats(df: pd.DataFrame, violation_tolerance: float):
     total_inner_values = pd.to_numeric(df["total_inner"], errors="coerce") / 3600
     max_inner_values = pd.to_numeric(df["max_inner"], errors="coerce")
     infeasible_count = (pd.to_numeric(df["violation"], errors="coerce") > violation_tolerance).sum()
+    ar_uniform_total_values = pd.to_numeric(df["ar_uniform_total"], errors="coerce")
+    ar_uniform_fun_values = pd.to_numeric(df["ar_uniform_fun"], errors="coerce")
+    ar_opt_total_values = pd.to_numeric(df["ar_opt_total"], errors="coerce")
+    ar_opt_fun_values = pd.to_numeric(df["ar_opt_fun"], errors="coerce")
     print(f"Total jobs: avg={total_jobs_values.mean()}, max={total_jobs_values.max()}")
     print(f"Optimized bitstrings: avg={optimized_bitstring_values.mean()}, max={optimized_bitstring_values.max()}")
     print(f"Total inner optimization time (h): avg={total_inner_values.mean()}, max={total_inner_values.max()}")
     print(f"Max inner optimization time (s): avg={max_inner_values.mean()}, max={max_inner_values.max()}")
     print(f"Infeasible instances: {infeasible_count}")
+    print(f"AR uniform total: avg={ar_uniform_total_values.mean()}")
+    print(f"AR uniform fun: avg={ar_uniform_fun_values.mean()}")
+    print(f"AR opt total: avg={ar_opt_total_values.mean()}")
+    print(f"AR opt fun: avg={ar_opt_fun_values.mean()}")
 
 
 if __name__ == "__main__":
