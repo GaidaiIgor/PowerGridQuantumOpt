@@ -65,23 +65,6 @@ def plot_average_normalized_objective_histories():
     plot_histories([13], np.linspace(0, 3600, 50).tolist(), list(range(120)), ["scip", "smac", "uniform", "hybrid/nl_1"])
 
 
-def plot_history_diff():
-    """Plots differences between the first configured solver curve and all remaining configured solver curves."""
-    num_generators = [10, 11, 12, 13]
-    grid_times = np.linspace(0, 1800, 50).tolist()
-    instance_ids = list(range(120))
-    solver_ids = ["hybrid/nl_2", "uniform"]
-    lines = []
-    for num_gens_ind, num_gens in enumerate(num_generators):
-        curves = get_history_curves(num_gens, grid_times, instance_ids, solver_ids)
-        for solver_id in solver_ids[1:]:
-            label = str(num_gens)
-            lines.append(Line(grid_times, curves[solver_ids[0]] - curves[solver_id], color=num_gens_ind, marker=0, label=label))
-    lines.append(Line([grid_times[0], grid_times[-1]], [0, 0], color="black", marker="none", style="--"))
-    plot_general(lines, axis_labels=("Time [s]", "Normalized Objective Difference"), boundaries=(None, None, -0.05, 0.05))
-    save_figure()
-
-
 def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], instance_ids: Sequence[int], solver_ids: Sequence[str]):
     """Plots average normalized objective histories for configured solvers.
     :param num_generators: Generator counts whose datasets should be plotted together.
@@ -101,6 +84,23 @@ def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], i
     plot_general(lines, axis_labels=("Time [s]", "Normalized Objective"), boundaries=(None, None, 0.9, 1.01))
     save_figure()
 
+    
+def plot_history_diff():
+    """Plots differences between the first configured solver curve and all remaining configured solver curves."""
+    num_generators = [10, 11, 12, 13]
+    grid_times = np.linspace(0, 1800, 50).tolist()
+    instance_ids = list(range(120))
+    solver_ids = ["hybrid/nl_2", "uniform"]
+    lines = []
+    for num_gens_ind, num_gens in enumerate(num_generators):
+        curves = get_history_curves(num_gens, grid_times, instance_ids, solver_ids)
+        for solver_id in solver_ids[1:]:
+            label = str(num_gens)
+            lines.append(Line(grid_times, curves[solver_ids[0]] - curves[solver_id], color=num_gens_ind, marker=0, label=label))
+    lines.append(Line([grid_times[0], grid_times[-1]], [0, 0], color="black", marker="none", style="--"))
+    plot_general(lines, axis_labels=("Time [s]", "Normalized Objective Difference"), boundaries=(None, None, -0.05, 0.05))
+    save_figure()
+
 
 def get_history_curves(num_generators: int, grid_times: Sequence[float], instance_ids: Sequence[int], solver_ids: Sequence[str]) -> dict[str, np.ndarray]:
     """Computes average normalized objective curves for one dataset.
@@ -116,16 +116,17 @@ def get_history_curves(num_generators: int, grid_times: Sequence[float], instanc
     for solver_id in solver_ids:
         csv_path = data_path / solver_id / ".solutions.csv"
         if csv_path.exists():
-            solver_histories[solver_id] = _load_solver_histories(csv_path, violation_tolerance)
+            solver_histories[solver_id] = _load_solver_histories(csv_path, violation_tolerance, grid_times[-1])
     best_objectives = _get_best_objectives(instance_ids, solver_histories)
     return {solver_id: _get_average_normalized_curve(grid_times, instance_ids, histories, best_objectives) for solver_id, histories in solver_histories.items()}
 
 
-def _load_solver_histories(csv_path: Path, violation_tolerance: float) -> dict[int, list[HistoryEntry] | None]:
+def _load_solver_histories(csv_path: Path, violation_tolerance: float, max_time: float) -> dict[int, list[HistoryEntry] | None]:
     """Loads solver histories grouped by instance from a CSV file.
     :param csv_path: Path to the solver CSV file.
     :param violation_tolerance: Maximum violation still treated as feasible.
-    :return: Mapping from instance id to sorted history entries, or ``None`` when the CSV history is null.
+    :param max_time: Maximum time of loaded history entries.
+    :return: Mapping from instance id to history entries, or ``None`` when the CSV history is null.
     """
     df = pd.read_csv(csv_path)
     converter = make_converter()
@@ -134,7 +135,8 @@ def _load_solver_histories(csv_path: Path, violation_tolerance: float) -> dict[i
         if pd.isna(history_text):
             histories[instance] = None
             continue
-        histories[instance] = [entry for entry in converter.loads(history_text, list[HistoryEntry]) if entry.result.violation <= violation_tolerance]
+        histories[instance] = [entry for entry in converter.loads(history_text, list[HistoryEntry])
+                               if entry.result.violation <= violation_tolerance and entry.time <= max_time]
     return histories
 
 
