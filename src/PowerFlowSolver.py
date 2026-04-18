@@ -344,7 +344,7 @@ class HybridSolver(PowerFlowSolver):
         """Optimizes quantum parameters and returns the feasible incumbent history.
         :param problem: Power-flow optimization problem to solve.
         :param progress_path: Path for persisting incumbent progress snapshots.
-        :return: Tuple of feasible incumbent history and optional extra hybrid-run information.
+        :return: Tuple of feasible incumbent history and optional extra hybrid-run information, including VQA angle-optimization classical time.
         """
         def update_history(new_result: EvaluationResult):
             """Appends a new incumbent history entry.
@@ -366,6 +366,7 @@ class HybridSolver(PowerFlowSolver):
         history = []
         start_time = time.perf_counter()
         result = self.vqp.optimize_parameters(cost_function, initial_angles)
+        classical_opt_time = time.perf_counter() - start_time - result.quantum_time
         assert result.success, f"Angle optimization failed: {result.message}"
 
         while len(inner_optimizer.cache) < num_bitstrings and time.perf_counter() - start_time - self.vqp.quantum_time < self.max_classical_time:
@@ -375,7 +376,7 @@ class HybridSolver(PowerFlowSolver):
         assert np.isclose(best_result.total, history[-1].result.total), \
             f"Lowest overall: fun={best_result.fun}; violation={best_result.violation}. Lowest feasible: fun={history[-1].result.fun}."
 
-        extra = get_optimizer_stats(inner_optimizer) | {"total_jobs": self.vqp.num_jobs}
+        extra = get_optimizer_stats(inner_optimizer) | {"total_jobs": self.vqp.num_jobs, "classical_opt_time": classical_opt_time}
         if self.analyze_expectations:
             inner_optimizer.best_result_callback = None
             uniform_probs = {format(i, f"0{len(problem.generators)}b"): 1 / num_bitstrings for i in range(num_bitstrings)}

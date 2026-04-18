@@ -34,7 +34,7 @@ def run_parallel() -> None:
     solver = get_solver(num_generators, args.solver, args.num_layers, args.analyze_expectations, max_classical_time_s)
 
     solutions_path = Path(".solutions.csv")
-    columns = ["instance", "generators", "cont_params", "cost", "violation", "job_ind", "total_jobs", "optimized_bitstrings", "total_inner", "max_inner",
+    columns = ["instance", "generators", "cont_params", "cost", "violation", "job_ind", "total_jobs", "classical_opt_time", "optimized_bitstrings", "max_inner",
                "ar_uniform_total", "ar_uniform_fun", "ar_opt_total", "ar_opt_fun", "error", "history"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generators": "string"}).reindex(columns=columns)
@@ -96,8 +96,8 @@ def run_parallel() -> None:
                         "violation": last_result.violation,
                         "job_ind": history[-1].job_ind,
                         "total_jobs": extra.get("total_jobs"),
+                        "classical_opt_time": extra.get("classical_opt_time"),
                         "optimized_bitstrings": extra.get("optimized_bitstrings"),
-                        "total_inner": extra.get("total_inner"),
                         "max_inner": extra.get("max_inner"),
                         "ar_uniform_total": extra.get("ar_uniform_total"),
                         "ar_uniform_fun": extra.get("ar_uniform_fun"),
@@ -114,9 +114,10 @@ def run_parallel() -> None:
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
     print("\nAll instances:")
     print_stats(output_df, solver.violation_tolerance)
-    print("\nFastest 100 instances:")
-    fastest_100_df = output_df.loc[pd.to_numeric(output_df["total_inner"], errors="coerce").nsmallest(100).index]
-    print_stats(fastest_100_df, solver.violation_tolerance)
+    if args.solver == "hybrid":
+        print("\nFastest 100 instances:")
+        fastest_100_df = output_df.loc[pd.to_numeric(output_df["classical_opt_time"], errors="coerce").nsmallest(100).index]
+        print_stats(fastest_100_df, solver.violation_tolerance)
 
 
 def parse_cli_args() -> argparse.Namespace:
@@ -193,8 +194,8 @@ def print_stats(df: pd.DataFrame, violation_tolerance: float):
     :param violation_tolerance: Violation threshold above which an instance is considered infeasible.
     """
     total_jobs_values = pd.to_numeric(df["total_jobs"], errors="coerce")
+    classical_opt_time_values = pd.to_numeric(df["classical_opt_time"], errors="coerce") / 3600
     optimized_bitstring_values = pd.to_numeric(df["optimized_bitstrings"], errors="coerce")
-    total_inner_values = pd.to_numeric(df["total_inner"], errors="coerce") / 3600
     max_inner_values = pd.to_numeric(df["max_inner"], errors="coerce")
     infeasible_count = (pd.to_numeric(df["violation"], errors="coerce") > violation_tolerance).sum()
     ar_uniform_total_values = pd.to_numeric(df["ar_uniform_total"], errors="coerce")
@@ -202,8 +203,8 @@ def print_stats(df: pd.DataFrame, violation_tolerance: float):
     ar_opt_total_values = pd.to_numeric(df["ar_opt_total"], errors="coerce")
     ar_opt_fun_values = pd.to_numeric(df["ar_opt_fun"], errors="coerce")
     print(f"Total jobs: avg={total_jobs_values.mean()}, max={total_jobs_values.max()}")
+    print(f"Classical angle optimization time (h): avg={classical_opt_time_values.mean()}, max={classical_opt_time_values.max()}")
     print(f"Optimized bitstrings: avg={optimized_bitstring_values.mean()}, max={optimized_bitstring_values.max()}")
-    print(f"Total inner optimization time (h): avg={total_inner_values.mean()}, max={total_inner_values.max()}")
     print(f"Max inner optimization time (s): avg={max_inner_values.mean()}, max={max_inner_values.max()}")
     print(f"Infeasible instances: {infeasible_count}")
     print(f"AR uniform total: avg={ar_uniform_total_values.mean()}")
