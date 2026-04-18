@@ -13,14 +13,14 @@ from src.VariationalQuantumProgram import VariationalQuantumProgram
 SOLVER_IDS = ("scip", "smac", "uniform", "hybrid")
 
 
-def get_solver(num_generators: int, solver_id: str, num_layers: int = 1, analyze_expectations: bool = False, max_classical_time: float = 0) \
+def get_solver(num_generators: int, solver_id: str, num_layers: int = 1, analyze_expectations: bool = False, max_classical_time: float | None = None) \
     -> PowerFlowSolver:
     """Builds the configured solver for a problem size.
     :param num_generators: Number of generators or qubits in the target instance.
     :param solver_id: Solver identifier. Must be one of ``"scip"``, ``"smac"``, ``"uniform"``, or ``"hybrid"``.
     :param num_layers: Number of repeated ansatz blocks used by the hybrid solver.
     :param analyze_expectations: Whether hybrid solvers should compute post-optimization expectation analysis.
-    :param max_classical_time: Maximum total classical time in seconds for hybrid runs.
+    :param max_classical_time: Maximum classical angle-optimization time in seconds for hybrid runs, or ``None`` to disable the cap.
     :return: Solver configured for the current experiment.
     """
     max_inner_time_s = 30

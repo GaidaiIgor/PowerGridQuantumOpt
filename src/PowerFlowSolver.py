@@ -328,14 +328,14 @@ class HybridSolver(PowerFlowSolver):
     :var vqp: Variational quantum program used for binary-variable search.
     :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
     :var analyze_expectations: Whether to compute post-optimization expectation analysis.
-    :var max_classical_time: Maximum total classical time in seconds for the hybrid run.
+    :var max_classical_time: Maximum classical angle-optimization time in seconds for the hybrid run, or ``None`` to disable the cap.
     :var seed: Optional random seed for initial quantum-parameter sampling.
     :var violation_tolerance: Violation tolerance; history stores only entries with violation below this threshold.
     """
     vqp: VariationalQuantumProgram
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
     analyze_expectations: bool = False
-    max_classical_time: float = 0
+    max_classical_time: float | None = None
     violation_tolerance: float = 1e-10
     seed: int | None = None
     name: str = "hybrid"
@@ -355,45 +355,61 @@ class HybridSolver(PowerFlowSolver):
             history.append(HistoryEntry(classical_time, self.vqp.num_jobs, stats.copy(), new_result))
             pd.to_pickle(history, progress_path)
 
+        def cost_function(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> float:
+            """Returns total cost for one generator-status bitstring and aborts angle optimization when its classical-time cap is exceeded.
+            :param generator_statuses: Binary generator on/off bitstring.
+            :param max_classical_time: Classical angle-optimization time cap in seconds, or ``None`` to disable time checks.
+            :return: Total objective value for the given status pattern.
+            """
+            if max_classical_time is not None and time.perf_counter() - start_time - self.vqp.quantum_time > max_classical_time:
+                raise TimeoutError("Classical angle optimization time exceeded max_classical_time.")
+            return inner_optimizer.optimize(generator_statuses).total
+
         inner_optimizer = self.inner_optimizer_factory(problem)
         inner_optimizer.violation_tolerance = self.violation_tolerance
         inner_optimizer.best_result_callback = update_history
-        cost_function = lambda generator_statuses: inner_optimizer.optimize(generator_statuses).total
         num_bitstrings = 2 ** len(problem.generators)
         rng = random.default_rng(self.seed)
         initial_angles = rng.uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
 
         history = []
-        start_time = time.perf_counter()
-        result = self.vqp.optimize_parameters(cost_function, initial_angles)
-        classical_opt_time = time.perf_counter() - start_time - result.quantum_time
-        assert result.success, f"Angle optimization failed: {result.message}"
+        extra = {}
+        try:
+            start_time = time.perf_counter()
+            result = self.vqp.optimize_parameters(cost_function, initial_angles)
+            extra |= {"classical_opt_time": time.perf_counter() - start_time - self.vqp.quantum_time, "total_opt_jobs": self.vqp.num_jobs}
+            assert result.success, f"Angle optimization failed: {result.message}"
 
-        while len(inner_optimizer.cache) < num_bitstrings and time.perf_counter() - start_time - self.vqp.quantum_time < self.max_classical_time:
-            self.vqp.get_cost_expectation(cost_function, result.x)
+            while len(inner_optimizer.cache) < num_bitstrings:
+                self.vqp.get_cost_expectation(cost_function, result.x)
+        except TimeoutError:
+            pass
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
+        
         best_result = min(inner_optimizer.cache.values(), key=lambda cached_result: cached_result.total)
         assert np.isclose(best_result.total, history[-1].result.total), \
             f"Lowest overall: fun={best_result.fun}; violation={best_result.violation}. Lowest feasible: fun={history[-1].result.fun}."
 
-        extra = get_optimizer_stats(inner_optimizer) | {"total_jobs": self.vqp.num_jobs, "classical_opt_time": classical_opt_time}
+        extra |= get_optimizer_stats(inner_optimizer)
         if self.analyze_expectations:
+            assert extra.get("classical_opt_time") is not None, "Expectation analysis requires completed angle optimization."
             inner_optimizer.best_result_callback = None
+            cost_function_untimed = partial(cost_function, max_classical_time=None)
             uniform_probs = {format(i, f"0{len(problem.generators)}b"): 1 / num_bitstrings for i in range(num_bitstrings)}
-            uniform_total_expectation = utils.get_cost_expectation(cost_function, uniform_probs)
+            uniform_total_expectation = utils.get_cost_expectation(cost_function_untimed, uniform_probs)
             best_total = min(cached_result.total for cached_result in inner_optimizer.cache.values())
 
             feasible_bitstrings = {generator_statuses for generator_statuses, cached_result in inner_optimizer.cache.items()
                                    if cached_result.violation <= self.violation_tolerance}
             feasible_uniform_probs = self.get_feasible_probs(feasible_bitstrings, uniform_probs)
-            uniform_fun_expectation = utils.get_cost_expectation(cost_function, feasible_uniform_probs)
+            uniform_fun_expectation = utils.get_cost_expectation(cost_function_untimed, feasible_uniform_probs)
 
             exact_sampler = ExactSampler()
             opt_probs = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
-            opt_total_expectation = utils.get_cost_expectation(cost_function, opt_probs)
+            opt_total_expectation = utils.get_cost_expectation(cost_function_untimed, opt_probs)
 
             feasible_opt_probs = self.get_feasible_probs(feasible_bitstrings, opt_probs)
-            opt_fun_expectation = utils.get_cost_expectation(cost_function, feasible_opt_probs)
+            opt_fun_expectation = utils.get_cost_expectation(cost_function_untimed, feasible_opt_probs)
 
             extra |= {"final_probs": opt_probs,
                       "ar_uniform_total": best_total / uniform_total_expectation,

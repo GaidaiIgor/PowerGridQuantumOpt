@@ -44,8 +44,8 @@ def run_single() -> None:
     print("\nSolution:")
     debug.print_evaluation_result(problem, history[-1].result)
     print(f"Job index: {history[-1].job_ind}")
-    if "total_jobs" in extra:
-        print(f"Total jobs: {extra["total_jobs"]}")
+    if "total_opt_jobs" in extra:
+        print(f"Total opt jobs: {extra["total_opt_jobs"]}")
     if "optimized_bitstrings" in extra:
         print(f"Optimized bitstrings: {extra["optimized_bitstrings"]}")
     if isinstance(solver, HybridSolver) and solver.analyze_expectations:
