@@ -15,5 +15,5 @@ export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 
 echo "SLURM_JOB_ID=$SLURM_JOB_ID"
-time python /storage/home/zgj518/projects/PowerGridQuantumOpt/run_parallel.py -d .. -s uniform -t 1
+time python /storage/home/zgj518/projects/PowerGridQuantumOpt/run_parallel.py -df /storage/home/zgj518/projects/PowerGridQuantumOpt/data/11 -s uniform -mct 0.5 -t 1.0
 jobstats $SLURM_JOB_ID
