@@ -62,7 +62,13 @@ def plot_polar_vs_rectangular():
 
 def plot_average_normalized_objective_histories():
     """Plots average normalized objective histories for the default solver comparison."""
-    plot_histories([13], np.linspace(0, 3600, 50).tolist(), list(range(120)), ["scip", "smac", "uniform", "hybrid/nl_1"])
+    num_generators = [10]
+    selecting_solver = "hybrid/nl_1"
+    full_df = pd.read_csv(Path(__file__).resolve().parent.parent / f"data/{num_generators[0]}/{selecting_solver}/.solutions.csv")
+    fastest_df = full_df.loc[pd.to_numeric(full_df["classical_opt_time"], errors="coerce").nsmallest(100).index]
+    time_grid = np.linspace(0, max(fastest_df["classical_opt_time"]), 50)
+    instance_ids = fastest_df["instance"].astype(int).tolist()
+    plot_histories(num_generators, time_grid, instance_ids, ["scip", "smac", "uniform", "hybrid/nl_1"])
 
 
 def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], instance_ids: Sequence[int], solver_ids: Sequence[str]):
