@@ -55,60 +55,62 @@ def plot_instance_objective_histories():
     save_figure()
 
 
-def plot_polar_vs_rectangular():
-    """Plots normalized objective histories for polar and rectangular CasADi results on the 5-generator dataset."""
-    plot_histories([5], np.linspace(0, 1800, 50).tolist(), list(range(120)), ["casadi", "casadi_rectangular"])
-
-
-def plot_average_normalized_objective_histories():
+def plot_average_histories():
     """Plots average normalized objective histories for the default solver comparison."""
-    num_generators = [10]
-    selecting_solver = "hybrid/nl_1"
-    full_df = pd.read_csv(Path(__file__).resolve().parent.parent / f"data/{num_generators[0]}/{selecting_solver}/.solutions.csv")
-    fastest_df = full_df.loc[pd.to_numeric(full_df["classical_opt_time"], errors="coerce").nsmallest(100).index]
-    time_grid = np.linspace(0, max(fastest_df["classical_opt_time"]), 50)
-    instance_ids = fastest_df["instance"].astype(int).tolist()
-    plot_histories(num_generators, time_grid, instance_ids, ["scip", "smac", "uniform", "hybrid/nl_1"])
-
-
-def plot_histories(num_generators: Sequence[int], grid_times: Sequence[float], instance_ids: Sequence[int], solver_ids: Sequence[str]):
-    """Plots average normalized objective histories for configured solvers.
-    :param num_generators: Generator counts whose datasets should be plotted together.
-    :param grid_times: Uniform time grid used to align objective histories.
-    :param instance_ids: Instance ids included in the average normalized objective curves.
-    :param solver_ids: Solver ids whose CSV files should be loaded from subfolders inside each dataset folder.
-    """
+    num_generators = [10, 11, 12, 13]
+    solver_ids = ["hybrid/nl_1", "uniform"]
+    ref_solver = "hybrid/nl_1"
     solver_names = {"scip": "SCIP", "smac": "SMAC", "uniform": "Uniform", "hybrid/nl_1": "Hybrid", "hybrid/nl_2": "Hybrid L2"}
+
+    history_data = get_history_data_2(num_generators, solver_ids, ref_solver)
     lines = []
     labeled_solvers = set()
     for num_gens_ind, num_gens in enumerate(num_generators):
-        curves = get_history_curves(num_gens, grid_times, instance_ids, solver_ids)
-        for solver_index, solver_id in enumerate(solver_ids):
+        for solver_ind, solver_id in enumerate(solver_ids):
+            xs, ys = history_data[num_gens][solver_id]
             label = solver_names.get(solver_id, solver_id) if solver_id not in labeled_solvers else "_nolabel_"
-            lines.append(Line(grid_times, curves[solver_id], color=solver_index, marker=num_gens_ind, label=label))
+            lines.append(Line(xs, ys, color=solver_ind, marker=num_gens_ind, label=label))
             labeled_solvers.add(solver_id)
     plot_general(lines, axis_labels=("Time [s]", "Normalized Objective"), boundaries=(None, None, 0.9, 1.01))
     save_figure()
 
-    
+
 def plot_history_diff():
-    """Plots differences between the first configured solver curve and all remaining configured solver curves."""
-    num_generators = [10, 11, 12, 13]
-    grid_times = np.linspace(0, 1800, 50).tolist()
-    instance_ids = list(range(120))
-    solver_ids = ["hybrid/nl_2", "uniform"]
+    """Plots differences between the two configured solver curves."""
+    num_generators = [13]
+    solver_ids = ["hybrid/nl_1", "uniform"]
+    ref_solver = "hybrid/nl_1"
+
+    history_data = get_history_data_2(num_generators, solver_ids, ref_solver)
     lines = []
     for num_gens_ind, num_gens in enumerate(num_generators):
-        curves = get_history_curves(num_gens, grid_times, instance_ids, solver_ids)
-        for solver_id in solver_ids[1:]:
-            label = str(num_gens)
-            lines.append(Line(grid_times, curves[solver_ids[0]] - curves[solver_id], color=num_gens_ind, marker=0, label=label))
-    lines.append(Line([grid_times[0], grid_times[-1]], [0, 0], color="black", marker="none", style="--"))
-    plot_general(lines, axis_labels=("Time [s]", "Normalized Objective Difference"), boundaries=(None, None, -0.05, 0.05))
+        xs, first_ys = history_data[num_gens][solver_ids[0]]
+        _, second_ys = history_data[num_gens][solver_ids[1]]
+        lines.append(Line(xs, first_ys - second_ys, color=num_gens_ind, marker=0, label=str(num_gens)))
+    lines.append(Line([0, 10000], [0, 0], color="black", marker="none", style="--"))
+    plot_general(lines, axis_labels=("Time [s]", "Normalized Objective Difference"), boundaries=(0, xs[-1], -0.1, 0.1))
     save_figure()
 
 
-def get_history_curves(num_generators: int, grid_times: Sequence[float], instance_ids: Sequence[int], solver_ids: Sequence[str]) -> dict[str, np.ndarray]:
+def get_history_data_2(num_generators: list[int], solver_ids: list[str], ref_solver: str) -> dict[int, dict[str, tuple[np.ndarray, np.ndarray]]]:
+    """Collects average normalized objective histories across datasets.
+    :param num_generators: Generator counts whose datasets should be loaded.
+    :param solver_ids: Solver ids whose CSV files should be loaded from subfolders inside each dataset folder.
+    :param ref_solver: Solver id used to select the fastest instances and time grid in each dataset.
+    :return: History data keyed by generator count and then solver id.
+    """
+    histories = {}
+    for num_gens in num_generators:
+        full_df = pd.read_csv(Path(__file__).resolve().parent.parent / f"data/{num_gens}/{ref_solver}/.solutions.csv")
+        fastest_100_df = full_df.loc[pd.to_numeric(full_df["classical_opt_time"], errors="coerce").nsmallest(100).index]
+        time_grid = np.linspace(0, max(fastest_100_df["classical_opt_time"]), 50)
+        instance_ids = fastest_100_df["instance"].astype(int).tolist()
+        data = get_history_data(num_gens, time_grid, instance_ids, solver_ids)
+        histories[num_gens] = {solver_id: (time_grid, data[solver_id]) for solver_id in solver_ids}
+    return histories
+
+
+def get_history_data(num_generators: int, grid_times: Sequence[float], instance_ids: Sequence[int], solver_ids: Sequence[str]) -> dict[str, np.ndarray]:
     """Computes average normalized objective curves for one dataset.
     :param num_generators: Generator count whose dataset folder should be loaded.
     :param grid_times: Uniform time grid used to align objective histories.
@@ -187,6 +189,6 @@ def _get_average_normalized_curve(grid_times: Sequence[float], instance_ids: Seq
 if __name__ == "__main__":
     # plot_instance_objective_histories()
     # plot_polar_vs_rectangular()
-    # plot_average_normalized_objective_histories()
+    # plot_average_histories()
     plot_history_diff()
     plt.show()
