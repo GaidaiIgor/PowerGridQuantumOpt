@@ -279,13 +279,15 @@ class SmacSolver(PowerFlowSolver):
 
 @dataclass
 class UniformSolver(PowerFlowSolver):
-    """Samples generator assignments uniformly and optimizes them classically until all assignments are seen.
+    """Samples generator assignments uniformly and optimizes them classically until all assignments are seen or the solver time limit is exceeded.
     :var name: Canonical solver name used in file naming.
     :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
-    :var seed: Optional random seed for uniform bitstring sampling.
+    :var max_time: Maximum wall-clock solve time in seconds, or ``None`` to disable the cap.
     :var violation_tolerance: Violation tolerance passed through to the inner optimizer.
+    :var seed: Optional random seed for uniform bitstring sampling.
     """
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
+    max_time: float | None = None
     violation_tolerance: float = 1e-10
     seed: int | None = None
     name: str = "uniform"
@@ -294,7 +296,7 @@ class UniformSolver(PowerFlowSolver):
         """Samples bitstrings uniformly and returns the incumbent history.
         :param problem: Power-flow optimization problem to solve.
         :param progress_path: Path for persisting incumbent progress snapshots.
-        :return: Solver history whose last entry is the final incumbent together with solver-specific extra information.
+        :return: Solver history whose last entry is the final incumbent reached before exhausting bitstrings or hitting ``max_time``, together with solver-specific extra information.
         """
         def update_history(new_result: EvaluationResult):
             """Appends a new incumbent history entry.
@@ -313,6 +315,8 @@ class UniformSolver(PowerFlowSolver):
         rng = random.default_rng(self.seed)
         start_time = time.perf_counter()
         while len(inner_optimizer.cache) < num_bitstrings:
+            if self.max_time is not None and time.perf_counter() - start_time > self.max_time:
+                break
             generator_statuses = format(rng.integers(num_bitstrings), f"0{len(problem.generators)}b")
             if generator_statuses in inner_optimizer.cache:
                 continue

@@ -36,7 +36,7 @@ def get_solver(num_generators: int, solver_id: str, num_layers: int = 1, analyze
     if solver_id == "smac":
         return SmacSolver(inner_optimizer_factory, violation_tolerance, silent, seed)
     if solver_id == "uniform":
-        return UniformSolver(inner_optimizer_factory, violation_tolerance, seed)
+        return UniformSolver(inner_optimizer_factory, max_classical_time, violation_tolerance, seed)
     if solver_id == "hybrid":
         vqp = get_variational_quantum_program(num_generators, num_layers)
         return HybridSolver(vqp, inner_optimizer_factory, analyze_expectations, max_classical_time, violation_tolerance, seed)
