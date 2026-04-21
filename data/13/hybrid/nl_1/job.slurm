@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH -J 13/hybrid
+#SBATCH -J 13/hybrid/nl_1
 #SBATCH -p epyc-cpu
 #SBATCH -N 1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=120
 #SBATCH --mem=60G
-#SBATCH -t 06:30:00
+#SBATCH -t 05:00:00
 #SBATCH -o out.txt
 
 module load python/3.13.11
@@ -15,5 +15,5 @@ export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 
 echo "SLURM_JOB_ID=$SLURM_JOB_ID"
-time python /storage/home/zgj518/projects/PowerGridQuantumOpt/run_parallel.py -d .. -s hybrid -t 6
+time python /storage/home/zgj518/projects/PowerGridQuantumOpt/run_parallel.py -df /storage/home/zgj518/projects/PowerGridQuantumOpt/data/13 -s hybrid -nl 1 -ae -mct 4 -t 4.5
 jobstats $SLURM_JOB_ID
