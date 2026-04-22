@@ -16,7 +16,7 @@ from cattrs.preconf.json import make_converter
 from pebble import ProcessPool
 from tqdm import tqdm
 
-from common.utils import SOLVER_IDS, get_solver
+from common.utils import SAMPLER_IDS, SOLVER_IDS, get_solver
 from src.HistoryEntry import HistoryEntry
 from src.PowerFlowProblem import PowerFlowProblem
 from src.PowerFlowSolver import PowerFlowSolver
@@ -31,7 +31,7 @@ def run_parallel() -> None:
     timeout_s = args.timeout * 3600
     max_classical_time_s = None if args.max_classical_time is None else args.max_classical_time * 3600
     num_generators = read_num_generators(args.data_folder)
-    solver = get_solver(num_generators, args.solver, args.num_layers, args.analyze_expectations, max_classical_time_s)
+    solver = get_solver(num_generators, args.solver, args.num_layers, args.analyze_expectations, max_classical_time_s, args.sampler, args.shots)
 
     solutions_path = Path(".solutions.csv")
     columns = ["instance", "generators", "cont_params", "cost", "violation", "job_ind", "total_opt_jobs", "classical_opt_time", "optimized_bitstrings",
@@ -127,6 +127,8 @@ def parse_cli_args() -> argparse.Namespace:
     parser.add_argument("-df", "--data-folder", required=True, type=Path, help="Folder containing stored power-flow instance pickle files.")
     parser.add_argument("-s", "--solver", required=True, choices=SOLVER_IDS, help="Solver to run.")
     parser.add_argument("-nl", "--num-layers", default=1, type=int, help="Number of repeated ansatz blocks for the hybrid solver.")
+    parser.add_argument("-sa", "--sampler", default="finite", choices=SAMPLER_IDS, help="Sampler backend for the hybrid solver.")
+    parser.add_argument("-sh", "--shots", default=1000, type=int, help="Number of shots for sampling-based backends.")
     parser.add_argument("-ae", "--analyze-expectations", action="store_true", help="Enables post-optimization expectation analysis for hybrid runs.")
     parser.add_argument("-mct", "--max-classical-time", default=None, type=float, help="Maximum classical angle-optimization time in hours for hybrid runs.")
     parser.add_argument("-t", "--timeout", required=True, type=float, help="Per-instance timeout in hours.")

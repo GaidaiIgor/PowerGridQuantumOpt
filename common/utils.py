@@ -7,13 +7,15 @@ from qiskit.primitives import StatevectorSampler
 from src.CircuitLayer import AllToAllEntangler, ZXMixer
 from src.ContinuousPowerOptimizer import CasadiOptimizer
 from src.PowerFlowSolver import PowerFlowSolver, SCIPSolver, SmacSolver, UniformSolver, HybridSolver
-from src.Sampler import MySamplerV2
+from src.Sampler import ExactSampler, IonQSampler, MySamplerV2, Sampler
 from src.VariationalQuantumProgram import VariationalQuantumProgram
 
 SOLVER_IDS = ("scip", "smac", "uniform", "hybrid")
+SAMPLER_IDS = ("exact", "finite", "ionq-simulator", "ionq-hardware")
 
 
-def get_solver(num_generators: int, solver_id: str, num_layers: int = 1, analyze_expectations: bool = False, max_classical_time: float | None = None) \
+def get_solver(num_generators: int, solver_id: str, num_layers: int = 1, analyze_expectations: bool = False, max_classical_time: float | None = None,
+               sampler_id: str = "finite", shots: int = 1000) \
     -> PowerFlowSolver:
     """Builds the configured solver for a problem size.
     :param num_generators: Number of generators or qubits in the target instance.
@@ -21,6 +23,8 @@ def get_solver(num_generators: int, solver_id: str, num_layers: int = 1, analyze
     :param num_layers: Number of repeated ansatz blocks used by the hybrid solver.
     :param analyze_expectations: Whether hybrid solvers should compute post-optimization expectation analysis.
     :param max_classical_time: Maximum classical angle-optimization time in seconds for hybrid runs, or ``None`` to disable the cap.
+    :param sampler_id: Sampler identifier for hybrid runs.
+    :param shots: Number of shots for sampling-based backends.
     :return: Solver configured for the current experiment.
     """
     max_inner_time_s = 30
@@ -38,23 +42,39 @@ def get_solver(num_generators: int, solver_id: str, num_layers: int = 1, analyze
     if solver_id == "uniform":
         return UniformSolver(inner_optimizer_factory, max_classical_time, violation_tolerance, seed)
     if solver_id == "hybrid":
-        vqp = get_variational_quantum_program(num_generators, num_layers)
+        vqp = get_variational_quantum_program(num_generators, num_layers, sampler_id, shots)
         return HybridSolver(vqp, inner_optimizer_factory, analyze_expectations, max_classical_time, violation_tolerance, seed)
     raise ValueError(f"Unsupported solver {solver_id}. Expected one of " + ", ".join(SOLVER_IDS) + ".")
 
 
-def get_variational_quantum_program(num_qubits: int, num_layers: int) -> VariationalQuantumProgram:
+def get_variational_quantum_program(num_qubits: int, num_layers: int, sampler_id: str = "finite", shots: int = 1000) -> VariationalQuantumProgram:
     """Builds the variational quantum program used by hybrid solvers.
     :param num_qubits: Number of qubits used by the program.
     :param num_layers: Number of repeated ansatz blocks.
+    :param sampler_id: Sampler identifier for circuit evaluation.
+    :param shots: Number of shots for sampling-based backends.
     :return: Configured variational quantum program.
     """
     entangler = AllToAllEntangler(num_qubits)
     mixer = ZXMixer(num_qubits)
-
-    # sampler = ExactSampler()
-    sampler = MySamplerV2(StatevectorSampler(default_shots=1000))
-    # sampler = IonQSampler("simulator", 1000, None)
-    # sampler = IonQSampler("qpu.forte-enterprise-1", 1000, None)
+    sampler = get_sampler(sampler_id, shots)
 
     return VariationalQuantumProgram(num_layers, [entangler, mixer], sampler)
+
+
+def get_sampler(sampler_id: str, shots: int) -> Sampler:
+    """Builds the configured sampler backend.
+    :param sampler_id: Sampler identifier.
+    :param shots: Number of shots for sampling-based backends.
+    :return: Configured sampler backend.
+    """
+    match sampler_id:
+        case "exact":
+            return ExactSampler()
+        case "finite":
+            return MySamplerV2(StatevectorSampler(default_shots=shots))
+        case "ionq-simulator":
+            return IonQSampler("simulator", shots, None)
+        case "ionq-hardware":
+            return IonQSampler("qpu.forte-enterprise-1", shots, None)
+    raise ValueError(f"Unsupported sampler {sampler_id}. Expected one of " + ", ".join(SAMPLER_IDS) + ".")
