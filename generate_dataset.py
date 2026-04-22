@@ -21,9 +21,9 @@ def parse_cli_args() -> tuple[int, int, Path]:
     :return: Generator count, instance count, and destination directory.
     """
     parser = argparse.ArgumentParser(description="Generates random power-flow instances.")
-    parser.add_argument("num_generators", type=int, help="Number of generators to use when generating instances.")
-    parser.add_argument("num_instances", type=int, help="Number of instances to generate.")
-    parser.add_argument("output_path", type=Path, help="Directory where generated instances will be written.")
+    parser.add_argument("-ng", "--num-generators", type=int, required=True, help="Number of generators to use when generating instances.")
+    parser.add_argument("-ni", "--num-instances", type=int, required=True, help="Number of instances to generate.")
+    parser.add_argument("-op", "--output-path", type=Path, required=True, help="Directory where generated instances will be written.")
     args = parser.parse_args()
     return args.num_generators, args.num_instances, args.output_path
 
