@@ -59,15 +59,17 @@ def plot_average_histories():
     """Plots average normalized objective histories for the default solver comparison."""
     num_generators = [10, 11, 12, 13]
     solver_ids = ["hybrid/nl_1", "uniform"]
-    ref_solver = "hybrid/nl_1"
+    ref_ind = 0
+    violation_tolerance = 1e-10
     solver_names = {"scip": "SCIP", "smac": "SMAC", "uniform": "Uniform", "hybrid/nl_1": "Hybrid", "hybrid/nl_2": "Hybrid L2"}
 
-    history_data = get_history_data_2(num_generators, solver_ids, ref_solver)
+    history_data = load_histories(num_generators, solver_ids, ref_ind, violation_tolerance)
     lines = []
     labeled_solvers = set()
     for num_gens_ind, num_gens in enumerate(num_generators):
+        xs, solver_data = history_data[num_gens_ind]
         for solver_ind, solver_id in enumerate(solver_ids):
-            xs, ys = history_data[num_gens][solver_id]
+            ys = solver_data[solver_ind]
             label = solver_names.get(solver_id, solver_id) if solver_id not in labeled_solvers else "_nolabel_"
             lines.append(Line(xs, ys, color=solver_ind, marker=num_gens_ind, label=label))
             labeled_solvers.add(solver_id)
@@ -79,110 +81,145 @@ def plot_history_diff():
     """Plots differences between the two configured solver curves."""
     num_generators = [13]
     solver_ids = ["hybrid/nl_1", "uniform"]
-    ref_solver = "hybrid/nl_1"
+    ref_ind = 0
+    violation_tolerance = 1e-10
 
-    history_data = get_history_data_2(num_generators, solver_ids, ref_solver)
+    history_data = load_histories(num_generators, solver_ids, ref_ind, violation_tolerance)
     lines = []
     for num_gens_ind, num_gens in enumerate(num_generators):
-        xs, first_ys = history_data[num_gens][solver_ids[0]]
-        _, second_ys = history_data[num_gens][solver_ids[1]]
+        xs, solver_data = history_data[num_gens_ind]
+        first_ys, second_ys = solver_data
         lines.append(Line(xs, first_ys - second_ys, color=num_gens_ind, marker=0, label=str(num_gens)))
     lines.append(Line([0, 10000], [0, 0], color="black", marker="none", style="--"))
     plot_general(lines, axis_labels=("Time [s]", "Normalized Objective Difference"), boundaries=(0, xs[-1], -0.1, 0.1))
     save_figure()
 
 
-def get_history_data_2(num_generators: list[int], solver_ids: list[str], ref_solver: str) -> dict[int, dict[str, tuple[np.ndarray, np.ndarray]]]:
+def plot_ar_vs_instance():
+    """Plots `ar_uniform_fun` and `ar_opt_fun` against instance index for the configured generator count."""
+    num_generators = 10
+    df = load_dfs(num_generators, ["hybrid/nl_1"], 0)[0]
+    lines = [Line(df["instance"], df["ar_uniform_fun"], color=0, style="none", label="AR Uniform"),
+             Line(df["instance"], df["ar_opt_fun"], color=1, style="none", label="AR Opt")]
+    plot_general(lines, axis_labels=("Instance Index", "Approximation Ratio"), boundaries=(df["instance"].min(), df["instance"].max(), 0, 1))
+    save_figure()
+
+
+def plot_ar_diff_vs_instance():
+    """Plots `ar_opt_fun - ar_uniform_fun` against instance index for the configured generator count."""
+    num_generators = 10
+    df = load_dfs(num_generators, ["hybrid/nl_1"], 0)[0]
+    lines = [Line(df["instance"], df["ar_opt_fun"] - df["ar_uniform_fun"], marker="none", label="AR Opt - AR Uniform")]
+    plot_general(lines, axis_labels=("Instance Index", "Opt - Uniform AR Diff"), boundaries=(df["instance"].min(), df["instance"].max(), -0.4, 0.4))
+    save_figure()
+
+
+def plot_average_ar_vs_generators():
+    """Plots average `ar_uniform_fun` and `ar_opt_fun` against generator count for the configured datasets."""
+    generator_counts = [10, 11, 12, 13]
+    dfs = [load_dfs(num_generators, ["hybrid/nl_1"], 0)[0] for num_generators in generator_counts]
+    lines = [Line(generator_counts, [df["ar_uniform_fun"].mean() for df in dfs], color=0, label="AR Uniform"),
+             Line(generator_counts, [df["ar_opt_fun"].mean() for df in dfs], color=1, label="AR Opt")]
+    plot_general(lines, axis_labels=("Number of Generators", "Average Approximation Ratio"), boundaries=(min(generator_counts), max(generator_counts), 0, 1))
+    save_figure()
+
+
+def load_histories(num_generators: list[int], solver_ids: list[str], ref_ind: int, violation_tolerance: float) -> list[tuple[np.ndarray, list[np.ndarray]]]:
     """Collects average normalized objective histories across datasets.
     :param num_generators: Generator counts whose datasets should be loaded.
     :param solver_ids: Solver ids whose CSV files should be loaded from subfolders inside each dataset folder.
-    :param ref_solver: Solver id used to select the fastest instances and time grid in each dataset.
-    :return: History data keyed by generator count and then solver id.
+    :param ref_ind: Index of the solver used to select the fastest instances and time grid in each dataset.
+    :param violation_tolerance: Maximum violation still treated as feasible in extracted histories.
+    :return: History data in `num_generators` order, each entry storing one time grid and solver curves in `solver_ids` order.
     """
-    histories = {}
+    histories = []
     for num_gens in num_generators:
-        full_df = pd.read_csv(Path(__file__).resolve().parent.parent / f"data/{num_gens}/{ref_solver}/.solutions.csv")
-        fastest_100_df = full_df.loc[pd.to_numeric(full_df["classical_opt_time"], errors="coerce").nsmallest(100).index]
-        time_grid = np.linspace(0, max(fastest_100_df["classical_opt_time"]), 50)
-        instance_ids = fastest_100_df["instance"].astype(int).tolist()
-        data = get_history_data(num_gens, time_grid, instance_ids, solver_ids)
-        histories[num_gens] = {solver_id: (time_grid, data[solver_id]) for solver_id in solver_ids}
+        dfs = load_dfs(num_gens, solver_ids, ref_ind)
+        time_grid = np.linspace(0, max(dfs[ref_ind]["classical_opt_time"]), 50)
+        histories.append((time_grid, extract_normalized_solver_histories(dfs, time_grid, violation_tolerance)))
     return histories
 
 
-def get_history_data(num_generators: int, grid_times: Sequence[float], instance_ids: Sequence[int], solver_ids: Sequence[str]) -> dict[str, np.ndarray]:
-    """Computes average normalized objective curves for one dataset.
-    :param num_generators: Generator count whose dataset folder should be loaded.
-    :param grid_times: Uniform time grid used to align objective histories.
-    :param instance_ids: Instance ids included in the average normalized objective curves.
-    :param solver_ids: Solver ids whose CSV files should be loaded from subfolders inside the dataset folder.
-    :return: Average normalized objective curve for each loaded solver keyed by solver id.
+def load_dfs(num_generators: int, solver_ids: list[str], ref_ind: int | None = None) -> list[pd.DataFrame]:
+    """Loads solver data and optionally restricts all data frames to the fastest reference instances.
+    :param num_generators: Generator count whose solver CSV should be loaded.
+    :param solver_ids: Solver ids whose CSV files should be loaded.
+    :param ref_ind: Index of the reference solver inside `solver_ids`, or ``None`` to skip trimming.
+    :return: Solver data frames in `solver_ids` order after optional trimming.
     """
-    violation_tolerance = 1e-10
-    data_path = Path(__file__).resolve().parent.parent / f"data/{num_generators}"
-    solver_histories = {}
-    for solver_id in solver_ids:
-        csv_path = data_path / solver_id / ".solutions.csv"
-        if csv_path.exists():
-            solver_histories[solver_id] = _load_solver_histories(csv_path, violation_tolerance, grid_times[-1])
-    best_objectives = _get_best_objectives(instance_ids, solver_histories)
-    return {solver_id: _get_average_normalized_curve(grid_times, instance_ids, histories, best_objectives) for solver_id, histories in solver_histories.items()}
+    dfs = [pd.read_csv(Path(__file__).resolve().parent.parent / f"data/{num_generators}/{solver_id}/.solutions.csv") for solver_id in solver_ids]
+    if ref_ind is None:
+        return dfs
+    ref_df = dfs[ref_ind]
+    fastest_100_inds = pd.to_numeric(ref_df["classical_opt_time"], errors="coerce").nsmallest(100).index
+    return [df.loc[fastest_100_inds] for df in dfs]
 
 
-def _load_solver_histories(csv_path: Path, violation_tolerance: float, max_time: float) -> dict[int, list[HistoryEntry] | None]:
-    """Loads solver histories grouped by instance from a CSV file.
-    :param csv_path: Path to the solver CSV file.
+def extract_normalized_solver_histories(solver_dfs: list[pd.DataFrame], time_grid: Sequence[float], violation_tolerance: float) -> list[np.ndarray]:
+    """Computes average normalized objective curves for aligned solver data frames.
+    :param solver_dfs: Solver data frames aligned by row index.
+    :param time_grid: Uniform time grid used to align objective histories.
+    :param violation_tolerance: Maximum violation still treated as feasible in extracted histories.
+    :return: Average normalized objective curve for each loaded solver in input order.
+    """
+    assert all(df.index.equals(solver_dfs[0].index) for df in solver_dfs[1:]), "Solver data frames must share row indices."
+    all_solver_histories = [extract_solver_histories(df, violation_tolerance, time_grid[-1]) for df in solver_dfs]
+    best_objectives = get_best_objectives(all_solver_histories)
+    return [get_average_normalized_history(time_grid, solver_histories, best_objectives) for solver_histories in all_solver_histories]
+
+
+def extract_solver_histories(df: pd.DataFrame, violation_tolerance: float, max_time: float) -> list[list[HistoryEntry] | None]:
+    """Extracts solver histories from one aligned data frame.
+    :param df: Solver data frame whose rows define the aligned history order.
     :param violation_tolerance: Maximum violation still treated as feasible.
     :param max_time: Maximum time of loaded history entries.
-    :return: Mapping from instance id to history entries, or ``None`` when the CSV history is null.
+    :return: History entries for each row, or ``None`` when the row history is null.
     """
-    df = pd.read_csv(csv_path)
     converter = make_converter()
-    histories = {}
-    for instance, history_text in zip(df["instance"], df["history"]):
+    histories = []
+    for history_text in df["history"]:
         if pd.isna(history_text):
-            histories[instance] = None
+            histories.append(None)
             continue
-        histories[instance] = [entry for entry in converter.loads(history_text, list[HistoryEntry])
-                               if entry.result.violation <= violation_tolerance and entry.time <= max_time]
+        histories.append([entry for entry in converter.loads(history_text, list[HistoryEntry])
+                          if entry.result.violation <= violation_tolerance and entry.time <= max_time])
     return histories
 
 
-def _get_best_objectives(instance_ids: Sequence[int], solver_histories: dict[str, dict[int, list[HistoryEntry] | None]]) -> dict[int, float | None]:
-    """Finds the best known feasible objective per instance.
-    :param instance_ids: Instance ids to include in aggregation.
-    :param solver_histories: Histories grouped by solver name and then by instance.
-    :return: Mapping from instance id to the lowest objective found by any loaded solver.
+def get_best_objectives(all_solver_histories: list[list[list[HistoryEntry] | None]]) -> list[float | None]:
+    """Finds the best known feasible objective for each instance.
+    :param all_solver_histories: Histories indexed by: 0) solver ind; 1) instance ind; 2) HistoryEntry index.
+    :return: Lowest objective found by any loaded solver for each instance.
     """
-    best_objectives = {}
-    for instance in instance_ids:
-        solver_objectives = [history[-1].result.fun for histories in solver_histories.values() if (history := histories.get(instance))]
-        best_objectives[instance] = min(solver_objectives) if len(solver_objectives) > 0 else None
-    return best_objectives
+    if len(all_solver_histories) == 0:
+        return []
+    best_instance_objectives = []
+    for instance_histories in zip(*all_solver_histories, strict=True):
+        best_solver_objectives = [solver_history[-1].result.fun for solver_history in instance_histories if solver_history]
+        best_instance_objectives.append(min(best_solver_objectives) if len(best_solver_objectives) > 0 else None)
+    return best_instance_objectives
 
 
-def _get_average_normalized_curve(grid_times: Sequence[float], instance_ids: Sequence[int], solver_histories: dict[int, list[HistoryEntry] | None],
-                                  best_objectives: dict[int, float]) -> np.ndarray:
+def get_average_normalized_history(time_grid: Sequence[float], solver_histories: list[list[HistoryEntry] | None], best_objectives: list[float | None]) \
+    -> np.ndarray:
     """Computes average normalized objective curve on a uniform time grid.
-    :param grid_times: Uniform time grid used for alignment.
-    :param instance_ids: Instance ids included in averaging denominator.
-    :param solver_histories: Histories for one solver grouped by instance.
-    :param best_objectives: Best known objective per instance across the loaded solvers.
+    :param time_grid: Uniform time grid used for alignment.
+    :param solver_histories: Histories for one solver aligned by row index.
+    :param best_objectives: Best known objective per aligned row across the loaded solvers.
     :return: Average normalized objective values for each grid time.
     """
-    totals = np.zeros(len(grid_times))
+    totals = np.zeros(len(time_grid))
     feasible_count = 0
-    for instance in instance_ids:
-        if (best_objective := best_objectives[instance]) is None:
+    for history, best_objective in zip(solver_histories, best_objectives, strict=True):
+        if best_objective is None:
             continue
         feasible_count += 1
-        history = solver_histories.get(instance)
         if not history:
             continue
         history_times = np.array([entry.time for entry in history])
-        normalized_objectives = np.array([best_objective / entry.result.fun for entry in history])
-        indices = np.searchsorted(history_times, grid_times, side="right") - 1
-        totals[indices >= 0] += normalized_objectives[indices[indices >= 0]]
+        indices = np.searchsorted(history_times, time_grid, side="right") - 1
+        normalized_history = np.array([best_objective / entry.result.fun for entry in history])
+        totals[indices >= 0] += normalized_history[indices[indices >= 0]]
     return totals / feasible_count
 
 
@@ -190,5 +227,10 @@ if __name__ == "__main__":
     # plot_instance_objective_histories()
     # plot_polar_vs_rectangular()
     # plot_average_histories()
-    plot_history_diff()
+    # plot_ar_vs_instance()
+    # plot_ar_diff_vs_instance()
+    # plot_average_ar_vs_generators()
+    # plot_history_diff()
+    # plot_ar_diff_vs_instance()
+    plot_average_ar_vs_generators()
     plt.show()
