@@ -99,10 +99,8 @@ def run_parallel() -> None:
                         "classical_opt_time": extra.get("classical_opt_time"),
                         "optimized_bitstrings": extra.get("optimized_bitstrings"),
                         "max_inner": extra.get("max_inner"),
-                        "ar_uniform_total": extra.get("ar_uniform_total"),
-                        "ar_uniform_fun": extra.get("ar_uniform_fun"),
-                        "ar_opt_total": extra.get("ar_opt_total"),
-                        "ar_opt_fun": extra.get("ar_opt_fun"),
+                        "ar_uniform": extra.get("ar_uniform"),
+                        "ar_opt": extra.get("ar_opt"),
                         "history": converter.dumps(history)}
             rows[index] = row
             output_df = pd.DataFrame.from_dict(rows, orient="index").rename_axis("instance").reset_index().reindex(columns=columns).sort_values("instance")
