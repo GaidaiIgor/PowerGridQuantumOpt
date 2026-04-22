@@ -35,7 +35,7 @@ def run_parallel() -> None:
 
     solutions_path = Path(".solutions.csv")
     columns = ["instance", "generators", "cont_params", "cost", "violation", "job_ind", "total_opt_jobs", "classical_opt_time", "optimized_bitstrings",
-               "max_inner", "ar_uniform_total", "ar_uniform_fun", "ar_opt_total", "ar_opt_fun", "error", "history"]
+               "max_inner", "ar_uniform", "ar_opt", "error", "history"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generators": "string"}).reindex(columns=columns)
     else:
