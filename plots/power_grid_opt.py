@@ -96,21 +96,22 @@ def plot_history_diff():
 
 
 def plot_ar_vs_instance():
-    """Plots `ar_uniform_fun` and `ar_opt_fun` against instance index for the configured generator count."""
+    """Plots `ar_uniform_fun` and `ar_opt_fun` against row index for the configured generator count."""
     num_generators = 10
     df = load_dfs(num_generators, ["hybrid/nl_1"], 0)[0]
-    lines = [Line(df["instance"], df["ar_uniform_fun"], color=0, style="none", label="AR Uniform"),
-             Line(df["instance"], df["ar_opt_fun"], color=1, style="none", label="AR Opt")]
-    plot_general(lines, axis_labels=("Instance Index", "Approximation Ratio"), boundaries=(df["instance"].min(), df["instance"].max(), 0, 1))
+    lines = [Line(np.arange(len(df)), df["ar_uniform_fun"], color=0, style="none", label="AR Uniform"),
+             Line(np.arange(len(df)), df["ar_opt_fun"], color=1, style="none", label="AR Opt")]
+    plot_general(lines, axis_labels=("Instance index", "Approximation Ratio"), boundaries=(0, 99, 0, 1))
     save_figure()
 
 
 def plot_ar_diff_vs_instance():
-    """Plots `ar_opt_fun - ar_uniform_fun` against instance index for the configured generator count."""
+    """Plots `ar_opt_fun - ar_uniform_fun` against row index for the configured generator count."""
     num_generators = 10
     df = load_dfs(num_generators, ["hybrid/nl_1"], 0)[0]
-    lines = [Line(df["instance"], df["ar_opt_fun"] - df["ar_uniform_fun"], marker="none", label="AR Opt - AR Uniform")]
-    plot_general(lines, axis_labels=("Instance Index", "Opt - Uniform AR Diff"), boundaries=(df["instance"].min(), df["instance"].max(), -0.4, 0.4))
+    lines = [Line(np.arange(len(df)), df["ar_opt_fun"] - df["ar_uniform_fun"], style="none", label="AR Opt - AR Uniform"),
+             Line([0, len(df) - 1], [0, 0], color="black", marker="none", style="--")]
+    plot_general(lines, axis_labels=("Instance index", "Opt - Uniform AR Diff"), boundaries=(0, 99, -0.4, 0.4))
     save_figure()
 
 
@@ -121,6 +122,7 @@ def plot_average_ar_vs_generators():
     lines = [Line(generator_counts, [df["ar_uniform_fun"].mean() for df in dfs], color=0, label="AR Uniform"),
              Line(generator_counts, [df["ar_opt_fun"].mean() for df in dfs], color=1, label="AR Opt")]
     plot_general(lines, axis_labels=("Number of Generators", "Average Approximation Ratio"), boundaries=(min(generator_counts), max(generator_counts), 0, 1))
+    plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
     save_figure()
 
 
@@ -164,7 +166,7 @@ def extract_normalized_solver_histories(solver_dfs: list[pd.DataFrame], time_gri
     """
     assert all(df.index.equals(solver_dfs[0].index) for df in solver_dfs[1:]), "Solver data frames must share row indices."
     all_solver_histories = [extract_solver_histories(df, violation_tolerance, time_grid[-1]) for df in solver_dfs]
-    best_objectives = get_best_objectives(all_solver_histories)
+    best_objectives = extract_best_objectives(all_solver_histories)
     return [get_average_normalized_history(time_grid, solver_histories, best_objectives) for solver_histories in all_solver_histories]
 
 
@@ -186,7 +188,7 @@ def extract_solver_histories(df: pd.DataFrame, violation_tolerance: float, max_t
     return histories
 
 
-def get_best_objectives(all_solver_histories: list[list[list[HistoryEntry] | None]]) -> list[float | None]:
+def extract_best_objectives(all_solver_histories: list[list[list[HistoryEntry] | None]]) -> list[float | None]:
     """Finds the best known feasible objective for each instance.
     :param all_solver_histories: Histories indexed by: 0) solver ind; 1) instance ind; 2) HistoryEntry index.
     :return: Lowest objective found by any loaded solver for each instance.
@@ -225,12 +227,9 @@ def get_average_normalized_history(time_grid: Sequence[float], solver_histories:
 
 if __name__ == "__main__":
     # plot_instance_objective_histories()
-    # plot_polar_vs_rectangular()
     # plot_average_histories()
-    # plot_ar_vs_instance()
-    # plot_ar_diff_vs_instance()
-    # plot_average_ar_vs_generators()
     # plot_history_diff()
+    # plot_ar_vs_instance()
     # plot_ar_diff_vs_instance()
     plot_average_ar_vs_generators()
     plt.show()
