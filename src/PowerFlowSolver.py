@@ -400,26 +400,14 @@ class HybridSolver(PowerFlowSolver):
             inner_optimizer.best_result_callback = None
             cost_function_untimed = partial(cost_function, max_classical_time=None)
             uniform_probs = {format(i, f"0{len(problem.generators)}b"): 1 / num_bitstrings for i in range(num_bitstrings)}
-            uniform_total_expectation = utils.get_cost_expectation(cost_function_untimed, uniform_probs)
+            uniform_expectation = utils.get_cost_expectation(cost_function_untimed, uniform_probs)
             best_total = min(cached_result.total for cached_result in inner_optimizer.cache.values())
-
-            feasible_bitstrings = {generator_statuses for generator_statuses, cached_result in inner_optimizer.cache.items()
-                                   if cached_result.violation <= self.violation_tolerance}
-            feasible_uniform_probs = self.get_feasible_probs(feasible_bitstrings, uniform_probs)
-            uniform_fun_expectation = utils.get_cost_expectation(cost_function_untimed, feasible_uniform_probs)
 
             exact_sampler = ExactSampler()
             opt_probs = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
-            opt_total_expectation = utils.get_cost_expectation(cost_function_untimed, opt_probs)
+            opt_expectation = utils.get_cost_expectation(cost_function_untimed, opt_probs)
 
-            feasible_opt_probs = self.get_feasible_probs(feasible_bitstrings, opt_probs)
-            opt_fun_expectation = utils.get_cost_expectation(cost_function_untimed, feasible_opt_probs)
-
-            extra |= {"final_probs": opt_probs,
-                      "ar_uniform_total": best_total / uniform_total_expectation,
-                      "ar_uniform_fun": best_total / uniform_fun_expectation,
-                      "ar_opt_total": best_total / opt_total_expectation,
-                      "ar_opt_fun": best_total / opt_fun_expectation}
+            extra |= {"final_probs": opt_probs, "ar_uniform": best_total / uniform_expectation, "ar_opt": best_total / opt_expectation}
         return history, extra
 
     def get_feasible_probs(self, feasible_bitstrings: set[str], probs: dict[str, float]) -> dict[str, float]:

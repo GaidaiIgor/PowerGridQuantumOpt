@@ -115,9 +115,10 @@ def run_parallel() -> None:
     print("\nAll instances:")
     print_stats(output_df, solver.violation_tolerance)
     if args.solver == "hybrid":
-        print("\nFastest 100 instances:")
-        fastest_100_df = output_df.loc[pd.to_numeric(output_df["classical_opt_time"], errors="coerce").nsmallest(100).index]
-        print_stats(fastest_100_df, solver.violation_tolerance)
+        print("\nSelected 100 instances:")
+        feasible_df = output_df.loc[pd.to_numeric(output_df["violation"], errors="coerce") <= solver.violation_tolerance]
+        select_100_df = feasible_df.loc[pd.to_numeric(feasible_df["classical_opt_time"], errors="coerce").nsmallest(100).index]
+        print_stats(select_100_df, solver.violation_tolerance)
 
 
 def parse_cli_args() -> argparse.Namespace:
