@@ -16,44 +16,42 @@ from src.utils import my_format
 
 def run_single() -> None:
     """Runs the configured solver on one stored problem instance."""
-    # problem = get_power_flow_ac_problem()
-    index = 49
     solver_id = "hybrid"
     num_layers = 1
+    analyze_expectations = True
+    # sampler_id = "finite"
+    sampler_id = "exact"
+    shots = 1000
+    data_path = Path("data/5")
+    instance = 0
     voltage_deviation_mult = 10
-    analyze_expectations = False
-    data_path = Path("data/5/capacity_100")
-    with (data_path / f"{index}.pkl").open("rb") as file:
+    seed = 0
+    with (data_path / f"{instance}.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file), voltage_deviation_mult)
 
     # debug.set_all_edge_capacities(problem, 100)
     # debug.set_all_node_voltage_ranges(problem, (1, 100))
     # debug.set_all_generator_p_min(problem, 0)
 
-    # solver = ClassicalSolver()
-    solver = get_solver(len(problem.generators), solver_id, num_layers, analyze_expectations)
+    solver = get_solver(len(problem.generators), solver_id, num_layers, analyze_expectations, None, sampler_id, shots)
 
-    inner_solver = solver.inner_optimizer_factory(problem)
-    inner_solver.optimize("11110")
+    # inner_solver = solver.inner_optimizer_factory(problem)
+    # inner_solver.optimize("11110")
 
     progress_folder = Path(".progress")
     progress_folder.mkdir(exist_ok=True)
-    progress_path = progress_folder / f"{index}.pkl"
+    progress_path = progress_folder / f"{instance}.pkl"
     history, extra = solver.solve(problem, progress_path)
 
     print("\nSolution:")
     debug.print_evaluation_result(problem, history[-1].result)
-    print(f"Job index: {history[-1].job_ind}")
-    if "total_opt_jobs" in extra:
-        print(f"Total opt jobs: {extra["total_opt_jobs"]}")
-    if "optimized_bitstrings" in extra:
-        print(f"Optimized bitstrings: {extra["optimized_bitstrings"]}")
-    if isinstance(solver, HybridSolver) and solver.analyze_expectations:
+    print(f"Optimized bitstrings: {extra["optimized_bitstrings"]}")
+    print(f"Solution found job ind: {history[-1].job_ind}")
+    print(f"Total opt jobs: {extra["total_opt_jobs"]}")
+    if solver.analyze_expectations:
         print(f"Optimized probabilities: {my_format(extra["final_probs"])}")
-        print(f"AR uniform total: {extra["ar_uniform_total"]}")
-        print(f"AR uniform fun: {extra["ar_uniform_fun"]}")
-        print(f"AR opt total: {extra["ar_opt_total"]}")
-        print(f"AR opt fun: {extra["ar_opt_fun"]}")
+        print(f"AR uniform: {extra["ar_uniform"]}")
+        print(f"AR opt: {extra["ar_opt"]}")
 
 
 def get_power_flow_ac_problem() -> PowerFlowProblem:
