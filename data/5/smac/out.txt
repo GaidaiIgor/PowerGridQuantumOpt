@@ -1,5 +1,0 @@
-Using 120 worker(s).
-Run complete: 0 timeout(s), 20 other failure(s).
-Inner optimization time: avg=0.09522461002372438, min=0.023230684972077142, max=0.34206425322190626
-Total jobs: avg=<NA>, min=<NA>, max=<NA>
-Unfeasible instances: 1
