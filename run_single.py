@@ -19,12 +19,13 @@ def run_single() -> None:
     solver_id = "hybrid"
     num_layers = 1
     analyze_expectations = True
-    # sampler_id = "finite"
     sampler_id = "exact"
+    # sampler_id = "finite"
     shots = 1000
     data_path = Path("data/5")
     instance = 0
     voltage_deviation_mult = 10
+    violation_mult = 10 ** 7
     seed = 0
     with (data_path / f"{instance}.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file), voltage_deviation_mult)
@@ -33,7 +34,7 @@ def run_single() -> None:
     # debug.set_all_node_voltage_ranges(problem, (1, 100))
     # debug.set_all_generator_p_min(problem, 0)
 
-    solver = get_solver(len(problem.generators), solver_id, num_layers, analyze_expectations, None, sampler_id, shots)
+    solver = get_solver(len(problem.generators), solver_id, num_layers, analyze_expectations, None, sampler_id, shots, violation_mult, seed)
 
     # inner_solver = solver.inner_optimizer_factory(problem)
     # inner_solver.optimize("11110")

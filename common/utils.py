@@ -15,8 +15,7 @@ SAMPLER_IDS = ("exact", "finite", "ionq-simulator", "ionq-hardware")
 
 
 def get_solver(num_generators: int, solver_id: str, num_layers: int = 1, analyze_expectations: bool = False, max_classical_time: float | None = None,
-               sampler_id: str = "finite", shots: int = 1000) \
-    -> PowerFlowSolver:
+               sampler_id: str = "finite", shots: int = 1000, violation_mult: float = 10 ** 7, seed: int = 0) -> PowerFlowSolver:
     """Builds the configured solver for a problem size.
     :param num_generators: Number of generators or qubits in the target instance.
     :param solver_id: Solver identifier. Must be one of ``"scip"``, ``"smac"``, ``"uniform"``, or ``"hybrid"``.
@@ -25,13 +24,13 @@ def get_solver(num_generators: int, solver_id: str, num_layers: int = 1, analyze
     :param max_classical_time: Maximum classical angle-optimization time in seconds for hybrid runs, or ``None`` to disable the cap.
     :param sampler_id: Sampler identifier for hybrid runs.
     :param shots: Number of shots for sampling-based backends.
+    :param violation_mult: Multiplication factor for objective constraint violation. Total objective = objective + mult * violation.
+    :param seed: Randomness seed for the solver.
     :return: Solver configured for the current experiment.
     """
     max_inner_time_s = 30
-    violation_mult = 10 ** 7
     violation_tolerance = 1e-10
     silent = True
-    seed = 0
 
     if solver_id == "scip":
         return SCIPSolver(violation_tolerance, silent, seed)
