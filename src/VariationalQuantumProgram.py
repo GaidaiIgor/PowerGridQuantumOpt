@@ -8,7 +8,7 @@ import noisyopt
 import numpy as np
 from numpy import ndarray
 from qiskit import QuantumCircuit
-from qiskit_algorithms.optimizers import SPSA
+from qiskit_algorithms.optimizers import SPSA, ADAM
 from scipy import optimize
 from scipy.optimize import OptimizeResult
 
@@ -82,14 +82,16 @@ class VariationalQuantumProgram:
         self.quantum_time = 0
         self.num_jobs = 0
         objective = partial(self.get_cost_expectation, cost_function)
+        # objective = lambda params: -1 / self.get_cost_expectation(cost_function, params)
 
         if isinstance(self.sampler, ExactSampler):
-            opt = SPSA(maxiter=500, blocking=True, trust_region=True, resamplings=1, last_avg=1, learning_rate=0.02, perturbation=0.05)
-            result = opt.minimize(objective, initial_angles)
-            result.success = True
-            # result = noisyopt.minimizeCompass(objective, initial_angles, errorcontrol=False, deltatol=1e-3)
-            # result = optimize.minimize(objective, initial_angles, method="SLSQP", options={"maxiter": np.iinfo(np.int32).max})
+            result = optimize.minimize(objective, initial_angles, method="SLSQP", options={"maxiter": np.iinfo(np.int32).max})
         else:
-            result = noisyopt.minimizeCompass(objective, initial_angles, errorcontrol=False)
+            # opt = SPSA(maxiter=100000)
+            # opt = ADAM()
+            # result = opt.minimize(objective, initial_angles)
+            # result.success = True
+
+            result = noisyopt.minimizeCompass(objective, initial_angles, errorcontrol=False, deltatol=1e-4)
         result.quantum_time = self.quantum_time
         return result

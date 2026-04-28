@@ -369,23 +369,36 @@ class HybridSolver(PowerFlowSolver):
                 raise TimeoutError("Classical angle optimization time exceeded max_classical_time.")
             return inner_optimizer.optimize(generator_statuses).total
 
+        def cost_function_inverse(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> float:
+            if max_classical_time is not None and time.perf_counter() - start_time - self.vqp.quantum_time > max_classical_time:
+                raise TimeoutError("Classical angle optimization time exceeded max_classical_time.")
+            return -1 / inner_optimizer.optimize(generator_statuses).total
+
+        def cost_function_log(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> float:
+            if max_classical_time is not None and time.perf_counter() - start_time - self.vqp.quantum_time > max_classical_time:
+                raise TimeoutError("Classical angle optimization time exceeded max_classical_time.")
+            return np.log(inner_optimizer.optimize(generator_statuses).total)
+
         inner_optimizer = self.inner_optimizer_factory(problem)
         inner_optimizer.violation_tolerance = self.violation_tolerance
         inner_optimizer.best_result_callback = update_history
         num_bitstrings = 2 ** len(problem.generators)
         rng = random.default_rng(self.seed)
+
         initial_angles = rng.uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
+        # initial_angles = np.zeros(len(self.vqp.circuit.parameters))
+        active_cost = cost_function
 
         history = []
         extra = {}
         try:
             start_time = time.perf_counter()
-            result = self.vqp.optimize_parameters(cost_function, initial_angles)
+            result = self.vqp.optimize_parameters(active_cost, initial_angles)
             extra |= {"classical_opt_time": time.perf_counter() - start_time - self.vqp.quantum_time, "total_opt_jobs": self.vqp.num_jobs}
             assert result.success, f"Angle optimization failed: {result.message}"
 
             while len(inner_optimizer.cache) < num_bitstrings:
-                self.vqp.get_cost_expectation(cost_function, result.x)
+                self.vqp.get_cost_expectation(active_cost, result.x)
         except TimeoutError:
             pass
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."

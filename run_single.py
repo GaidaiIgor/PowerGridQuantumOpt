@@ -1,6 +1,7 @@
 """Runs one power-flow instance with the configured solver."""
 
 import pickle
+import time
 from pathlib import Path
 
 import common.debug as debug
@@ -19,8 +20,8 @@ def run_single() -> None:
     solver_id = "hybrid"
     num_layers = 1
     analyze_expectations = True
-    sampler_id = "exact"
-    # sampler_id = "finite"
+    # sampler_id = "exact"
+    sampler_id = "finite"
     shots = 1000
     data_path = Path("data/5")
     instance = 0
@@ -78,4 +79,6 @@ def get_power_flow_ac_problem() -> PowerFlowProblem:
 
 
 if __name__ == "__main__":
+    start_time = time.perf_counter()
     run_single()
+    print(f"Elapsed time: {time.perf_counter() - start_time}")
