@@ -64,28 +64,27 @@ class VariationalQuantumProgram:
         self.num_jobs += 1
         return probabilities
 
-    def get_cost_expectation(self, cost_function: Callable[[str], float], param_vals: Sequence[float]) -> float:
+    def get_function_expectation(self, function: Callable[[str], float], param_vals: Sequence[float]) -> float:
         """Evaluates expectation of the cost function for given circuit parameter values.
-        :param cost_function: Function mapping sampled bitstrings to costs.
+        :param function: Function mapping sampled bitstrings to costs.
         :param param_vals: Parameter values assigned to the ansatz circuit.
         :return: Expected cost for the sampled output distribution.
         """
         probabilities = self.get_probabilities(param_vals)
-        return utils.get_cost_expectation(cost_function, probabilities)
+        return utils.get_function_expectation(function, probabilities)
 
-    def optimize_parameters(self, cost_function: Callable[[str], float], initial_angles: ndarray) -> OptimizeResult:
+    def optimize_parameters(self, target_function: Callable[[str], float], initial_angles: ndarray) -> OptimizeResult:
         """Optimizes variational parameters of the circuit to minimize expectation of cost function and returns optimized parameter values.
-        :param cost_function: Function mapping sampled bitstrings to costs.
+        :param target_function: Function mapping sampled bitstrings to target scalar to minimize.
         :param initial_angles: Initial parameter vector for classical optimization.
         :return: Optimization result including optimized angles and metadata.
         """
         self.quantum_time = 0
         self.num_jobs = 0
-        objective = partial(self.get_cost_expectation, cost_function)
-        # objective = lambda params: -1 / self.get_cost_expectation(cost_function, params)
+        objective = partial(self.get_function_expectation, target_function)
 
         if isinstance(self.sampler, ExactSampler):
-            result = optimize.minimize(objective, initial_angles, method="SLSQP", options={"maxiter": np.iinfo(np.int32).max})
+            result = optimize.minimize(objective, initial_angles, method="L-BFGS-B", options={"maxiter": np.iinfo(np.int32).max})
         else:
             # opt = SPSA(maxiter=100000)
             # opt = ADAM()

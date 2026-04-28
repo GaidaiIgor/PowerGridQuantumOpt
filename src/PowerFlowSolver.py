@@ -359,25 +359,50 @@ class HybridSolver(PowerFlowSolver):
             history.append(HistoryEntry(classical_time, self.vqp.num_jobs, stats.copy(), new_result))
             pd.to_pickle(history, progress_path)
 
-        def cost_function(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> float:
-            """Returns total cost for one generator-status bitstring and aborts angle optimization when its classical-time cap is exceeded.
+        def get_inner_result(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> EvaluationResult:
+            """Returns inner-optimizer result for one generator-status bitstring and aborts angle optimization when its classical-time cap is exceeded.
+            :param generator_statuses: Binary generator on/off bitstring.
+            :param max_classical_time: Classical angle-optimization time cap in seconds, or ``None`` to disable time checks.
+            :return: Inner-optimizer result for the given status pattern.
+            """
+            if max_classical_time is not None and time.perf_counter() - start_time - self.vqp.quantum_time > max_classical_time:
+                raise TimeoutError("Classical angle optimization time exceeded max_classical_time.")
+            return inner_optimizer.optimize(generator_statuses)
+
+        def get_cost(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> float:
+            """Returns total cost for one generator-status bitstring.
             :param generator_statuses: Binary generator on/off bitstring.
             :param max_classical_time: Classical angle-optimization time cap in seconds, or ``None`` to disable time checks.
             :return: Total objective value for the given status pattern.
             """
-            if max_classical_time is not None and time.perf_counter() - start_time - self.vqp.quantum_time > max_classical_time:
-                raise TimeoutError("Classical angle optimization time exceeded max_classical_time.")
-            return inner_optimizer.optimize(generator_statuses).total
+            return get_inner_result(generator_statuses, max_classical_time).total
 
-        def cost_function_inverse(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> float:
-            if max_classical_time is not None and time.perf_counter() - start_time - self.vqp.quantum_time > max_classical_time:
-                raise TimeoutError("Classical angle optimization time exceeded max_classical_time.")
-            return -1 / inner_optimizer.optimize(generator_statuses).total
+        def get_cost_inverse(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> float:
+            """Returns the negative inverse of the total cost for one generator-status bitstring.
+            :param generator_statuses: Binary generator on/off bitstring.
+            :param max_classical_time: Classical angle-optimization time cap in seconds, or ``None`` to disable time checks.
+            :return: Negative inverse transformed objective value for the given status pattern.
+            """
+            return -1 / get_inner_result(generator_statuses, max_classical_time).total
 
-        def cost_function_log(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> float:
-            if max_classical_time is not None and time.perf_counter() - start_time - self.vqp.quantum_time > max_classical_time:
-                raise TimeoutError("Classical angle optimization time exceeded max_classical_time.")
-            return np.log(inner_optimizer.optimize(generator_statuses).total)
+        def get_cost_log(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> float:
+            """Returns the logarithm of the total cost for one generator-status bitstring.
+            :param generator_statuses: Binary generator on/off bitstring.
+            :param max_classical_time: Classical angle-optimization time cap in seconds, or ``None`` to disable time checks.
+            :return: Log-transformed objective value for the given status pattern.
+            """
+            return np.log(get_inner_result(generator_statuses, max_classical_time).total)
+
+        def get_cost_transformed(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> float:
+            """Returns bounded feasibility-first surrogate cost for one generator-status bitstring.
+            :param generator_statuses: Binary generator on/off bitstring.
+            :param max_classical_time: Classical angle-optimization time cap in seconds, or ``None`` to disable time checks.
+            :return: Surrogate score in ``[0, 1)`` for feasible results and ``[1, 2)`` for infeasible ones.
+            """
+            result = get_inner_result(generator_statuses, max_classical_time)
+            if result.violation <= self.violation_tolerance:
+                return result.fun / (result.fun + 182.1452462507657)
+            return 1 + result.violation / (result.violation + 24.087523110066556)
 
         inner_optimizer = self.inner_optimizer_factory(problem)
         inner_optimizer.violation_tolerance = self.violation_tolerance
@@ -387,7 +412,7 @@ class HybridSolver(PowerFlowSolver):
 
         initial_angles = rng.uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
         # initial_angles = np.zeros(len(self.vqp.circuit.parameters))
-        active_cost = cost_function
+        active_cost = get_cost_inverse
 
         history = []
         extra = {}
@@ -398,7 +423,7 @@ class HybridSolver(PowerFlowSolver):
             assert result.success, f"Angle optimization failed: {result.message}"
 
             while len(inner_optimizer.cache) < num_bitstrings:
-                self.vqp.get_cost_expectation(active_cost, result.x)
+                self.vqp.get_function_expectation(active_cost, result.x)
         except TimeoutError:
             pass
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
@@ -411,16 +436,17 @@ class HybridSolver(PowerFlowSolver):
         if self.analyze_expectations:
             assert extra.get("classical_opt_time") is not None, "Expectation analysis requires completed angle optimization."
             inner_optimizer.best_result_callback = None
-            cost_function_untimed = partial(cost_function, max_classical_time=None)
+            cost_function_untimed = partial(get_cost_inverse, max_classical_time=None)
             uniform_probs = {format(i, f"0{len(problem.generators)}b"): 1 / num_bitstrings for i in range(num_bitstrings)}
-            uniform_expectation = utils.get_cost_expectation(cost_function_untimed, uniform_probs)
+            uniform_expectation = utils.get_function_expectation(cost_function_untimed, uniform_probs)
             best_total = min(cached_result.total for cached_result in inner_optimizer.cache.values())
+            uniform_expectation *= -best_total
 
             exact_sampler = ExactSampler()
             opt_probs = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
-            opt_expectation = utils.get_cost_expectation(cost_function_untimed, opt_probs)
+            opt_expectation = utils.get_function_expectation(cost_function_untimed, opt_probs) * -best_total
 
-            extra |= {"final_probs": opt_probs, "ar_uniform": best_total / uniform_expectation, "ar_opt": best_total / opt_expectation}
+            extra |= {"final_probs": opt_probs, "ar_uniform": uniform_expectation, "ar_opt": opt_expectation}
         return history, extra
 
     def get_feasible_probs(self, feasible_bitstrings: set[str], probs: dict[str, float]) -> dict[str, float]:

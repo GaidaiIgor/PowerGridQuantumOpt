@@ -8,13 +8,13 @@ from qiskit import QuantumCircuit
 from qiskit_ionq import IonQProvider
 
 
-def get_cost_expectation(cost_function: Callable[[str], float], probabilities: dict[str, float]) -> float:
+def get_function_expectation(function: Callable[[str], float], probabilities: dict[str, float]) -> float:
     """Evaluates expectation of the cost function for a given probability distribution.
-    :param cost_function: Function that maps a bitstring sample to its cost.
+    :param function: Function that maps a bitstring sample to a scalar.
     :param probabilities: Bitstring-probability mapping.
     :return: Expected cost under the provided distribution.
     """
-    expectation = sum(cost_function(bitstring) * probability for bitstring, probability in probabilities.items())
+    expectation = sum(function(bitstring) * probability for bitstring, probability in probabilities.items())
     return expectation
 
 
