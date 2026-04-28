@@ -8,7 +8,6 @@ import noisyopt
 import numpy as np
 from numpy import ndarray
 from qiskit import QuantumCircuit
-from qiskit_algorithms.optimizers import SPSA, ADAM
 from scipy import optimize
 from scipy.optimize import OptimizeResult
 
@@ -86,11 +85,6 @@ class VariationalQuantumProgram:
         if isinstance(self.sampler, ExactSampler):
             result = optimize.minimize(objective, initial_angles, method="L-BFGS-B", options={"maxiter": np.iinfo(np.int32).max})
         else:
-            # opt = SPSA(maxiter=100000)
-            # opt = ADAM()
-            # result = opt.minimize(objective, initial_angles)
-            # result.success = True
-
             result = noisyopt.minimizeCompass(objective, initial_angles, errorcontrol=False, deltatol=1e-4)
         result.quantum_time = self.quantum_time
         return result
