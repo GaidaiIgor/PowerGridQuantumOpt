@@ -26,18 +26,27 @@ from src.PowerFlowSolver import PowerFlowSolver
 def run_parallel() -> None:
     """Runs selected instances in parallel and persists each completed result to CSV."""
     args = parse_cli_args()
+    solver_id = args.solver
+    violation_tolerance = 1e-10
+    silent = True
+    seed = 0
+    violation_mult = 10 ** 7
+    max_inner_time_s = 30
+    max_classical_time_s = None if args.max_classical_time is None else args.max_classical_time * 3600
+    data_folder = args.data_folder
+    num_generators = read_num_generators(data_folder)
+    num_layers = args.num_layers
+    sampler_id = args.sampler
+    shots = args.shots
+    analyze_expectations = args.analyze_expectations
+    max_process_time_s = args.timeout * 3600
     instance_indices = list(range(120))
     voltage_deviation_mult = 10
     absent_only = True
-    timeout_s = args.timeout * 3600
-    max_classical_time_s = None if args.max_classical_time is None else args.max_classical_time * 3600
-    num_generators = read_num_generators(args.data_folder)
-    violation_mult = 10 ** 7
-    seed = 0
-    np.random.seed(seed)
-    solver = get_solver(num_generators, args.solver, args.num_layers, args.analyze_expectations, max_classical_time_s, args.sampler, args.shots, violation_mult,
-                        seed)
 
+    np.random.seed(seed)
+    solver = get_solver(solver_id, violation_tolerance, silent, seed, violation_mult, max_inner_time_s, max_classical_time_s, num_generators, num_layers,
+                        sampler_id, shots, analyze_expectations, max_process_time_s)
     solutions_path = Path(".solutions.csv")
     columns = ["instance", "generators", "cont_params", "cost", "violation", "job_ind", "total_opt_jobs", "classical_opt_time", "optimized_bitstrings",
                "max_inner", "ar_uniform", "ar_opt", "error", "history"]
@@ -67,7 +76,7 @@ def run_parallel() -> None:
     error_count = 0
     with ProcessPool(max_workers=workers) as pool:
         future_to_metadata = \
-            {pool.schedule(run_instance, args=(args.data_folder, index, solver, voltage_deviation_mult, seed), timeout=timeout_s): index
+            {pool.schedule(run_instance, args=(data_folder, index, solver, voltage_deviation_mult, seed), timeout=max_process_time_s): index
              for index in instance_indices}
         for future in tqdm(as_completed(future_to_metadata), total=len(future_to_metadata), smoothing=0):
             index = future_to_metadata[future]
@@ -85,7 +94,7 @@ def run_parallel() -> None:
                     extra = {}
                 if isinstance(ex, FutureTimeoutError):
                     timeout_count += 1
-                    error = f"Timeout after {timeout_s}s"
+                    error = f"Timeout after {max_process_time_s}s"
                 else:
                     error_count += 1
                     error = f"{type(ex).__name__}: {ex}"
@@ -117,7 +126,7 @@ def run_parallel() -> None:
     print(f"Run complete: {timeout_count} timeout(s), {error_count} other failure(s).")
     print("\nAll instances:")
     print_stats(output_df, solver.violation_tolerance)
-    if args.solver == "hybrid":
+    if solver_id == "hybrid":
         print("\nSelected 100 instances:")
         feasible_df = output_df.loc[pd.to_numeric(output_df["violation"], errors="coerce") <= solver.violation_tolerance]
         select_100_df = feasible_df.loc[pd.to_numeric(feasible_df["classical_opt_time"], errors="coerce").nsmallest(100).index]

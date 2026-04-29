@@ -2,6 +2,7 @@
 
 import pickle
 import time
+from itertools import product
 from pathlib import Path
 
 import common.debug as debug
@@ -11,32 +12,39 @@ from networkx import Graph
 from common.utils import get_solver
 from src.Generator import Generator
 from src.PowerFlowProblem import PowerFlowProblem
-from src.PowerFlowSolver import HybridSolver
 from src.utils import my_format
 
 
-def run_single() -> None:
+def run_single():
     """Runs the configured solver on one stored problem instance."""
     solver_id = "hybrid"
+    violation_tolerance = 1e-10
+    silent = True
+    seed = 0
+    violation_mult = 10 ** 7
+    max_inner_time_s = 30
+    max_classical_time = None
     num_layers = 1
-    analyze_expectations = True
-    # sampler_id = "exact"
-    sampler_id = "finite"
+    sampler_id = "exact"
+    # sampler_id = "finite"
     shots = 1000
+    analyze_expectations = True
+    max_process_time = None
     data_path = Path("data/5")
     instance = 7
     voltage_deviation_mult = 10
-    violation_mult = 10 ** 7
-    seed = 0
-    np.random.seed(seed)
+
     with (data_path / f"{instance}.pkl").open("rb") as file:
         problem = PowerFlowProblem(pickle.load(file), voltage_deviation_mult)
+    num_generators = len(problem.generators)
+    np.random.seed(seed)
 
     # debug.set_all_edge_capacities(problem, 100)
     # debug.set_all_node_voltage_ranges(problem, (1, 100))
     # debug.set_all_generator_p_min(problem, 0)
 
-    solver = get_solver(len(problem.generators), solver_id, num_layers, analyze_expectations, None, sampler_id, shots, violation_mult, seed)
+    solver = get_solver(solver_id, violation_tolerance, silent, seed, violation_mult, max_inner_time_s, max_classical_time, num_generators, num_layers,
+                        sampler_id, shots, analyze_expectations, max_process_time)
 
     # inner_solver = solver.inner_optimizer_factory(problem)
     # inner_solver.optimize("11110")
@@ -44,9 +52,26 @@ def run_single() -> None:
     progress_folder = Path(".progress")
     progress_folder.mkdir(exist_ok=True)
     progress_path = progress_folder / f"{instance}.pkl"
-    history, extra = solver.solve(problem, progress_path)
+
+    angle_results = []
+    best_result = None
+    counter = 0
+    for initial_angles in product((-0.1, 0.1), repeat=len(solver.vqp.circuit.parameters)):
+        history, extra = solver.solve(problem, progress_path, np.array(initial_angles))
+        angle_results.append((initial_angles, extra["ar_opt"]))
+        if best_result is None or extra["ar_opt"] > best_result[1]:
+            best_result = (initial_angles, extra["ar_opt"], history, extra)
+        print(f"Initial angles {counter}: {my_format(initial_angles)}; final AR opt: {extra["ar_opt"]}")
+        counter += 1
+
+    print("\nAR opt ranking by initial angles:")
+    for initial_angles, ar_opt in sorted(angle_results, key=lambda item: item[1], reverse=True):
+        print(f"Initial angles: {my_format(initial_angles)}; final AR opt: {ar_opt}")
+
+    initial_angles, _, history, extra = best_result
 
     print("\nSolution:")
+    print(f"Initial angles: {my_format(initial_angles)}")
     debug.print_evaluation_result(problem, history[-1].result)
     print(f"Optimized bitstrings: {extra["optimized_bitstrings"]}")
     print(f"Solution found job ind: {history[-1].job_ind}")

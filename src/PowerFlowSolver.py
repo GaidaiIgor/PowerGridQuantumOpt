@@ -13,7 +13,7 @@ from typing import Callable, Any
 import numpy as np
 import pandas as pd
 from ConfigSpace import Configuration, ConfigurationSpace, Categorical
-from numpy import random
+from numpy import ndarray, random
 from pyscipopt import Eventhdlr, Model, SCIP_EVENTTYPE, SCIP_PARAMEMPHASIS, SCIP_PARAMSETTING, sin, cos, quicksum
 from pyscipopt.recipes.nonlinear import set_nonlinear_objective
 from smac import AlgorithmConfigurationFacade, Scenario
@@ -328,26 +328,29 @@ class UniformSolver(PowerFlowSolver):
 @dataclass
 class HybridSolver(PowerFlowSolver):
     """Optimizes binary variables on a quantum computer. Continuous variables are optimized classically by the problem.
-    :var name: Canonical solver name used in file naming.
     :var vqp: Variational quantum program used for binary-variable search.
     :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
-    :var analyze_expectations: Whether to compute post-optimization expectation analysis.
-    :var max_classical_time: Maximum classical angle-optimization time in seconds for the hybrid run, or ``None`` to disable the cap.
-    :var seed: Optional random seed for initial quantum-parameter sampling.
     :var violation_tolerance: Violation tolerance; history stores only entries with violation below this threshold.
+    :var analyze_expectations: Whether to compute post-optimization expectation analysis.
+    :var seed: Optional random seed for initial quantum-parameter sampling.
+    :var name: Canonical solver name used in file naming.
+    :var max_classical_time: Maximum classical angle-optimization time in seconds for the hybrid run, or ``None`` to disable the cap.
+    :var max_process_time: Maximum process time in seconds for the hybrid run, or ``None`` to disable the cap.
     """
     vqp: VariationalQuantumProgram
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
-    analyze_expectations: bool = False
-    max_classical_time: float | None = None
     violation_tolerance: float = 1e-10
+    analyze_expectations: bool = False
     seed: int | None = None
     name: str = "hybrid"
+    max_classical_time: float | None = None
+    max_process_time: float | None = None
 
-    def solve(self, problem: PowerFlowProblem, progress_path: Path) -> tuple[list[HistoryEntry], dict[str, Any]]:
+    def solve(self, problem: PowerFlowProblem, progress_path: Path, initial_angles: ndarray | None = None) -> tuple[list[HistoryEntry], dict[str, Any]]:
         """Optimizes quantum parameters and returns the feasible incumbent history.
         :param problem: Power-flow optimization problem to solve.
         :param progress_path: Path for persisting incumbent progress snapshots.
+        :param initial_angles: Initial quantum parameter vector, or ``None`` to sample it randomly.
         :return: Tuple of feasible incumbent history and optional extra hybrid-run information, including VQA angle-optimization classical time.
         """
         def update_history(new_result: EvaluationResult):
@@ -366,9 +369,9 @@ class HybridSolver(PowerFlowSolver):
             :return: Inner-optimizer result for the given status pattern.
             """
             if max_classical_time is not None and time.perf_counter() - start_time - self.vqp.quantum_time > max_classical_time:
-                raise TimeoutError("Classical angle optimization time exceeded max_classical_time.")
-            if max_classical_time is not None and time.perf_counter() - start_time > max_classical_time + 1200:
-                raise AssertionError(f"Wallclock time: {time.perf_counter() - start_time}; Quantum time: {self.vqp.quantum_time}")
+                raise TimeoutError("Classical angle optimization time exceeded limit.")
+            if max_classical_time is not None and time.perf_counter() - start_time > self.max_process_time - 60:
+                raise AssertionError(f"Ran out of process time. Quantum time = {self.vqp.quantum_time}")
             return inner_optimizer.optimize(generator_statuses)
 
         def get_cost(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> float:
@@ -387,33 +390,14 @@ class HybridSolver(PowerFlowSolver):
             """
             return -1 / get_inner_result(generator_statuses, max_classical_time).total
 
-        def get_cost_log(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> float:
-            """Returns the logarithm of the total cost for one generator-status bitstring.
-            :param generator_statuses: Binary generator on/off bitstring.
-            :param max_classical_time: Classical angle-optimization time cap in seconds, or ``None`` to disable time checks.
-            :return: Log-transformed objective value for the given status pattern.
-            """
-            return np.log(get_inner_result(generator_statuses, max_classical_time).total)
-
-        def get_cost_transformed(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> float:
-            """Returns bounded feasibility-first surrogate cost for one generator-status bitstring.
-            :param generator_statuses: Binary generator on/off bitstring.
-            :param max_classical_time: Classical angle-optimization time cap in seconds, or ``None`` to disable time checks.
-            :return: Surrogate score in ``[0, 1)`` for feasible results and ``[1, 2)`` for infeasible ones.
-            """
-            result = get_inner_result(generator_statuses, max_classical_time)
-            if result.violation <= self.violation_tolerance:
-                return result.fun / (result.fun + 182.1452462507657)
-            return 1 + result.violation / (result.violation + 24.087523110066556)
-
         inner_optimizer = self.inner_optimizer_factory(problem)
         inner_optimizer.violation_tolerance = self.violation_tolerance
         inner_optimizer.best_result_callback = update_history
         num_bitstrings = 2 ** len(problem.generators)
-        rng = random.default_rng(self.seed)
 
-        initial_angles = rng.uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
-        # initial_angles = np.zeros(len(self.vqp.circuit.parameters))
+        if initial_angles is None:
+            # initial_angles = random.default_rng(self.seed).uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
+            initial_angles = np.zeros(len(self.vqp.circuit.parameters))
         active_cost = get_cost_inverse
 
         history = []
