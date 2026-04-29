@@ -41,37 +41,39 @@ def get_solver(num_generators: int, solver_id: str, num_layers: int = 1, analyze
     if solver_id == "uniform":
         return UniformSolver(inner_optimizer_factory, max_classical_time, violation_tolerance, seed)
     if solver_id == "hybrid":
-        vqp = get_variational_quantum_program(num_generators, num_layers, sampler_id, shots)
+        vqp = get_variational_quantum_program(num_generators, num_layers, sampler_id, shots, seed)
         return HybridSolver(vqp, inner_optimizer_factory, analyze_expectations, max_classical_time, violation_tolerance, seed)
     raise ValueError(f"Unsupported solver {solver_id}. Expected one of " + ", ".join(SOLVER_IDS) + ".")
 
 
-def get_variational_quantum_program(num_qubits: int, num_layers: int, sampler_id: str = "finite", shots: int = 1000) -> VariationalQuantumProgram:
+def get_variational_quantum_program(num_qubits: int, num_layers: int, sampler_id: str = "finite", shots: int = 1000, seed: int | None = None) \
+    -> VariationalQuantumProgram:
     """Builds the variational quantum program used by hybrid solvers.
     :param num_qubits: Number of qubits used by the program.
     :param num_layers: Number of repeated ansatz blocks.
     :param sampler_id: Sampler identifier for circuit evaluation.
     :param shots: Number of shots for sampling-based backends.
+    :param seed: Randomness seed for sampling-based backends.
     :return: Configured variational quantum program.
     """
     entangler = AllToAllEntangler(num_qubits)
     mixer = ZXMixer(num_qubits)
-    sampler = get_sampler(sampler_id, shots)
-
+    sampler = get_sampler(sampler_id, shots, seed)
     return VariationalQuantumProgram(num_layers, [entangler, mixer], sampler)
 
 
-def get_sampler(sampler_id: str, shots: int) -> Sampler:
+def get_sampler(sampler_id: str, shots: int, seed: int | None = None) -> Sampler:
     """Builds the configured sampler backend.
     :param sampler_id: Sampler identifier.
     :param shots: Number of shots for sampling-based backends.
+    :param seed: Randomness seed for sampling-based backends.
     :return: Configured sampler backend.
     """
     match sampler_id:
         case "exact":
             return ExactSampler()
         case "finite":
-            return MySamplerV2(StatevectorSampler(default_shots=shots))
+            return MySamplerV2(StatevectorSampler(default_shots=shots, seed=seed))
         case "ionq-simulator":
             return IonQSampler("simulator", shots, None)
         case "ionq-hardware":

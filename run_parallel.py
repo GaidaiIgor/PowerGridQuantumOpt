@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 from cattrs.preconf.json import make_converter
 from pebble import ProcessPool
@@ -31,7 +32,11 @@ def run_parallel() -> None:
     timeout_s = args.timeout * 3600
     max_classical_time_s = None if args.max_classical_time is None else args.max_classical_time * 3600
     num_generators = read_num_generators(args.data_folder)
-    solver = get_solver(num_generators, args.solver, args.num_layers, args.analyze_expectations, max_classical_time_s, args.sampler, args.shots)
+    violation_mult = 10 ** 7
+    seed = 0
+    np.random.seed(seed)
+    solver = get_solver(num_generators, args.solver, args.num_layers, args.analyze_expectations, max_classical_time_s, args.sampler, args.shots, violation_mult,
+                        seed)
 
     solutions_path = Path(".solutions.csv")
     columns = ["instance", "generators", "cont_params", "cost", "violation", "job_ind", "total_opt_jobs", "classical_opt_time", "optimized_bitstrings",
@@ -62,7 +67,7 @@ def run_parallel() -> None:
     error_count = 0
     with ProcessPool(max_workers=workers) as pool:
         future_to_metadata = \
-            {pool.schedule(run_instance, args=(args.data_folder, index, solver, voltage_deviation_mult), timeout=timeout_s): index
+            {pool.schedule(run_instance, args=(args.data_folder, index, solver, voltage_deviation_mult, seed), timeout=timeout_s): index
              for index in instance_indices}
         for future in tqdm(as_completed(future_to_metadata), total=len(future_to_metadata), smoothing=0):
             index = future_to_metadata[future]
@@ -147,17 +152,20 @@ def read_num_generators(data_folder: Path) -> int:
     return len(problem.generators)
 
 
-def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver, voltage_deviation_mult: float) -> tuple[list[HistoryEntry], dict[str, Any]]:
+def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver, voltage_deviation_mult: float, seed: int | None) -> \
+    tuple[list[HistoryEntry], dict[str, Any]]:
     """Solves one instance and returns its solver history and extras.
     :param data_folder: Path to the dataset folder.
     :param index: Instance index to solve.
     :param solver: Solver used for the instance.
     :param voltage_deviation_mult: Multiplier applied to squared voltage deviation from ``1`` in the objective.
+    :param seed: Randomness seed applied to worker-local global NumPy RNG.
     :return: Solver history whose last entry is the final incumbent together with solver-specific extras.
     """
     progress_folder = Path(".progress")
     log_path = progress_folder / f"{index}.txt"
     with redirect_worker_output(log_path):
+        np.random.seed(seed)
         with (data_folder / f"{index}.pkl").open("rb") as file:
             problem = PowerFlowProblem(pickle.load(file), voltage_deviation_mult)
         progress_path = progress_folder / f"{index}.pkl"

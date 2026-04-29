@@ -25,6 +25,12 @@ class VariationalQuantumProgram:
     :var quantum_time: Accumulated time spent evaluating sampled quantum probabilities.
     :var num_jobs: Number of quantum computer jobs.
     """
+    num_layers: int
+    layer_types: list[CircuitLayer]
+    sampler: Sampler
+    circuit: QuantumCircuit
+    quantum_time: float
+    num_jobs: int
 
     def __init__(self, num_layers: int, layer_types: list[CircuitLayer], sampler: Sampler):
         """Appends configured layer blocks and initializes program state.
