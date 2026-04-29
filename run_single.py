@@ -24,7 +24,7 @@ def run_single() -> None:
     sampler_id = "finite"
     shots = 1000
     data_path = Path("data/5")
-    instance = 39
+    instance = 7
     voltage_deviation_mult = 10
     violation_mult = 10 ** 7
     seed = 0
