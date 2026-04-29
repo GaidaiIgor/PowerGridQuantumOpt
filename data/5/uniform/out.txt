@@ -1,0 +1,34 @@
+SLURM_JOB_ID=8228
+Using 120 worker(s).
+  0%|          | 0/120 [00:00<?, ?it/s]  1%|          | 1/120 [00:01<01:59,  1.00s/it]  2%|▎         | 3/120 [00:01<00:44,  2.62it/s]  8%|▊         | 9/120 [00:01<00:15,  7.20it/s] 12%|█▎        | 15/120 [00:01<00:09, 11.01it/s] 18%|█▊        | 22/120 [00:01<00:06, 14.81it/s] 24%|██▍       | 29/120 [00:01<00:05, 17.43it/s] 30%|███       | 36/120 [00:01<00:04, 19.67it/s] 36%|███▌      | 43/120 [00:02<00:03, 20.79it/s] 42%|████▏     | 50/120 [00:02<00:03, 21.48it/s] 48%|████▊     | 57/120 [00:02<00:02, 22.67it/s] 53%|█████▎    | 64/120 [00:02<00:02, 22.64it/s] 59%|█████▉    | 71/120 [00:03<00:02, 22.76it/s] 65%|██████▌   | 78/120 [00:03<00:01, 22.41it/s] 71%|███████   | 85/120 [00:03<00:01, 22.42it/s] 77%|███████▋  | 92/120 [00:04<00:01, 20.97it/s] 82%|████████▎ | 99/120 [00:05<00:01, 18.93it/s] 88%|████████▊ | 106/120 [00:06<00:00, 15.95it/s] 94%|█████████▍| 113/120 [00:07<00:00, 14.31it/s]100%|██████████| 120/120 [00:12<00:00,  9.71it/s]100%|██████████| 120/120 [00:12<00:00,  9.71it/s]
+Run complete: 0 timeout(s), 0 other failure(s).
+
+All instances:
+Total opt jobs: avg=<NA>, max=<NA>
+Classical angle optimization time (h): avg=nan, max=nan
+Optimized bitstrings: avg=32.0, max=32
+Max inner optimization time (s): avg=0.857909057343689, max=3.6023371792398393
+Infeasible instances: 2
+AR uniform: avg=nan
+AR opt: avg=nan
+
+real	0m15.852s
+user	6m19.031s
+sys	0m18.515s
+
+
+Run time is very short so only providing seff output:
+
+Job ID: 8228
+Cluster: mocshpc
+User/Group: zgj518/zgj518
+State: RUNNING
+Nodes: 1
+Cores per node: 120
+CPU Utilized: 00:00:00
+CPU Efficiency: 0.00% of 00:34:00 core-walltime
+Job Wall-clock time: 00:00:17
+Memory Utilized: 0.00 MB
+Memory Efficiency: 0.00% of 60.00 GB (60.00 GB/node)
+WARNING: Efficiency statistics can only be obtained after the job has ended as seff tool is based on the accounting database data.
+
