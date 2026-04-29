@@ -396,8 +396,8 @@ class HybridSolver(PowerFlowSolver):
         num_bitstrings = 2 ** len(problem.generators)
 
         if initial_angles is None:
-            # initial_angles = random.default_rng(self.seed).uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
-            initial_angles = np.array([{"G": 0.1, "B": -0.1}[parameter.name[0]] for parameter in self.vqp.circuit.parameters])
+            initial_angles = random.default_rng(self.seed).uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
+            # initial_angles = np.array([{"G": 0.1, "B": -0.1}[parameter.name[0]] for parameter in self.vqp.circuit.parameters])
             # initial_angles = np.zeros(len(self.vqp.circuit.parameters))
         active_cost = get_cost_inverse
 
