@@ -1,43 +1,30 @@
-SLURM_JOB_ID=7527
+SLURM_JOB_ID=8203
 Using 120 worker(s).
-  0%|          | 0/120 [00:00<?, ?it/s]  1%|          | 1/120 [00:06<12:59,  6.55s/it]  2%|▏         | 2/120 [00:06<06:37,  3.37s/it]  2%|▎         | 3/120 [00:06<04:32,  2.33s/it]  4%|▍         | 5/120 [00:07<02:45,  1.44s/it]  7%|▋         | 8/120 [00:07<01:46,  1.05it/s]  9%|▉         | 11/120 [00:07<01:16,  1.43it/s] 12%|█▏        | 14/120 [00:07<01:00,  1.77it/s] 17%|█▋        | 20/120 [00:08<00:40,  2.49it/s] 22%|██▏       | 26/120 [00:08<00:29,  3.14it/s] 27%|██▋       | 32/120 [00:08<00:23,  3.76it/s] 32%|███▏      | 38/120 [00:08<00:18,  4.32it/s] 37%|███▋      | 44/120 [00:09<00:15,  4.82it/s] 42%|████▏     | 50/120 [00:09<00:13,  5.35it/s] 47%|████▋     | 56/120 [00:09<00:10,  5.89it/s] 52%|█████▏    | 62/120 [00:09<00:09,  6.36it/s] 57%|█████▋    | 68/120 [00:09<00:07,  6.84it/s] 62%|██████▏   | 74/120 [00:10<00:06,  7.29it/s] 67%|██████▋   | 80/120 [00:10<00:05,  7.71it/s] 72%|███████▏  | 86/120 [00:10<00:04,  8.06it/s] 77%|███████▋  | 92/120 [00:11<00:03,  8.23it/s] 82%|████████▏ | 98/120 [00:11<00:02,  8.23it/s] 87%|████████▋ | 104/120 [00:13<00:02,  7.93it/s] 92%|█████████▏| 110/120 [00:14<00:01,  7.82it/s] 97%|█████████▋| 116/120 [00:15<00:00,  7.50it/s]100%|██████████| 120/120 [00:17<00:00,  6.67it/s]
+  0%|          | 0/120 [00:00<?, ?it/s]  1%|          | 1/120 [00:11<22:42, 11.45s/it]  4%|▍         | 5/120 [00:11<04:26,  2.32s/it]  8%|▊         | 9/120 [00:12<02:35,  1.40s/it] 11%|█         | 13/120 [00:13<01:47,  1.00s/it] 14%|█▍        | 17/120 [00:13<01:20,  1.28it/s] 18%|█▊        | 21/120 [00:13<01:04,  1.53it/s] 21%|██        | 25/120 [00:13<00:52,  1.80it/s] 24%|██▍       | 29/120 [00:14<00:44,  2.06it/s] 28%|██▊       | 34/120 [00:14<00:35,  2.40it/s] 32%|███▎      | 39/120 [00:14<00:30,  2.70it/s] 37%|███▋      | 44/120 [00:14<00:25,  3.02it/s] 41%|████      | 49/120 [00:15<00:21,  3.26it/s] 45%|████▌     | 54/120 [00:15<00:18,  3.54it/s] 49%|████▉     | 59/120 [00:15<00:15,  3.83it/s] 53%|█████▎    | 64/120 [00:15<00:13,  4.11it/s] 57%|█████▊    | 69/120 [00:16<00:11,  4.28it/s] 62%|██████▏   | 74/120 [00:16<00:10,  4.47it/s] 66%|██████▌   | 79/120 [00:17<00:08,  4.63it/s] 70%|███████   | 84/120 [00:17<00:07,  4.73it/s] 74%|███████▍  | 89/120 [00:18<00:06,  4.89it/s] 78%|███████▊  | 94/120 [00:18<00:05,  5.04it/s] 82%|████████▎ | 99/120 [00:19<00:04,  5.10it/s] 87%|████████▋ | 104/120 [00:20<00:03,  5.15it/s] 91%|█████████ | 109/120 [00:21<00:02,  5.09it/s] 95%|█████████▌| 114/120 [00:22<00:01,  5.04it/s] 99%|█████████▉| 119/120 [00:25<00:00,  4.62it/s] 99%|█████████▉| 119/120 [00:39<00:00,  2.98it/s]100%|██████████| 120/120 [00:45<00:00,  2.62it/s]100%|██████████| 120/120 [00:45<00:00,  2.62it/s]
 Run complete: 0 timeout(s), 0 other failure(s).
 
 All instances:
-Total opt jobs: avg=623.3416666666667, max=1016
-Classical angle optimization time (h): avg=0.0009646959979015972, max=0.003723580009666168
+Total opt jobs: avg=1196.4583333333333, max=2384
+Classical angle optimization time (h): avg=0.001084851660864876, max=0.009921975611424487
 Optimized bitstrings: avg=32.0, max=32
-Max inner optimization time (s): avg=0.9449996762831385, max=4.117472891230136
+Max inner optimization time (s): avg=1.2184782565804197, max=29.90135900815949
 Infeasible instances: 2
-AR uniform: avg=1.3245410335557722e-05
-AR opt: avg=7.984508405324278e-05
+AR uniform: avg=0.28978403238128236
+AR opt: avg=0.8972315437612378
 
 Selected 100 instances:
-Total opt jobs: avg=628.13, max=1016
-Classical angle optimization time (h): avg=0.0006925039895473876, max=0.0016685434003981452
+Total opt jobs: avg=1200.18, max=2384
+Classical angle optimization time (h): avg=0.0007335524962826942, max=0.001740725992195722
 Optimized bitstrings: avg=32.0, max=32
-Max inner optimization time (s): avg=0.5787026369292289, max=3.6180890537798405
+Max inner optimization time (s): avg=0.6063934052502736, max=3.9199728220701218
 Infeasible instances: 0
-AR uniform: avg=1.3059078828593334e-06
-AR opt: avg=4.235767566633466e-05
+AR uniform: avg=0.3082744888986478
+AR opt: avg=0.9053120151545305
 
-real	0m21.744s
-user	18m53.004s
-sys	0m37.010s
-
-
-Run time is very short so only providing seff output:
-
-Job ID: 7527
-Cluster: mocshpc
-User/Group: zgj518/zgj518
-State: RUNNING
-Nodes: 1
-Cores per node: 120
-CPU Utilized: 00:00:00
-CPU Efficiency: 0.00% of 00:46:00 core-walltime
-Job Wall-clock time: 00:00:23
-Memory Utilized: 0.00 MB
-Memory Efficiency: 0.00% of 60.00 GB (60.00 GB/node)
-WARNING: Efficiency statistics can only be obtained after the job has ended as seff tool is based on the accounting database data.
-
+real	0m49.327s
+user	30m54.661s
+sys	0m51.234s
+No data was found for job 8203. This is probably because it is too old
+or it expired from Jobstats database. If you are not running this command on the
+cluster where the job was run then use the -c option to specify the cluster.
+If the run time was very short then try running "seff 8203".
