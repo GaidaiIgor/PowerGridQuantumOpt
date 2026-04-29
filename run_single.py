@@ -25,8 +25,8 @@ def run_single():
     max_inner_time_s = 30
     max_classical_time = None
     num_layers = 1
-    sampler_id = "exact"
-    # sampler_id = "finite"
+    # sampler_id = "exact"
+    sampler_id = "finite"
     shots = 1000
     analyze_expectations = True
     max_process_time = None
@@ -52,26 +52,9 @@ def run_single():
     progress_folder = Path(".progress")
     progress_folder.mkdir(exist_ok=True)
     progress_path = progress_folder / f"{instance}.pkl"
-
-    angle_results = []
-    best_result = None
-    counter = 0
-    for initial_angles in product((-0.1, 0.1), repeat=len(solver.vqp.circuit.parameters)):
-        history, extra = solver.solve(problem, progress_path, np.array(initial_angles))
-        angle_results.append((initial_angles, extra["ar_opt"]))
-        if best_result is None or extra["ar_opt"] > best_result[1]:
-            best_result = (initial_angles, extra["ar_opt"], history, extra)
-        print(f"Initial angles {counter}: {my_format(initial_angles)}; final AR opt: {extra["ar_opt"]}")
-        counter += 1
-
-    print("\nAR opt ranking by initial angles:")
-    for initial_angles, ar_opt in sorted(angle_results, key=lambda item: item[1], reverse=True):
-        print(f"Initial angles: {my_format(initial_angles)}; final AR opt: {ar_opt}")
-
-    initial_angles, _, history, extra = best_result
+    history, extra = solver.solve(problem, progress_path)
 
     print("\nSolution:")
-    print(f"Initial angles: {my_format(initial_angles)}")
     debug.print_evaluation_result(problem, history[-1].result)
     print(f"Optimized bitstrings: {extra["optimized_bitstrings"]}")
     print(f"Solution found job ind: {history[-1].job_ind}")

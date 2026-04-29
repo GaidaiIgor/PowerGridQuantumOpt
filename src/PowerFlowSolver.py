@@ -350,7 +350,7 @@ class HybridSolver(PowerFlowSolver):
         """Optimizes quantum parameters and returns the feasible incumbent history.
         :param problem: Power-flow optimization problem to solve.
         :param progress_path: Path for persisting incumbent progress snapshots.
-        :param initial_angles: Initial quantum parameter vector, or ``None`` to sample it randomly.
+        :param initial_angles: Initial quantum parameter vector, or ``None`` to use entangler and mixer defaults.
         :return: Tuple of feasible incumbent history and optional extra hybrid-run information, including VQA angle-optimization classical time.
         """
         def update_history(new_result: EvaluationResult):
@@ -396,7 +396,8 @@ class HybridSolver(PowerFlowSolver):
         num_bitstrings = 2 ** len(problem.generators)
 
         if initial_angles is None:
-            initial_angles = random.default_rng(self.seed).uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
+            # initial_angles = random.default_rng(self.seed).uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
+            initial_angles = np.array([{"G": 0.1, "B": -0.1}[parameter.name[0]] for parameter in self.vqp.circuit.parameters])
             # initial_angles = np.zeros(len(self.vqp.circuit.parameters))
         active_cost = get_cost_inverse
 
