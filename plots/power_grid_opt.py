@@ -80,15 +80,15 @@ def plot_average_histories():
 def plot_history_diff():
     """Plots differences between the two configured solver curves."""
     num_generators = [5]
-    solver_ids = ["hybrid/nl_1", "uniform"]
-    ref_ind = 0
+    solver_ids = ["hybrid/nl_1/uniform", "uniform", "hybrid/nl_1"]
+    ref_ind = 2
     violation_tolerance = 1e-10
 
     history_data = load_histories(num_generators, solver_ids, ref_ind, violation_tolerance)
     lines = []
     for num_gens_ind, num_gens in enumerate(num_generators):
         xs, solver_data = history_data[num_gens_ind]
-        first_ys, second_ys = solver_data
+        first_ys, second_ys = solver_data[:2]
         lines.append(Line(xs, first_ys - second_ys, color=num_gens_ind, marker=0, label=str(num_gens)))
     lines.append(Line([0, 10000], [0, 0], color="black", marker="none", style="--"))
     plot_general(lines, axis_labels=("Time [s]", "Normalized Objective Difference"), boundaries=(0, xs[-1], None, None))
