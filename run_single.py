@@ -25,6 +25,7 @@ def run_single():
     max_inner_time_s = 30
     max_classical_time = None
     num_layers = 1
+    initial_angles = "random"
     # sampler_id = "exact"
     sampler_id = "finite"
     shots = 1000
@@ -44,7 +45,7 @@ def run_single():
     # debug.set_all_generator_p_min(problem, 0)
 
     solver = get_solver(solver_id, violation_tolerance, silent, seed, violation_mult, max_inner_time_s, max_classical_time, num_generators, num_layers,
-                        sampler_id, shots, analyze_expectations, max_process_time)
+                        initial_angles, sampler_id, shots, analyze_expectations, max_process_time)
 
     # inner_solver = solver.inner_optimizer_factory(problem)
     # inner_solver.optimize("11110")

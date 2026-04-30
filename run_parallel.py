@@ -36,6 +36,7 @@ def run_parallel() -> None:
     data_folder = args.data_folder
     num_generators = read_num_generators(data_folder)
     num_layers = args.num_layers
+    initial_angles = args.initial_angles
     sampler_id = args.sampler
     shots = args.shots
     analyze_expectations = args.analyze_expectations
@@ -46,7 +47,7 @@ def run_parallel() -> None:
 
     np.random.seed(seed)
     solver = get_solver(solver_id, violation_tolerance, silent, seed, violation_mult, max_inner_time_s, max_classical_time_s, num_generators, num_layers,
-                        sampler_id, shots, analyze_expectations, max_process_time_s)
+                        initial_angles, sampler_id, shots, analyze_expectations, max_process_time_s)
     solutions_path = Path(".solutions.csv")
     columns = ["instance", "generators", "cont_params", "cost", "violation", "job_ind", "total_opt_jobs", "classical_opt_time", "optimized_bitstrings",
                "max_inner", "ar_uniform", "ar_opt", "error", "history"]
@@ -141,6 +142,7 @@ def parse_cli_args() -> argparse.Namespace:
     parser.add_argument("-df", "--data-folder", required=True, type=Path, help="Folder containing stored power-flow instance pickle files.")
     parser.add_argument("-s", "--solver", required=True, choices=SOLVER_IDS, help="Solver to run.")
     parser.add_argument("-nl", "--num-layers", default=1, type=int, help="Number of repeated ansatz blocks for the hybrid solver.")
+    parser.add_argument("-ia", "--initial-angles", default="random", choices=("random", "guess"), help="Initial angle initializer for hybrid runs.")
     parser.add_argument("-sa", "--sampler", default="finite", choices=SAMPLER_IDS, help="Sampler backend for the hybrid solver.")
     parser.add_argument("-sh", "--shots", default=1000, type=int, help="Number of shots for sampling-based backends.")
     parser.add_argument("-ae", "--analyze-expectations", action="store_true", help="Enables post-optimization expectation analysis for hybrid runs.")

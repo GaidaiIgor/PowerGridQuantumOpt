@@ -336,6 +336,7 @@ class HybridSolver(PowerFlowSolver):
     :var name: Canonical solver name used in file naming.
     :var max_classical_time: Maximum classical angle-optimization time in seconds for the hybrid run, or ``None`` to disable the cap.
     :var max_process_time: Maximum process time in seconds for the hybrid run, or ``None`` to disable the cap.
+    :var initial_angles: Initial quantum parameter vector, ``"random"`` for random initialization, or ``"guess"`` for entangler and mixer defaults.
     """
     vqp: VariationalQuantumProgram
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
@@ -345,12 +346,12 @@ class HybridSolver(PowerFlowSolver):
     name: str = "hybrid"
     max_classical_time: float | None = None
     max_process_time: float | None = None
+    initial_angles: ndarray | str = "random"
 
-    def solve(self, problem: PowerFlowProblem, progress_path: Path, initial_angles: ndarray | None = None) -> tuple[list[HistoryEntry], dict[str, Any]]:
+    def solve(self, problem: PowerFlowProblem, progress_path: Path) -> tuple[list[HistoryEntry], dict[str, Any]]:
         """Optimizes quantum parameters and returns the feasible incumbent history.
         :param problem: Power-flow optimization problem to solve.
         :param progress_path: Path for persisting incumbent progress snapshots.
-        :param initial_angles: Initial quantum parameter vector, or ``None`` to use entangler and mixer defaults.
         :return: Tuple of feasible incumbent history and optional extra hybrid-run information, including VQA angle-optimization classical time.
         """
         def update_history(new_result: EvaluationResult):
@@ -396,9 +397,15 @@ class HybridSolver(PowerFlowSolver):
         inner_optimizer.best_result_callback = update_history
         num_bitstrings = 2 ** len(problem.generators)
 
-        if initial_angles is None:
-            # initial_angles = random.default_rng(self.seed).uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
-            initial_angles = np.array([{"G": 0, "B": -0}[parameter.name[0]] for parameter in self.vqp.circuit.parameters])
+        initial_angles = self.initial_angles
+        assert initial_angles is not None, "initial_angles cannot be None."
+        if isinstance(initial_angles, str):
+            if initial_angles == "random":
+                initial_angles = random.default_rng(self.seed).uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
+            elif initial_angles == "guess":
+                initial_angles = np.array([{"G": 0.1, "B": -0.1}[parameter.name[0]] for parameter in self.vqp.circuit.parameters])
+            else:
+                raise ValueError("initial_angles must be \"random\", \"guess\", or an angle vector.")
         active_cost = get_cost_inverse
 
         history = []
