@@ -1,70 +1,30 @@
-SLURM_JOB_ID=8266
+SLURM_JOB_ID=8325
 Using 120 worker(s).
-  0%|          | 0/120 [00:00<?, ?it/s]  1%|          | 1/120 [00:11<22:43, 11.45s/it]  2%|▏         | 2/120 [00:11<11:28,  5.83s/it]  2%|▎         | 3/120 [00:11<07:44,  3.97s/it]  4%|▍         | 5/120 [00:12<04:38,  2.42s/it]  6%|▌         | 7/120 [00:12<03:17,  1.75s/it]  8%|▊         | 9/120 [00:12<02:33,  1.38s/it] 10%|█         | 12/120 [00:12<01:52,  1.04s/it] 13%|█▎        | 16/120 [00:12<01:22,  1.25it/s] 17%|█▋        | 20/120 [00:13<01:05,  1.53it/s] 20%|██        | 24/120 [00:13<00:52,  1.82it/s] 23%|██▎       | 28/120 [00:13<00:43,  2.10it/s] 27%|██▋       | 32/120 [00:13<00:37,  2.35it/s] 30%|███       | 36/120 [00:13<00:32,  2.60it/s] 33%|███▎      | 40/120 [00:13<00:27,  2.86it/s] 37%|███▋      | 44/120 [00:14<00:24,  3.09it/s] 40%|████      | 48/120 [00:14<00:21,  3.34it/s] 43%|████▎     | 52/120 [00:14<00:18,  3.59it/s] 47%|████▋     | 56/120 [00:14<00:16,  3.83it/s] 50%|█████     | 60/120 [00:14<00:14,  4.02it/s] 53%|█████▎    | 64/120 [00:15<00:13,  4.16it/s] 57%|█████▋    | 68/120 [00:15<00:11,  4.36it/s] 60%|██████    | 72/120 [00:16<00:10,  4.50it/s] 63%|██████▎   | 76/120 [00:16<00:09,  4.67it/s] 67%|██████▋   | 80/120 [00:16<00:08,  4.75it/s] 70%|███████   | 84/120 [00:17<00:07,  4.81it/s] 73%|███████▎  | 88/120 [00:18<00:06,  4.87it/s] 77%|███████▋  | 92/120 [00:18<00:05,  5.00it/s] 80%|████████  | 96/120 [00:18<00:04,  5.14it/s] 83%|████████▎ | 100/120 [00:19<00:03,  5.04it/s] 87%|████████▋ | 104/120 [00:20<00:03,  5.11it/s] 90%|█████████ | 108/120 [00:21<00:02,  5.00it/s] 93%|█████████▎| 112/120 [00:23<00:01,  4.73it/s] 97%|█████████▋| 116/120 [00:24<00:00,  4.70it/s] 97%|█████████▋| 116/120 [00:39<00:01,  2.90it/s]100%|██████████| 120/120 [00:48<00:00,  2.48it/s]100%|██████████| 120/120 [00:48<00:00,  2.48it/s]
+  0%|          | 0/120 [00:00<?, ?it/s]  1%|          | 1/120 [00:11<22:50, 11.52s/it]  3%|▎         | 4/120 [00:11<05:46,  2.98s/it]  6%|▌         | 7/120 [00:12<03:21,  1.79s/it]  8%|▊         | 10/120 [00:12<02:19,  1.27s/it] 11%|█         | 13/120 [00:13<01:47,  1.00s/it] 13%|█▎        | 16/120 [00:13<01:26,  1.20it/s] 18%|█▊        | 21/120 [00:13<01:03,  1.56it/s] 22%|██▏       | 26/120 [00:13<00:49,  1.90it/s] 26%|██▌       | 31/120 [00:13<00:39,  2.24it/s] 30%|███       | 36/120 [00:14<00:32,  2.55it/s] 34%|███▍      | 41/120 [00:14<00:27,  2.85it/s] 38%|███▊      | 46/120 [00:14<00:23,  3.15it/s] 42%|████▎     | 51/120 [00:14<00:19,  3.45it/s] 47%|████▋     | 56/120 [00:15<00:17,  3.66it/s] 51%|█████     | 61/120 [00:15<00:15,  3.92it/s] 55%|█████▌    | 66/120 [00:15<00:13,  4.14it/s] 59%|█████▉    | 71/120 [00:16<00:11,  4.37it/s] 63%|██████▎   | 76/120 [00:17<00:09,  4.45it/s] 68%|██████▊   | 81/120 [00:17<00:08,  4.54it/s] 72%|███████▏  | 86/120 [00:18<00:07,  4.66it/s] 76%|███████▌  | 91/120 [00:18<00:06,  4.80it/s] 80%|████████  | 96/120 [00:19<00:04,  4.87it/s] 84%|████████▍ | 101/120 [00:20<00:03,  4.93it/s] 88%|████████▊ | 106/120 [00:21<00:02,  4.95it/s] 92%|█████████▎| 111/120 [00:23<00:01,  4.78it/s] 97%|█████████▋| 116/120 [00:24<00:00,  4.69it/s] 97%|█████████▋| 116/120 [00:39<00:01,  2.90it/s]100%|██████████| 120/120 [00:47<00:00,  2.52it/s]100%|██████████| 120/120 [00:47<00:00,  2.52it/s]
 Run complete: 0 timeout(s), 0 other failure(s).
 
 All instances:
-Total opt jobs: avg=1143.8833333333334, max=1781
-Classical angle optimization time (h): avg=0.0010975983764672291, max=0.010175175768737164
+Total opt jobs: avg=1196.4583333333333, max=2384
+Classical angle optimization time (h): avg=0.001057281016469157, max=0.009699096788988552
 Optimized bitstrings: avg=32.0, max=32
-Max inner optimization time (s): avg=1.2948207440009962, max=30.007556322030723
+Max inner optimization time (s): avg=1.1811152224933419, max=29.18852264387533
 Infeasible instances: 2
-AR uniform: avg=0.2897840730451838
-AR opt: avg=0.9219772092535062
+AR uniform: avg=0.28978403238128236
+AR opt: avg=0.8972315437612378
 
 Selected 100 instances:
-Total opt jobs: avg=1140.83, max=1717
-Classical angle optimization time (h): avg=0.0007237363533414381, max=0.001694680601875815
+Total opt jobs: avg=1200.18, max=2384
+Classical angle optimization time (h): avg=0.0007156350443450111, max=0.0016937967526933384
 Optimized bitstrings: avg=32.0, max=32
-Max inner optimization time (s): avg=0.6021964426478371, max=3.7220243010669947
+Max inner optimization time (s): avg=0.5872584527917206, max=3.7702426509931684
 Infeasible instances: 0
 AR uniform: avg=0.3082744888986478
-AR opt: avg=0.9231788807972167
+AR opt: avg=0.9053120151545305
 
-real	0m59.503s
-user	30m48.329s
-sys	0m56.513s
-
-================================================================================
-                              Slurm Job Statistics                              
-================================================================================
-         Job ID: 8266
-   User/Account: zgj518/allusers
-       Job Name: 5/hybrid/nl_1
-          State: RUNNING
-          Nodes: 1
-      CPU Cores: 120
-     CPU Memory: 60GB (500MB per CPU-core)
-  QOS/Partition: u-default/epyc-cpu
-        Cluster: mocshpc
-     Start Time: Wed Apr 29, 2026 at 6:09 PM
-       Run Time: 00:01:01 (in progress)
-     Time Limit: 02:30:00
-
-                              Overall Utilization                               
-================================================================================
-  CPU utilization  [||||||||||||                                   25%]
-  CPU memory usage [||||||||||||||||                               33%]
-
-                              Detailed Utilization                              
-================================================================================
-  CPU utilization per node (CPU time used/run time)
-      epyc18: 00:31:10/02:02:01 (efficiency=25.5%)
-
-  CPU memory usage per node - used/allocated
-      epyc18: 19.0GB/57GB (162.4MB/486.4MB per core of 120)
-
-                                     Notes                                      
-================================================================================
-  * The overall CPU utilization of this job is 25.5%. This value is low
-    compared to the target range of 90% and above. Please investigate the
-    reason for the low efficiency. For instance, have you conducted a scaling
-    analysis? For assistance:
-      https://ithelp.utc.edu or ithelp@utc.edu
-
-  * See the URL below for various job metrics plotted as a function of time:
-      https://ondemand.mocshpc.utc.edu/pun/sys/jobstats/8266  (VPN required off-campus)
-
-  * Have a nice day!
-
-
+real	0m52.630s
+user	31m38.235s
+sys	0m55.583s
+No data was found for job 8325. This is probably because it is too old
+or it expired from Jobstats database. If you are not running this command on the
+cluster where the job was run then use the -c option to specify the cluster.
+If the run time was very short then try running "seff 8325".
