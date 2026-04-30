@@ -371,7 +371,8 @@ class HybridSolver(PowerFlowSolver):
             if max_classical_time is not None and time.perf_counter() - start_time - self.vqp.quantum_time > max_classical_time:
                 raise TimeoutError("Classical angle optimization time exceeded limit.")
             if max_classical_time is not None and time.perf_counter() - start_time > self.max_process_time - 60:
-                raise AssertionError(f"Ran out of process time. Quantum time = {self.vqp.quantum_time}")
+                raise AssertionError(f"Ran out of process time. "
+                                     f"Remaining classical time = {max_classical_time - time.perf_counter() + start_time + self.vqp.quantum_time}")
             return inner_optimizer.optimize(generator_statuses)
 
         def get_cost(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> float:
