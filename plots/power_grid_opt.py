@@ -80,8 +80,8 @@ def plot_average_histories():
 def plot_history_diff():
     """Plots differences between the two configured solver curves."""
     num_generators = [5]
-    solver_ids = ["hybrid/nl_1/uniform", "uniform", "hybrid/nl_1"]
-    ref_ind = 2
+    solver_ids = ["hybrid/nl_1/uniform", "uniform"]
+    ref_ind = 0
     violation_tolerance = 1e-10
 
     history_data = load_histories(num_generators, solver_ids, ref_ind, violation_tolerance)
@@ -99,9 +99,15 @@ def plot_ar_vs_instance():
     """Plots `ar_uniform_fun` and `ar_opt_fun` against row index for the configured generator count."""
     num_generators = 5
     df = load_dfs(num_generators, ["hybrid/nl_1"], 0)[0]
+    ar_uniform_average = df["ar_uniform"].mean()
+    ar_opt_average = df["ar_opt"].mean()
     lines = [Line(np.arange(len(df)), df["ar_uniform"], color=0, style="none", label="AR Uniform"),
-             Line(np.arange(len(df)), df["ar_opt"], color=1, style="none", label="AR Opt")]
-    plot_general(lines, axis_labels=("Instance index", "Approximation Ratio"), boundaries=(0, 99, 0, 1))
+             Line([0, len(df) - 1], [ar_uniform_average] * 2, color=0, marker="none", style="--"),
+             Line(np.arange(len(df)), df["ar_opt"], color=1, style="none", label="AR Opt"),
+             Line([0, len(df) - 1], [ar_opt_average] * 2, color=1, marker="none", style="--")]
+    plot_general(lines, axis_labels=("Instance index", "Approximation Ratio"), boundaries=(0, len(df) + 6, 0, 1))
+    plt.text(len(df), ar_uniform_average, f"{ar_uniform_average:.3f}", color=lines[1].color, va="center")
+    plt.text(len(df), ar_opt_average, f"{ar_opt_average:.3f}", color=lines[3].color, va="center")
     save_figure()
 
 
@@ -228,8 +234,8 @@ def get_average_normalized_history(time_grid: Sequence[float], solver_histories:
 if __name__ == "__main__":
     # plot_instance_objective_histories()
     # plot_average_histories()
-    plot_history_diff()
-    # plot_ar_vs_instance()
+    # plot_history_diff()
+    plot_ar_vs_instance()
     # plot_ar_diff_vs_instance()
     # plot_average_ar_vs_generators()
     plt.show()
