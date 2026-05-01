@@ -26,13 +26,12 @@ def run_single():
     max_classical_time = None
     num_layers = 1
     initial_angles = "random"
-    # sampler_id = "exact"
-    sampler_id = "finite"
+    sampler_id = "exact"
     shots = 1000
     analyze_expectations = True
     max_process_time = None
     data_path = Path("data/5")
-    instance = 7
+    instance = 0
     voltage_deviation_mult = 10
 
     with (data_path / f"{instance}.pkl").open("rb") as file:

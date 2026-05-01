@@ -79,8 +79,8 @@ def plot_average_histories():
 
 def plot_history_diff():
     """Plots differences between the two configured solver curves."""
-    num_generators = [5]
-    solver_ids = ["hybrid/nl_1/uniform", "uniform"]
+    num_generators = [10]
+    solver_ids = ["hybrid/nl_1", "uniform"]
     ref_ind = 0
     violation_tolerance = 1e-10
 
@@ -91,14 +91,14 @@ def plot_history_diff():
         first_ys, second_ys = solver_data[:2]
         lines.append(Line(xs, first_ys - second_ys, color=num_gens_ind, marker=0, label=str(num_gens)))
     lines.append(Line([0, 10000], [0, 0], color="black", marker="none", style="--"))
-    plot_general(lines, axis_labels=("Time [s]", "Normalized Objective Difference"), boundaries=(0, xs[-1], None, None))
+    plot_general(lines, axis_labels=("Time [s]", "Normalized Objective Difference"), boundaries=(0, xs[-1], -0.02, 0.1))
     save_figure()
 
 
 def plot_ar_vs_instance():
     """Plots `ar_uniform_fun` and `ar_opt_fun` against row index for the configured generator count."""
-    num_generators = 5
-    df = load_dfs(num_generators, ["hybrid/nl_1"], 0)[0]
+    num_generators = 10
+    df = load_dfs(num_generators, ["hybrid/nl_1/exact"], 0)[0]
     ar_uniform_average = df["ar_uniform"].mean()
     ar_opt_average = df["ar_opt"].mean()
     lines = [Line(np.arange(len(df)), df["ar_uniform"], color=0, style="none", label="AR Uniform"),
@@ -113,7 +113,7 @@ def plot_ar_vs_instance():
 
 def plot_ar_diff_vs_instance():
     """Plots `ar_opt_fun - ar_uniform_fun` against row index for the configured generator count."""
-    num_generators = 5
+    num_generators = 10
     df = load_dfs(num_generators, ["hybrid/nl_1"], 0)[0]
     lines = [Line(np.arange(len(df)), df["ar_opt"] - df["ar_uniform"], style="none", label="AR Opt - AR Uniform"),
              Line([0, len(df) - 1], [0, 0], color="black", marker="none", style="--")]

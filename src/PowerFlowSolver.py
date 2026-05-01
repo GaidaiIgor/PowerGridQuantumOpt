@@ -398,7 +398,6 @@ class HybridSolver(PowerFlowSolver):
         num_bitstrings = 2 ** len(problem.generators)
 
         initial_angles = self.initial_angles
-        assert initial_angles is not None, "initial_angles cannot be None."
         if isinstance(initial_angles, str):
             if initial_angles == "random":
                 initial_angles = random.default_rng(self.seed).uniform(-np.pi, np.pi, len(self.vqp.circuit.parameters))
