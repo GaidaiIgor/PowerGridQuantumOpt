@@ -1,0 +1,43 @@
+SLURM_JOB_ID=8387
+Using 120 worker(s).
+  0%|          | 0/120 [00:00<?, ?it/s]  1%|          | 1/120 [00:02<05:17,  2.67s/it]  3%|▎         | 4/120 [00:02<01:22,  1.41it/s]  6%|▌         | 7/120 [00:02<00:48,  2.33it/s]  8%|▊         | 10/120 [00:03<00:34,  3.16it/s] 11%|█         | 13/120 [00:03<00:27,  3.90it/s] 13%|█▎        | 16/120 [00:03<00:23,  4.46it/s] 18%|█▊        | 21/120 [00:03<00:17,  5.68it/s] 22%|██▏       | 26/120 [00:03<00:13,  6.72it/s] 26%|██▌       | 31/120 [00:04<00:11,  7.70it/s] 30%|███       | 36/120 [00:04<00:09,  8.53it/s] 34%|███▍      | 41/120 [00:04<00:08,  9.34it/s] 38%|███▊      | 46/120 [00:04<00:07, 10.14it/s] 42%|████▎     | 51/120 [00:04<00:06, 10.85it/s] 47%|████▋     | 56/120 [00:04<00:05, 11.49it/s] 51%|█████     | 61/120 [00:05<00:04, 11.82it/s] 55%|█████▌    | 66/120 [00:05<00:04, 12.28it/s] 59%|█████▉    | 71/120 [00:05<00:03, 12.69it/s] 63%|██████▎   | 76/120 [00:05<00:03, 13.04it/s] 68%|██████▊   | 81/120 [00:06<00:02, 13.30it/s] 72%|███████▏  | 86/120 [00:06<00:02, 13.52it/s] 76%|███████▌  | 91/120 [00:06<00:02, 13.72it/s] 80%|████████  | 96/120 [00:07<00:01, 13.50it/s] 84%|████████▍ | 101/120 [00:08<00:01, 12.08it/s] 88%|████████▊ | 106/120 [00:09<00:01, 11.73it/s] 92%|█████████▎| 111/120 [00:10<00:00, 11.03it/s] 97%|█████████▋| 116/120 [00:10<00:00, 10.92it/s]100%|██████████| 120/120 [00:14<00:00,  8.18it/s]
+Run complete: 0 timeout(s), 0 other failure(s).
+
+All instances:
+Total opt jobs: avg=1021.65, max=2478
+Classical angle optimization time (h): avg=0.000993621901220245, max=0.0035500711803150707
+Optimized bitstrings: avg=32.0, max=32
+Max inner optimization time (s): avg=1.0371741083836847, max=9.541339716997754
+Infeasible instances: 2
+AR uniform: avg=0.28978403238128236
+AR opt: avg=0.9629716272738311
+
+Selected 100 instances:
+Total opt jobs: avg=1054.41, max=2478
+Classical angle optimization time (h): avg=0.0007306625346637398, max=0.001853725351399286
+Optimized bitstrings: avg=32.0, max=32
+Max inner optimization time (s): avg=0.6251884592603164, max=4.38296932799858
+Infeasible instances: 0
+AR uniform: avg=0.30748536362448925
+AR opt: avg=0.9771271042480616
+
+real	0m18.248s
+user	10m32.862s
+sys	0m21.580s
+
+
+Run time is very short so only providing seff output:
+
+Job ID: 8387
+Cluster: mocshpc
+User/Group: zgj518/zgj518
+State: RUNNING
+Nodes: 1
+Cores per node: 120
+CPU Utilized: 00:00:00
+CPU Efficiency: 0.00% of 00:38:00 core-walltime
+Job Wall-clock time: 00:00:19
+Memory Utilized: 0.00 MB
+Memory Efficiency: 0.00% of 60.00 GB (60.00 GB/node)
+WARNING: Efficiency statistics can only be obtained after the job has ended as seff tool is based on the accounting database data.
+
