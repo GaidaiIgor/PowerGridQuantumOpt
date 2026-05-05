@@ -23,7 +23,7 @@ from src.PowerFlowProblem import PowerFlowProblem
 from src.PowerFlowSolver import PowerFlowSolver
 
 
-def run_parallel() -> None:
+def run_parallel():
     """Runs selected instances in parallel and persists each completed result to CSV."""
     args = parse_cli_args()
     solver_id = args.solver
@@ -40,6 +40,7 @@ def run_parallel() -> None:
     sampler_id = args.sampler
     shots = args.shots
     analyze_expectations = args.analyze_expectations
+    num_samples = args.num_samples
     max_process_time_s = args.timeout * 3600
     instance_indices = list(range(120))
     voltage_deviation_mult = 10
@@ -47,10 +48,10 @@ def run_parallel() -> None:
 
     np.random.seed(seed)
     solver = get_solver(solver_id, violation_tolerance, silent, seed, violation_mult, max_inner_time_s, max_classical_time_s, num_generators, num_layers,
-                        initial_angles, sampler_id, shots, analyze_expectations, max_process_time_s)
+                        initial_angles, sampler_id, shots, analyze_expectations, num_samples, max_process_time_s)
     solutions_path = Path(".solutions.csv")
     columns = ["instance", "generators", "cont_params", "cost", "violation", "job_ind", "total_opt_jobs", "classical_opt_time", "optimized_bitstrings",
-               "max_inner", "ar_uniform", "ar_opt", "error", "history"]
+               "max_inner", "ar_uniform", "ar_opt", "ar_median_std", "ar_median_3rd_moment", "error", "history"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generators": "string"}).reindex(columns=columns)
     else:
@@ -116,6 +117,8 @@ def run_parallel() -> None:
                         "max_inner": extra.get("max_inner"),
                         "ar_uniform": extra.get("ar_uniform"),
                         "ar_opt": extra.get("ar_opt"),
+                        "ar_median_std": extra.get("ar_median_std"),
+                        "ar_median_3rd_moment": extra.get("ar_median_3rd_moment"),
                         "history": converter.dumps(history)}
             rows[index] = row
             output_df = pd.DataFrame.from_dict(rows, orient="index").rename_axis("instance").reset_index().reindex(columns=columns).sort_values("instance")
@@ -146,6 +149,7 @@ def parse_cli_args() -> argparse.Namespace:
     parser.add_argument("-sa", "--sampler", default="finite", choices=SAMPLER_IDS, help="Sampler backend for the hybrid solver.")
     parser.add_argument("-sh", "--shots", default=1000, type=int, help="Number of shots for sampling-based backends.")
     parser.add_argument("-ae", "--analyze-expectations", action="store_true", help="Enables post-optimization expectation analysis for hybrid runs.")
+    parser.add_argument("-ns", "--num-samples", default=100, type=int, help="Number of random angle vectors sampled when expectation analysis is enabled.")
     parser.add_argument("-mct", "--max-classical-time", default=None, type=float, help="Maximum classical angle-optimization time in hours for hybrid runs.")
     parser.add_argument("-t", "--timeout", required=True, type=float, help="Per-instance timeout in hours.")
     return parser.parse_args()

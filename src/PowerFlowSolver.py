@@ -329,24 +329,26 @@ class UniformSolver(PowerFlowSolver):
 class HybridSolver(PowerFlowSolver):
     """Optimizes binary variables on a quantum computer. Continuous variables are optimized classically by the problem.
     :var vqp: Variational quantum program used for binary-variable search.
+    :var initial_angles: Initial quantum parameter vector, ``"random"`` for random initialization, or ``"guess"`` for entangler and mixer defaults.
     :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
     :var violation_tolerance: Violation tolerance; history stores only entries with violation below this threshold.
     :var analyze_expectations: Whether to compute post-optimization expectation analysis.
+    :var num_angle_samples: Number of random angle vectors included in expectation analysis.
     :var seed: Optional random seed for initial quantum-parameter sampling.
     :var name: Canonical solver name used in file naming.
     :var max_classical_time: Maximum classical angle-optimization time in seconds for the hybrid run, or ``None`` to disable the cap.
     :var max_process_time: Maximum process time in seconds for the hybrid run, or ``None`` to disable the cap.
-    :var initial_angles: Initial quantum parameter vector, ``"random"`` for random initialization, or ``"guess"`` for entangler and mixer defaults.
     """
     vqp: VariationalQuantumProgram
+    initial_angles: ndarray | str
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
     violation_tolerance: float = 1e-10
     analyze_expectations: bool = False
+    num_angle_samples: int = 100
     seed: int | None = None
     name: str = "hybrid"
     max_classical_time: float | None = None
     max_process_time: float | None = None
-    initial_angles: ndarray | str = "random"
 
     def solve(self, problem: PowerFlowProblem, progress_path: Path) -> tuple[list[HistoryEntry], dict[str, Any]]:
         """Optimizes quantum parameters and returns the feasible incumbent history.
@@ -405,22 +407,22 @@ class HybridSolver(PowerFlowSolver):
                 initial_angles = np.array([{"G": 0.1, "B": -0.1}[parameter.name[0]] for parameter in self.vqp.circuit.parameters])
             else:
                 raise ValueError("initial_angles must be \"random\", \"guess\", or an angle vector.")
-        active_cost = get_cost_inverse
+        cost_function = get_cost_inverse
 
         history = []
         extra = {}
         try:
             start_time = time.perf_counter()
-            result = self.vqp.optimize_parameters(active_cost, initial_angles)
+            result = self.vqp.optimize_parameters(cost_function, initial_angles)
             extra |= {"classical_opt_time": time.perf_counter() - start_time - self.vqp.quantum_time, "total_opt_jobs": self.vqp.num_jobs}
             assert result.success, f"Angle optimization failed: {result.message}"
 
             while len(inner_optimizer.cache) < num_bitstrings:
-                self.vqp.get_function_expectation(active_cost, result.x)
+                self.vqp.get_function_expectation(cost_function, result.x)
         except TimeoutError:
             pass
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
-        
+
         best_result = min(inner_optimizer.cache.values(), key=lambda cached_result: cached_result.total)
         assert np.isclose(best_result.total, history[-1].result.total), \
             f"Lowest overall: fun={best_result.fun}; violation={best_result.violation}. Lowest feasible: fun={history[-1].result.fun}."
@@ -428,19 +430,45 @@ class HybridSolver(PowerFlowSolver):
         extra |= get_optimizer_stats(inner_optimizer)
         if self.analyze_expectations:
             assert extra.get("classical_opt_time") is not None, "Expectation analysis requires completed angle optimization."
-            inner_optimizer.best_result_callback = None
-            cost_function_untimed = partial(get_cost_inverse, max_classical_time=None)
-            uniform_probs = {format(i, f"0{len(problem.generators)}b"): 1 / num_bitstrings for i in range(num_bitstrings)}
-            uniform_expectation = utils.get_function_expectation(cost_function_untimed, uniform_probs)
-            best_total = min(cached_result.total for cached_result in inner_optimizer.cache.values())
-            uniform_expectation *= -best_total
-
-            exact_sampler = ExactSampler()
-            opt_probs = exact_sampler.get_sample_probabilities(self.vqp.circuit, result.x)
-            opt_expectation = utils.get_function_expectation(cost_function_untimed, opt_probs) * -best_total
-
-            extra |= {"final_probs": opt_probs, "ar_uniform": uniform_expectation, "ar_opt": opt_expectation}
+            extra |= self.analyze_ar_expectations(inner_optimizer, cost_function, result.x)
         return history, extra
+
+    def analyze_ar_expectations(self, inner_optimizer: ContinuousPowerOptimizer, cost_function: Callable[..., float], optimal_angles: ndarray) \
+        -> dict[str, Any]:
+        """Evaluates exact AR expectations and random-angle distribution moments.
+        :param inner_optimizer: Continuous optimizer containing cached bitstring evaluations.
+        :param cost_function: Function returning the negative inverse total cost for one bitstring.
+        :param optimal_angles: Optimized quantum-circuit angle vector.
+        :return: Expectation-analysis extras for result export.
+        """
+        inner_optimizer.best_result_callback = None
+        cost_function_untimed = partial(cost_function, max_classical_time=None)
+        num_bitstrings = 2 ** len(inner_optimizer.problem.generators)
+        bitstrings = [format(i, f"0{len(inner_optimizer.problem.generators)}b") for i in range(num_bitstrings)]
+        cost_values = np.array([cost_function_untimed(bitstring) for bitstring in bitstrings])
+        best_total = min(cached_result.total for cached_result in inner_optimizer.cache.values())
+        ar_values = -best_total * cost_values
+        uniform_expectation = np.mean(ar_values)
+
+        exact_sampler = ExactSampler()
+        opt_probs = exact_sampler.get_sample_probabilities(self.vqp.circuit, optimal_angles)
+        opt_expectation = utils.get_function_expectation(cost_function_untimed, opt_probs) * -best_total
+        extra = {"ar_uniform": uniform_expectation, "ar_opt": opt_expectation}
+        if self.num_angle_samples <= 0:
+            return extra
+
+        rng = random.default_rng(self.seed)
+        samples = []
+        for angles in rng.uniform(-np.pi, np.pi, (self.num_angle_samples, len(self.vqp.circuit.parameters))):
+            probs_dict = exact_sampler.get_sample_probabilities(self.vqp.circuit, angles)
+            probabilities = np.array([probs_dict.get(bitstring, 0) for bitstring in bitstrings])
+            expectation = np.dot(probabilities, ar_values)
+            std = np.sqrt(np.dot(probabilities, (ar_values - expectation) ** 2))
+            ar_3rd_moment = np.dot(probabilities, np.abs(ar_values - expectation) ** 3) / std ** 3
+            samples.append({"angles": angles.tolist(), "ar_expectation": expectation, "ar_std": std, "ar_3rd_moment": ar_3rd_moment})
+        extra |= {"ar_random_samples": samples, "ar_median_std": np.median([sample["ar_std"] for sample in samples]),
+                  "ar_median_3rd_moment": np.median([sample["ar_3rd_moment"] for sample in samples])}
+        return extra
 
     def get_feasible_probs(self, feasible_bitstrings: set[str], probs: dict[str, float]) -> dict[str, float]:
         """Removes infeasible bitstrings from a probability distribution and renormalizes it.

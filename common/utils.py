@@ -17,7 +17,7 @@ SAMPLER_IDS = ("exact", "finite", "ionq-simulator", "ionq-hardware")
 def get_solver(solver_id: str, violation_tolerance: float = 1e-10, silent: bool = True, seed: int = 0, violation_mult: float = 10 ** 7,
                max_inner_time_s: float = 30, max_classical_time: float | None = None, num_generators: int = 5, num_layers: int = 1,
                initial_angles: str = "random", sampler_id: str = "finite", shots: int = 1000, analyze_expectations: bool = False,
-               max_process_time: float | None = None) -> PowerFlowSolver:
+               num_angle_samples: int = 100, max_process_time: float | None = None) -> PowerFlowSolver:
     """Builds the configured solver for a problem size.
     :param solver_id: Solver identifier. Must be one of ``"scip"``, ``"smac"``, ``"uniform"``, or ``"hybrid"``.
     :param violation_tolerance: Maximum tolerated constraint violation.
@@ -32,6 +32,7 @@ def get_solver(solver_id: str, violation_tolerance: float = 1e-10, silent: bool 
     :param sampler_id: Sampler identifier for hybrid runs.
     :param shots: Number of shots for sampling-based backends.
     :param analyze_expectations: Whether hybrid solvers should compute post-optimization expectation analysis.
+    :param num_angle_samples: Number of random angle vectors included in expectation analysis.
     :param max_process_time: Maximum process time in seconds for hybrid runs, or ``None`` to disable the cap.
     :return: Solver configured for the current experiment.
     """
@@ -45,8 +46,8 @@ def get_solver(solver_id: str, violation_tolerance: float = 1e-10, silent: bool 
         return UniformSolver(inner_optimizer_factory, max_classical_time, violation_tolerance, seed)
     if solver_id == "hybrid":
         vqp = get_variational_quantum_program(num_generators, num_layers, sampler_id, shots, seed)
-        return HybridSolver(vqp, inner_optimizer_factory, violation_tolerance, analyze_expectations, seed, "hybrid", max_classical_time, max_process_time,
-                            initial_angles)
+        return HybridSolver(vqp, initial_angles, inner_optimizer_factory, violation_tolerance, analyze_expectations, num_angle_samples, seed, "hybrid",
+                            max_classical_time, max_process_time)
     raise ValueError(f"Unsupported solver {solver_id}. Expected one of " + ", ".join(SOLVER_IDS) + ".")
 
 

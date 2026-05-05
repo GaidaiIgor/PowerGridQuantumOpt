@@ -39,16 +39,8 @@ def run_single():
     num_generators = len(problem.generators)
     np.random.seed(seed)
 
-    # debug.set_all_edge_capacities(problem, 100)
-    # debug.set_all_node_voltage_ranges(problem, (1, 100))
-    # debug.set_all_generator_p_min(problem, 0)
-
     solver = get_solver(solver_id, violation_tolerance, silent, seed, violation_mult, max_inner_time_s, max_classical_time, num_generators, num_layers,
-                        initial_angles, sampler_id, shots, analyze_expectations, max_process_time)
-
-    # inner_solver = solver.inner_optimizer_factory(problem)
-    # inner_solver.optimize("11110")
-
+                        initial_angles, sampler_id, shots, analyze_expectations, max_process_time=max_process_time)
     progress_folder = Path(".progress")
     progress_folder.mkdir(exist_ok=True)
     progress_path = progress_folder / f"{instance}.pkl"
