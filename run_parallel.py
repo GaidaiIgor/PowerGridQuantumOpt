@@ -40,7 +40,6 @@ def run_parallel():
     sampler_id = args.sampler
     shots = args.shots
     analyze_expectations = args.analyze_expectations
-    num_samples = args.num_samples
     max_process_time_s = args.timeout * 3600
     instance_indices = list(range(120))
     voltage_deviation_mult = 10
@@ -48,10 +47,10 @@ def run_parallel():
 
     np.random.seed(seed)
     solver = get_solver(solver_id, violation_tolerance, silent, seed, violation_mult, max_inner_time_s, max_classical_time_s, num_generators, num_layers,
-                        initial_angles, sampler_id, shots, analyze_expectations, num_samples, max_process_time_s)
+                        initial_angles, sampler_id, shots, analyze_expectations, max_process_time_s)
     solutions_path = Path(".solutions.csv")
     columns = ["instance", "generators", "cont_params", "cost", "violation", "job_ind", "total_opt_jobs", "classical_opt_time", "optimized_bitstrings",
-               "max_inner", "ar_uniform", "ar_opt", "ar_median_std", "ar_median_3rd_moment", "error", "history"]
+               "max_inner", "ar_uniform", "ar_opt", "error", "history"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generators": "string"}).reindex(columns=columns)
     else:
@@ -117,8 +116,6 @@ def run_parallel():
                         "max_inner": extra.get("max_inner"),
                         "ar_uniform": extra.get("ar_uniform"),
                         "ar_opt": extra.get("ar_opt"),
-                        "ar_median_std": extra.get("ar_median_std"),
-                        "ar_median_3rd_moment": extra.get("ar_median_3rd_moment"),
                         "history": converter.dumps(history)}
             rows[index] = row
             output_df = pd.DataFrame.from_dict(rows, orient="index").rename_axis("instance").reset_index().reindex(columns=columns).sort_values("instance")
@@ -149,7 +146,6 @@ def parse_cli_args() -> argparse.Namespace:
     parser.add_argument("-sa", "--sampler", default="finite", choices=SAMPLER_IDS, help="Sampler backend for the hybrid solver.")
     parser.add_argument("-sh", "--shots", default=1000, type=int, help="Number of shots for sampling-based backends.")
     parser.add_argument("-ae", "--analyze-expectations", action="store_true", help="Enables post-optimization expectation analysis for hybrid runs.")
-    parser.add_argument("-ns", "--num-samples", default=100, type=int, help="Number of random angle vectors sampled when expectation analysis is enabled.")
     parser.add_argument("-mct", "--max-classical-time", default=None, type=float, help="Maximum classical angle-optimization time in hours for hybrid runs.")
     parser.add_argument("-t", "--timeout", required=True, type=float, help="Per-instance timeout in hours.")
     return parser.parse_args()
@@ -224,8 +220,6 @@ def print_stats(df: pd.DataFrame, violation_tolerance: float):
     infeasible_count = (pd.to_numeric(df["violation"], errors="coerce") > violation_tolerance).sum()
     ar_uniform_values = pd.to_numeric(df["ar_uniform"], errors="coerce")
     ar_opt_values = pd.to_numeric(df["ar_opt"], errors="coerce")
-    ar_median_std = pd.to_numeric(df["ar_median_std"], errors="coerce")
-    ar_median_3rd_moment = pd.to_numeric(df["ar_median_3rd_moment"], errors="coerce")
     print(f"Total opt jobs: avg={total_opt_jobs_values.mean()}, max={total_opt_jobs_values.max()}")
     print(f"Classical angle optimization time (h): avg={classical_opt_time_values.mean()}, max={classical_opt_time_values.max()}")
     print(f"Optimized bitstrings: avg={optimized_bitstring_values.mean()}, max={optimized_bitstring_values.max()}")
@@ -233,8 +227,6 @@ def print_stats(df: pd.DataFrame, violation_tolerance: float):
     print(f"Infeasible instances: {infeasible_count}")
     print(f"AR uniform: avg={ar_uniform_values.mean()}")
     print(f"AR opt: avg={ar_opt_values.mean()}")
-    print(f"AR median std: avg={ar_median_std.mean()}")
-    print(f"AR median 3rd moment: avg={ar_median_3rd_moment.mean()}")
 
 
 if __name__ == "__main__":

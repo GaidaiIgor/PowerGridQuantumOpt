@@ -52,7 +52,6 @@ def run_single():
     print(f"Solution found job ind: {history[-1].job_ind}")
     print(f"Total opt jobs: {extra["total_opt_jobs"]}")
     if solver.analyze_expectations:
-        print(f"Optimized probabilities: {my_format(extra["final_probs"])}")
         print(f"AR uniform: {extra["ar_uniform"]}")
         print(f"AR opt: {extra["ar_opt"]}")
 

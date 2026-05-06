@@ -333,7 +333,6 @@ class HybridSolver(PowerFlowSolver):
     :var inner_optimizer_factory: Factory that creates continuous optimizers for a given problem.
     :var violation_tolerance: Violation tolerance; history stores only entries with violation below this threshold.
     :var analyze_expectations: Whether to compute post-optimization expectation analysis.
-    :var num_angle_samples: Number of random angle vectors included in expectation analysis.
     :var seed: Optional random seed for initial quantum-parameter sampling.
     :var name: Canonical solver name used in file naming.
     :var max_classical_time: Maximum classical angle-optimization time in seconds for the hybrid run, or ``None`` to disable the cap.
@@ -344,7 +343,6 @@ class HybridSolver(PowerFlowSolver):
     inner_optimizer_factory: Callable[[PowerFlowProblem], ContinuousPowerOptimizer]
     violation_tolerance: float = 1e-10
     analyze_expectations: bool = False
-    num_angle_samples: int = 100
     seed: int | None = None
     name: str = "hybrid"
     max_classical_time: float | None = None
@@ -435,7 +433,7 @@ class HybridSolver(PowerFlowSolver):
 
     def analyze_ar_expectations(self, inner_optimizer: ContinuousPowerOptimizer, cost_function: Callable[..., float], optimal_angles: ndarray) \
         -> dict[str, Any]:
-        """Evaluates exact AR expectations and random-angle distribution moments.
+        """Evaluates exact AR expectations.
         :param inner_optimizer: Continuous optimizer containing cached bitstring evaluations.
         :param cost_function: Function returning the negative inverse total cost for one bitstring.
         :param optimal_angles: Optimized quantum-circuit angle vector.
@@ -453,22 +451,7 @@ class HybridSolver(PowerFlowSolver):
         exact_sampler = ExactSampler()
         opt_probs = exact_sampler.get_sample_probabilities(self.vqp.circuit, optimal_angles)
         opt_expectation = utils.get_function_expectation(cost_function_untimed, opt_probs) * -best_total
-        extra = {"ar_uniform": uniform_expectation, "ar_opt": opt_expectation}
-        if self.num_angle_samples <= 0:
-            return extra
-
-        rng = random.default_rng(self.seed)
-        samples = []
-        for angles in rng.uniform(-np.pi, np.pi, (self.num_angle_samples, len(self.vqp.circuit.parameters))):
-            probs_dict = exact_sampler.get_sample_probabilities(self.vqp.circuit, angles)
-            probabilities = np.array([probs_dict.get(bitstring, 0) for bitstring in bitstrings])
-            expectation = np.dot(probabilities, ar_values)
-            std = np.sqrt(np.dot(probabilities, (ar_values - expectation) ** 2))
-            ar_3rd_moment = np.dot(probabilities, np.abs(ar_values - expectation) ** 3) / std ** 3
-            samples.append({"angles": angles.tolist(), "ar_expectation": expectation, "ar_std": std, "ar_3rd_moment": ar_3rd_moment})
-        extra |= {"ar_random_samples": samples, "ar_median_std": np.median([sample["ar_std"] for sample in samples]),
-                  "ar_median_3rd_moment": np.median([sample["ar_3rd_moment"] for sample in samples])}
-        return extra
+        return {"ar_uniform": uniform_expectation, "ar_opt": opt_expectation}
 
     def get_feasible_probs(self, feasible_bitstrings: set[str], probs: dict[str, float]) -> dict[str, float]:
         """Removes infeasible bitstrings from a probability distribution and renormalizes it.
