@@ -224,6 +224,8 @@ def print_stats(df: pd.DataFrame, violation_tolerance: float):
     infeasible_count = (pd.to_numeric(df["violation"], errors="coerce") > violation_tolerance).sum()
     ar_uniform_values = pd.to_numeric(df["ar_uniform"], errors="coerce")
     ar_opt_values = pd.to_numeric(df["ar_opt"], errors="coerce")
+    ar_median_std = pd.to_numeric(df["ar_median_std"], errors="coerce")
+    ar_median_3rd_moment = pd.to_numeric(df["ar_median_3rd_moment"], errors="coerce")
     print(f"Total opt jobs: avg={total_opt_jobs_values.mean()}, max={total_opt_jobs_values.max()}")
     print(f"Classical angle optimization time (h): avg={classical_opt_time_values.mean()}, max={classical_opt_time_values.max()}")
     print(f"Optimized bitstrings: avg={optimized_bitstring_values.mean()}, max={optimized_bitstring_values.max()}")
@@ -231,6 +233,8 @@ def print_stats(df: pd.DataFrame, violation_tolerance: float):
     print(f"Infeasible instances: {infeasible_count}")
     print(f"AR uniform: avg={ar_uniform_values.mean()}")
     print(f"AR opt: avg={ar_opt_values.mean()}")
+    print(f"AR median std: avg={ar_median_std.mean()}")
+    print(f"AR median 3rd moment: avg={ar_median_3rd_moment.mean()}")
 
 
 if __name__ == "__main__":
