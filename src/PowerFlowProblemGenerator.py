@@ -14,7 +14,6 @@ from scipy.optimize import brentq
 from scipy.stats import norm
 
 from .Generator import Generator
-from .validation import validate_bounds
 
 
 @dataclass
@@ -154,10 +153,13 @@ class PowerFlowProblemGenerator:
         assert num_instances > 0, f"num_instances must be positive, got {num_instances}."
         assert generator_density > 0, f"generator_density must be positive, got {generator_density}."
         assert average_node_degree >= 0, f"average_node_degree must be non-negative, got {average_node_degree}."
-        validate_bounds("load_react_frac_range", load_react_frac_range, min_value=-1, max_value=1, include_min=False, include_max=False)
-        validate_bounds("generator_react_frac_range", generator_react_frac_range, min_value=-1, max_value=1, include_min=False, include_max=False)
-        validate_bounds("line_react_frac_range", line_react_frac_range, min_value=-1, max_value=1, include_min=True, include_max=True)
-        validate_bounds("degree_bias", degree_bias, min_value=0, max_value=1, include_min=True, include_max=True)
+        assert -1 < load_react_frac_range[0] <= load_react_frac_range[1] < 1, \
+            f"load_react_frac_range must satisfy -1 < lower <= upper < 1, got {load_react_frac_range}."
+        assert -1 < generator_react_frac_range[0] <= generator_react_frac_range[1] < 1, \
+            f"generator_react_frac_range must satisfy -1 < lower <= upper < 1, got {generator_react_frac_range}."
+        assert -1 <= line_react_frac_range[0] <= line_react_frac_range[1] <= 1, \
+            f"line_react_frac_range must satisfy -1 <= lower <= upper <= 1, got {line_react_frac_range}."
+        assert 0 <= degree_bias <= 1, f"degree_bias must satisfy 0 <= degree_bias <= 1, got {degree_bias}."
 
         load_s_spec = load_s_spec or LognormalSpec(1, 10)
         generator_s_range_ref_spec = generator_s_range_ref_spec or LognormalSpec(load_s_spec.mean * 1.2, load_s_spec.spread_factor)
