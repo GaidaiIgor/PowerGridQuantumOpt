@@ -1,10 +1,12 @@
 """Runs custom analysis modes that are intentionally kept outside solver classes."""
 
 import pickle
+from math import floor
 from pathlib import Path
 
 import numpy as np
 from numpy import random
+from scipy.stats import norm
 
 from common.utils import get_variational_quantum_program
 from src.ContinuousPowerOptimizer import CasadiOptimizer
@@ -12,12 +14,14 @@ from src.PowerFlowProblem import PowerFlowProblem
 from src.Sampler import ExactSampler
 
 
-def run_distribution_analysis(instance: int = 0, seed: int = 0) -> dict[str, object]:
+def run_distribution_analysis(instance: int = 0, seed: int = 0, target_ci_length: float = 0.1) -> dict[str, object]:
     """Computes random-angle AR distribution moments for one stored power-flow instance.
     :param instance: Stored instance index.
     :param seed: Random seed used to generate one circuit angle vector.
+    :param target_ci_length: Maximum allowed full 90 percent confidence interval length for the sampled mean.
     :return: Distribution-analysis values for the sampled angle vector.
     """
+    assert target_ci_length > 0, "Confidence interval length threshold must be positive."
     data_folder = Path("data/5")
     num_layers = 1
     violation_mult = 10 ** 7
@@ -39,7 +43,9 @@ def run_distribution_analysis(instance: int = 0, seed: int = 0) -> dict[str, obj
     expectation = np.dot(probs_list, ar_values)
     std = np.sqrt(np.dot(probs_list, (ar_values - expectation) ** 2))
     ar_3rd_moment = np.dot(probs_list, np.abs(ar_values - expectation) ** 3) / std ** 3
-    return {"instance": instance, "angles": angles.tolist(), "ar_expectation": expectation, "ar_std": std, "ar_3rd_moment": ar_3rd_moment}
+    z_score = norm.ppf(0.95)
+    required_num_samples = floor((2 * z_score * std / target_ci_length) ** 2) + 1
+    return {"instance": instance, "ar_expectation": expectation, "ar_std": std, "ar_3rd_moment": ar_3rd_moment, "required_num_samples": required_num_samples}
 
 
 if __name__ == "__main__":
