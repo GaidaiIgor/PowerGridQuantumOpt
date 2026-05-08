@@ -10,6 +10,7 @@ import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import key_press_handler
 from matplotlib import pyplot as plt
+from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.ticker import MultipleLocator
 from numpy import linalg
@@ -538,6 +539,28 @@ def data_matrix_to_lines(data: ndarray, line_labels: list[str] = None, colors: l
     return lines
 
 
+def apply_plot_settings(figure: Figure, font_size: int = 20, enable_annotations: bool = False, maximize: bool = True) -> AnnotationManager | None:
+    """Applies common interactive plot display settings.
+    :param figure: Figure whose display settings should be updated.
+    :param font_size: Font size.
+    :param enable_annotations: Whether plotted data lines should support click annotations.
+    :param maximize: Whether to maximize the figure window and force a square axes box.
+    :return: Annotation manager when annotations are enabled, otherwise ``None``.
+    """
+    manager = None
+    if enable_annotations:
+        manager = AnnotationManager()
+        manager.attach_canvas(figure.canvas)
+        figure.canvas.mpl_connect("button_press_event", lambda event: manager.button_press_event_handler(event))
+        figure.canvas.mpl_connect("draw_event", lambda event: manager.draw_event_handler(event))
+    plt.rcParams.update({"font.size": font_size})
+    if maximize:
+        figure.gca().set_box_aspect(1)
+        figure.set_size_inches(10, 10)
+        figure.canvas.manager.window.showMaximized()
+    return manager
+
+
 def plot_general(lines: list[Line], axis_labels: tuple[str | None, str | None] = None, tick_multiples: tuple[float | None, float | None] = None,
                  boundaries: tuple[float | None, float | None, float | None, float | None] = None, font_size: int = 20, legend_loc: str = "best",
                  figure_id: int = None, **kwargs):
@@ -551,17 +574,9 @@ def plot_general(lines: list[Line], axis_labels: tuple[str | None, str | None] =
     :param figure_id: ID of the figure where the results should be plotted or None to create new figure.
     :param kwargs: Extra plotting arguments reserved for future extensions.
     """
-    if figure_id is None:
-        new_figure = True
-        fig = plt.figure()
-    else:
-        new_figure = plt.fignum_exists(figure_id)
-        fig = plt.figure(figure_id)
-    manager = AnnotationManager()
-    manager.attach_canvas(fig.canvas)
-    fig.canvas.mpl_connect("button_press_event", lambda event: manager.button_press_event_handler(event))
-    fig.canvas.mpl_connect("draw_event", lambda event: manager.draw_event_handler(event))
-    plt.rcParams.update({"font.size": font_size})
+    new_figure = figure_id is None or not plt.fignum_exists(figure_id)
+    fig = plt.figure(figure_id)
+    manager = apply_plot_settings(fig, font_size, True, new_figure)
 
     for line in lines:
         errorbar = plt.errorbar(line.xs, line.ys, yerr=line.error_margins, color=line.color, marker=line.marker, linestyle=line.style,
@@ -594,16 +609,11 @@ def plot_general(lines: list[Line], axis_labels: tuple[str | None, str | None] =
         if boundaries[3] is not None:
             plt.ylim(top=boundaries[3])
 
-    if new_figure:
-        win = fig.canvas.manager.window
-        win.after(1000, lambda: win.state("zoomed"))
-        plt.gca().set_box_aspect(1)
-        plt.gcf().set_size_inches(10, 10)
-
-
-def save_figure(file_name: str = None):
+def save_figure(file_path: str = None):
     """Saves figure to a file.
-    :param file_name: Name of the file or None to use caller's name (without plot_).
+    :param file_path: Path to the output file or None to use default = out/caller's name (without plot_).
     """
-    file_name = inspect.currentframe().f_back.f_code.co_name[5:] if file_name is None else file_name
-    plt.savefig(f"out/{file_name}.jpg", dpi=300, bbox_inches="tight")
+    if file_path is None:
+        file_name = inspect.currentframe().f_back.f_code.co_name[5:]
+        file_path = f"out/{file_name}.jpg"
+    plt.savefig(file_path, dpi=300, bbox_inches="tight")

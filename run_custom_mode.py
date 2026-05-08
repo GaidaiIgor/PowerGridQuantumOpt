@@ -4,13 +4,16 @@ import pickle
 from math import floor
 from pathlib import Path
 
+import matplotlib
 import numpy as np
+matplotlib.use("QtAgg")
 from matplotlib import pyplot as plt
 from numpy import random
 from scipy.stats import norm
 from statsmodels.stats.proportion import proportion_confint
 
 from common.utils import get_variational_quantum_program
+from plots.general import apply_plot_settings, save_figure
 from src.ContinuousPowerOptimizer import CasadiOptimizer
 from src.PowerFlowProblem import PowerFlowProblem
 from src.Sampler import ExactSampler
@@ -26,6 +29,7 @@ def plot_sampling_distribution(instance: int = 0, seed: int = 0, target_ci_lengt
     data = collect_sampling_distribution(instance, seed, target_ci_length, num_repetitions)
     print(f"Success probability: {data["success_probability"]}")
     print(f"99% CI for success probability: {data["success_probability_ci"]}")
+    apply_plot_settings(plt.gcf())
     plt.hist(data["sampled_means"], bins=30, edgecolor="black")
     plt.axvline(data["exact_expectation"], color="black", linestyle="--", label="exact expectation")
     plt.axvline(data["target_ci_left"], color="red", linestyle="--", label="target CI")
@@ -34,6 +38,7 @@ def plot_sampling_distribution(instance: int = 0, seed: int = 0, target_ci_lengt
     plt.ylabel("frequency")
     plt.legend()
     plt.tight_layout()
+    save_figure("plots/out/sampling_distribution.jpg")
     plt.show()
 
 
@@ -99,7 +104,7 @@ if __name__ == "__main__":
     instance = 0
     seed = 0
     target_ci_length = 0.1
-    num_repetitions = 1000
+    num_repetitions = 10000
 
     plot_sampling_distribution(instance, seed, target_ci_length, num_repetitions)
     # print(analyze_distributions())
