@@ -19,11 +19,13 @@ from src.PowerFlowProblem import PowerFlowProblem
 from src.Sampler import ExactSampler
 
 
-def plot_sampling_distribution(instance: int, target_ci_length: float, target_ci_confidence: float, num_repetitions: int, seed: int | None = None):
+def plot_sampling_distribution(instance: int, target_ci_length: float, target_ci_confidence: float, sample_ci_confidence: float, num_repetitions: int,
+                               seed: int | None = None):
     """Plots the repeated-sampling distribution of the AR sample mean.
     :param instance: Stored instance index.
     :param target_ci_length: Maximum allowed full confidence interval length for the sampled mean.
     :param target_ci_confidence: Target success probability that sampled mean falls inside the target confidence interval.
+    :param sample_ci_confidence: Confidence level for the sampled success probability confidence interval.
     :param num_repetitions: Number of repeated sample sets used to form the histogram.
     :param seed: Random seed used to generate one circuit angle vector and repeated samples.
     """
@@ -31,7 +33,7 @@ def plot_sampling_distribution(instance: int, target_ci_length: float, target_ci
     problem = read_instance(instance)
     vqp = get_variational_quantum_program(len(problem.generators), num_layers, "exact", seed=seed)
     angles = random.default_rng(seed).uniform(-np.pi, np.pi, len(vqp.circuit.parameters))
-    analysis = analyze_distribution(problem, [angles], target_ci_length, target_ci_confidence, seed=seed)
+    analysis = analyze_distribution(problem, [angles], target_ci_length, target_ci_confidence, sample_ci_confidence, seed=seed)
     sampled_values = random.default_rng(seed).choice(analysis["ar_values"], size=(num_repetitions, analysis["required_num_samples"][0]),
                                                     p=analysis["probs_list"][0])
     sampled_means = sampled_values.mean(axis=1)
@@ -39,8 +41,9 @@ def plot_sampling_distribution(instance: int, target_ci_length: float, target_ci
     target_ci_right = analysis["expectation"][0] + target_ci_length / 2
     success_mask = (sampled_means >= target_ci_left) & (sampled_means <= target_ci_right)
     success_count = np.count_nonzero(success_mask)
+    success_probability_ci = proportion_confint(success_count, num_repetitions, alpha=1 - sample_ci_confidence, method="beta")
     print(f"Success probability: {success_count / num_repetitions}")
-    print(f"99% CI for success probability: {proportion_confint(success_count, num_repetitions, alpha=0.01, method="beta")}")
+    print(f"{sample_ci_confidence:.0%} CI for success probability: {success_probability_ci}")
 
     apply_plot_settings(plt.gcf())
     plt.hist(sampled_means, bins=30, edgecolor="black")
@@ -56,12 +59,13 @@ def plot_sampling_distribution(instance: int, target_ci_length: float, target_ci
 
 
 def analyze_distribution(problem: PowerFlowProblem | int, angles_list: list[ndarray] | ndarray, target_ci_length: float, target_ci_confidence: float,
-                         test_samples: bool = False, num_repetitions: int = 100000, seed: int | None = None) -> dict[str, object]:
+                         sample_ci_confidence: float, test_samples: bool = False, num_repetitions: int = 100000, seed: int | None = None) -> dict[str, object]:
     """Computes AR distribution values and moment summaries for multiple angle vectors.
     :param problem: Power-flow instance or stored instance index to analyze.
     :param angles_list: Circuit angle vectors whose probability distributions should be analyzed.
     :param target_ci_length: Maximum allowed full 90 percent confidence interval length for the sampled mean.
     :param target_ci_confidence: Target confidence level for the sampled mean confidence interval.
+    :param sample_ci_confidence: Confidence level for the sampled success probability confidence interval.
     :param test_samples: Whether predicted sample counts should be tested empirically.
     :param num_repetitions: Number of repeated sample sets used when testing predicted sample counts.
     :param seed: Random seed used to build the variational quantum program.
@@ -100,7 +104,8 @@ def analyze_distribution(problem: PowerFlowProblem | int, angles_list: list[ndar
         required_num_samples.append(required_samples)
         if test_samples:
             sample_seed = None if seed is None else seed + i
-            if not test_num_samples(ar_values, probs, expectation, required_samples, target_ci_length, target_ci_confidence, num_repetitions, sample_seed):
+            if not test_num_samples(ar_values, probs, expectation, required_samples, target_ci_length, target_ci_confidence, sample_ci_confidence,
+                                    num_repetitions, sample_seed):
                 print(f"Sample count test failed: index={problem_ind}, angles={angles}, seed={sample_seed}, required_num_samples={required_samples}")
 
     return {"ar_values": ar_values, "probs_list": probs_list, "expectation": expectations, "std": stds, "ar_3rd_moment": ar_3rd_moments,
@@ -119,7 +124,7 @@ def read_instance(instance: int) -> PowerFlowProblem:
 
 
 def test_num_samples(ar_values: ndarray, probs: ndarray, expectation: float, required_num_samples: int, target_ci_length: float,
-                     target_ci_confidence: float, num_repetitions: int, seed: int | None = None) -> bool:
+                     target_ci_confidence: float, sample_ci_confidence: float, num_repetitions: int, seed: int | None = None) -> bool:
     """Tests whether the required number of samples passes its confidence interval criterion.
     :param ar_values: Approximation-ratio values sampled by the selected angle distribution.
     :param probs: Sampling probabilities for the selected angle distribution.
@@ -127,6 +132,7 @@ def test_num_samples(ar_values: ndarray, probs: ndarray, expectation: float, req
     :param required_num_samples: Number of samples predicted by the confidence interval criterion.
     :param target_ci_length: Maximum allowed full confidence interval length for the sampled mean.
     :param target_ci_confidence: Target success probability that sampled mean falls inside the target confidence interval.
+    :param sample_ci_confidence: Confidence level for the sampled success probability confidence interval.
     :param num_repetitions: Number of repeated sample sets used to estimate success probability.
     :param seed: Random seed used to generate repeated samples.
     :return: Whether the required number of samples passes its confidence interval criterion.
@@ -137,7 +143,7 @@ def test_num_samples(ar_values: ndarray, probs: ndarray, expectation: float, req
     target_ci_right = expectation + target_ci_length / 2
     success_mask = (sampled_means >= target_ci_left) & (sampled_means <= target_ci_right)
     success_count = np.count_nonzero(success_mask)
-    success_probability_ci = proportion_confint(success_count, num_repetitions, alpha=0.01, method="beta")
+    success_probability_ci = proportion_confint(success_count, num_repetitions, alpha=1 - sample_ci_confidence, method="beta")
     return success_probability_ci[0] <= target_ci_confidence <= success_probability_ci[1]
 
 
@@ -146,10 +152,11 @@ if __name__ == "__main__":
     num_angles = 100
     target_ci_length = 0.1
     target_ci_confidence = 0.9
+    sample_ci_confidence = 0.99
     num_repetitions = 10000
     seed = 0
     angles = np.array([1.8799063, -1.11660544, 1.86383895, -1.7258123, -0.86514466, -0.51868881, 0.2601866, -2.43402012, -0.58466421, -3.13970336,
                        1.53548939, 2.21090156, -2.26865917, 1.28042375, 2.01755021, 3.02741664, 2.16009981, -0.47685302, 3.01397305, 2.97813185])
 
-    plot_sampling_distribution(instance, target_ci_length, target_ci_confidence, num_repetitions, seed)
+    plot_sampling_distribution(instance, target_ci_length, target_ci_confidence, sample_ci_confidence, num_repetitions, seed)
     # test_sampled_distributions(range(instance, instance + 1), num_angles, target_ci_length, target_ci_confidence, num_repetitions, seed)
