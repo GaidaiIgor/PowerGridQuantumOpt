@@ -31,7 +31,7 @@ def plot_sampling_distribution(instance: int, target_ci_length: float, target_ci
     problem = read_instance(instance)
     vqp = get_variational_quantum_program(len(problem.generators), num_layers, "exact", seed=seed)
     angles = random.default_rng(seed).uniform(-np.pi, np.pi, len(vqp.circuit.parameters))
-    data = test_sampled_distribution_angles(problem, angles, target_ci_length, target_ci_confidence, num_repetitions, seed)
+    data = test_sampled_distribution_instance_angles(problem, angles, target_ci_length, target_ci_confidence, num_repetitions, seed)
     print(f"Success probability: {data["success_probability"]}")
     print(f"99% CI for success probability: {data["success_probability_ci"]}")
 
@@ -48,12 +48,27 @@ def plot_sampling_distribution(instance: int, target_ci_length: float, target_ci
     plt.show()
 
 
-def test_sampled_distributions(instance: int, num_angles: int, target_ci_length: float, target_ci_confidence: float, num_repetitions: int,
+def test_sampled_distributions(instances: range, num_angles: int, target_ci_length: float, target_ci_confidence: float, num_repetitions: int,
                                seed: int | None = None):
+    """Tests sampled mean success probability confidence intervals for a range of stored instances.
+    :param instances: Stored instance indexes.
+    :param num_angles: Number of random angle vectors to test for each instance.
+    :param target_ci_length: Maximum allowed full confidence interval length for the sampled mean.
+    :param target_ci_confidence: Target success probability that sampled mean falls inside the target confidence interval.
+    :param num_repetitions: Number of repeated sample sets used to estimate success probability.
+    :param seed: Random seed used to generate angle vectors and repeated samples.
+    """
+    for instance in instances:
+        print(f"Testing instance {instance}")
+        test_sampled_distributions_instance(instance, num_angles, target_ci_length, target_ci_confidence, num_repetitions, seed)
+
+
+def test_sampled_distributions_instance(instance: int, num_angles: int, target_ci_length: float, target_ci_confidence: float, num_repetitions: int,
+                                        seed: int | None = None):
     """Tests sampled mean success probability confidence intervals for multiple random angle vectors.
     :param instance: Stored instance index.
     :param num_angles: Number of random angle vectors to test.
-    :param target_ci_length: Maximum allowed full 90 percent confidence interval length for the sampled mean.
+    :param target_ci_length: Maximum allowed full confidence interval length for the sampled mean.
     :param target_ci_confidence: Target success probability that sampled mean falls inside the target confidence interval.
     :param num_repetitions: Number of repeated sample sets used to estimate success probability.
     :param seed: Random seed used to generate angle vectors and repeated samples.
@@ -65,7 +80,7 @@ def test_sampled_distributions(instance: int, num_angles: int, target_ci_length:
     for i, angles in enumerate(angle_vectors):
         print(f"Sampling angle set {i}")
         sample_seed = None if seed is None else seed + i
-        test_result = test_sampled_distribution_angles(problem, angles, target_ci_length, target_ci_confidence, num_repetitions, sample_seed)
+        test_result = test_sampled_distribution_instance_angles(problem, angles, target_ci_length, target_ci_confidence, num_repetitions, sample_seed)
         success_probability_ci = test_result["success_probability_ci"]
         if success_probability_ci[0] > target_ci_confidence or success_probability_ci[1] < target_ci_confidence:
             print(f"Failed angles: {angles}")
@@ -73,8 +88,8 @@ def test_sampled_distributions(instance: int, num_angles: int, target_ci_length:
     print("Success")
 
 
-def test_sampled_distribution_angles(problem: PowerFlowProblem | int, angles: ndarray, target_ci_length: float, target_ci_confidence: float,
-                                     num_repetitions: int, seed: int | None = None) -> dict[str, object]:
+def test_sampled_distribution_instance_angles(problem: PowerFlowProblem | int, angles: ndarray, target_ci_length: float, target_ci_confidence: float,
+                                              num_repetitions: int, seed: int | None = None) -> dict[str, object]:
     """Collects repeated sample means from the selected angle-vector probability distribution.
     :param problem: Power-flow instance or stored instance index to analyze.
     :param angles: Circuit angle vector whose probability distribution should be sampled.
@@ -149,10 +164,11 @@ if __name__ == "__main__":
     num_angles = 100
     target_ci_length = 0.1
     target_ci_confidence = 0.9
-    num_repetitions = 10000
+    num_repetitions = 100000
     seed = 0
     angles = np.array([1.8799063, -1.11660544, 1.86383895, -1.7258123, -0.86514466, -0.51868881, 0.2601866, -2.43402012, -0.58466421, -3.13970336,
                        1.53548939, 2.21090156, -2.26865917, 1.28042375, 2.01755021, 3.02741664, 2.16009981, -0.47685302, 3.01397305, 2.97813185])
 
-    # test_sampled_distributions(instance, num_angles, target_ci_length, target_ci_confidence, num_repetitions, seed)
-    print(test_sampled_distribution_angles(instance, angles, target_ci_length, target_ci_confidence, num_repetitions, seed))
+    plot_sampling_distribution(instance, target_ci_length, target_ci_confidence, num_repetitions, seed)
+    # test_sampled_distributions(range(instance, instance + 1), num_angles, target_ci_length, target_ci_confidence, num_repetitions, seed)
+    # print(test_sampled_distribution_angles(instance, angles, target_ci_length, target_ci_confidence, num_repetitions, seed))
