@@ -220,7 +220,7 @@ class CasadiOptimizer(ContinuousPowerOptimizer):
         self.update_callback = UpdateCallback(self, vars.size1(), len(self.constraints))
         options = {"error_on_fail": False, "iteration_callback": self.update_callback, "iteration_callback_step": 1}
         if self.silent:
-            options |= {"ipopt.print_level": 0, "print_time": 0, "ipopt.sb": "yes"}
+            options |= {"ipopt.print_level": 0, "print_time": 0, "ipopt.sb": "yes", "inputs_check": False}
         if self.max_iter is not None:
             options["ipopt.max_iter"] = self.max_iter
         problem = {"x": vars, "f": self._build_objective(active_powers, voltages), "g": ca.vertcat(*(constraint.expression for constraint in self.constraints))}
