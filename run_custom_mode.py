@@ -20,9 +20,10 @@ from src.PowerFlowProblem import PowerFlowProblem
 from src.Sampler import ExactSampler
 
 
-def plot_sampling_distribution(instance: int, target_ci_length: float, target_ci_confidence: float, num_repetitions: int, sample_ci_confidence: float,
-                               shots_estimation_method: str = "bernstein", seed: int | None = None):
+def plot_sampling_distribution(data_folder: Path, instance: int, target_ci_length: float, target_ci_confidence: float, num_repetitions: int,
+                               sample_ci_confidence: float, shots_estimation_method: str = "bernstein", seed: int | None = None):
     """Plots the repeated-sampling distribution of the AR sample mean.
+    :param data_folder: Folder containing stored instances.
     :param instance: Stored instance index.
     :param target_ci_length: Maximum allowed full confidence interval length for the sampled mean.
     :param target_ci_confidence: Target success probability that sampled mean falls inside the target confidence interval.
@@ -32,10 +33,10 @@ def plot_sampling_distribution(instance: int, target_ci_length: float, target_ci
     :param seed: Random seed used to generate one circuit angle vector and repeated samples.
     """
     num_layers = 1
-    problem = read_instance(instance)
+    problem = read_instance(data_folder, instance)
     vqp = get_variational_quantum_program(len(problem.generators), num_layers, "exact", seed=seed)
     angles = random.default_rng(seed).uniform(-np.pi, np.pi, len(vqp.circuit.parameters))
-    analysis = analyze_distribution(problem, [angles], target_ci_length, target_ci_confidence, shots_estimation_method=shots_estimation_method, seed=seed)
+    analysis = analyze_distribution(None, problem, [angles], target_ci_length, target_ci_confidence, shots_estimation_method=shots_estimation_method, seed=seed)
     sampled_values = random.default_rng(seed).choice(analysis["ar_values"], size=(num_repetitions, analysis["required_num_shots"][0]),
                                                     p=analysis["probs_list"][0])
     sampled_means = sampled_values.mean(axis=1)
@@ -60,22 +61,24 @@ def plot_sampling_distribution(instance: int, target_ci_length: float, target_ci
     plt.show()
 
 
-def analyze_distribution_range(instances: range,
+def analyze_distribution_range(data_folder: Path,
+                               instances: range,
                                num_angles: int,
                                target_ci_length: float,
                                target_ci_confidence: float,
                                shots_estimation_method: str = "bernstein",
-                               test_samples: bool = False,
+                               test_samples_prob: float = 0,
                                num_repetitions: int = 10000,
                                fail_prob: float | None = None,
                                seed: int | None = None):
     """Computes required shot count summaries for a range of stored instances.
+    :param data_folder: Folder containing stored instances.
     :param instances: Stored instance indexes.
     :param num_angles: Number of random angle vectors to analyze for each instance.
     :param target_ci_length: Maximum allowed full 90 percent confidence interval length for the sampled mean.
     :param target_ci_confidence: Target confidence level for the sampled mean confidence interval.
     :param shots_estimation_method: Method used to estimate the required number of shots.
-    :param test_samples: Whether predicted shot counts should be tested empirically.
+    :param test_samples_prob: Probability of testing each predicted shot count empirically.
     :param num_repetitions: Number of repeated sample sets used when testing predicted shot counts.
     :param fail_prob: Confidence level for the sampled success probability confidence interval.
     :param seed: Random seed used to generate angle vectors and test samples.
@@ -83,14 +86,14 @@ def analyze_distribution_range(instances: range,
     num_layers = 1
     rand_gen = random.default_rng(seed)
     first_instance = next(iter(instances))
-    problem = read_instance(first_instance)
+    problem = read_instance(data_folder, first_instance)
     vqp = get_variational_quantum_program(len(problem.generators), num_layers, "exact", seed=seed)
     records = []
     for instance in instances:
         print(f"Analyzing instance: {instance}")
         angle_vectors = rand_gen.uniform(-np.pi, np.pi, (num_angles, len(vqp.circuit.parameters)))
-        analysis = analyze_distribution(instance, angle_vectors, target_ci_length, target_ci_confidence, shots_estimation_method, test_samples,
-                                        num_repetitions, fail_prob, seed)
+        analysis = analyze_distribution(data_folder, instance, angle_vectors, target_ci_length, target_ci_confidence, shots_estimation_method,
+                                        test_samples_prob, num_repetitions, fail_prob, seed)
         records += [{"instance": instance, "required_num_shots": required_num_shots} for required_num_shots in analysis["required_num_shots"]]
 
     data = DataFrame(records)
@@ -100,22 +103,24 @@ def analyze_distribution_range(instances: range,
     print(f"Global: mean required_num_shots = {data["required_num_shots"].mean()}, max required_num_shots = {data["required_num_shots"].max()}")
 
 
-def analyze_distribution(problem: PowerFlowProblem | int,
+def analyze_distribution(data_folder: Path | None,
+                         problem: PowerFlowProblem | int,
                          angles_list: list[ndarray],
                          target_ci_length: float,
                          target_ci_confidence: float,
                          shots_estimation_method: str = "bernstein",
-                         test_samples: bool = False,
+                         test_samples_prob: float = 0,
                          num_repetitions: int = 10000,
                          fail_prob: float | None = None,
                          seed: int | None = None) -> dict[str, object]:
     """Computes AR distribution values and statistics for multiple angle vectors.
+    :param data_folder: Folder containing stored instances when problem is an instance index.
     :param problem: Power-flow instance or stored instance index to analyze.
     :param angles_list: Circuit angle vectors whose probability distributions should be analyzed.
     :param target_ci_length: Maximum allowed full 90 percent confidence interval length for the sampled mean.
     :param target_ci_confidence: Target confidence level for the sampled mean confidence interval.
     :param shots_estimation_method: Method used to estimate the required number of shots.
-    :param test_samples: Whether predicted shot counts should be tested empirically.
+    :param test_samples_prob: Probability of testing each predicted shot count empirically.
     :param num_repetitions: Number of repeated sample sets used when testing predicted shot counts.
     :param fail_prob: Probability at or below which sample test is considered to be failed.
     :param seed: Random seed used to build the variational quantum program.
@@ -128,7 +133,8 @@ def analyze_distribution(problem: PowerFlowProblem | int,
 
     problem_ind = problem if isinstance(problem, int) else None
     if isinstance(problem, int):
-        problem = read_instance(problem)
+        assert data_folder is not None, "data_folder is required when problem is an instance index"
+        problem = read_instance(data_folder, problem)
     inner_optimizer = CasadiOptimizer(problem, max_inner_time_s, violation_mult, silent=silent)
     bitstrings = [format(i, f"0{len(problem.generators)}b") for i in range(2 ** len(problem.generators))]
     totals = np.array([inner_optimizer.optimize(bitstring).total for bitstring in bitstrings])
@@ -139,6 +145,7 @@ def analyze_distribution(problem: PowerFlowProblem | int,
     expectations = []
     stds = []
     required_num_shots = []
+    rand_gen = random.default_rng(seed)
     for i, angles in enumerate(angles_list):
         probs_dict = ExactSampler().get_sample_probabilities(vqp.circuit, angles)
         probs = np.array([probs_dict.get(bitstring, 0) for bitstring in bitstrings])
@@ -150,8 +157,8 @@ def analyze_distribution(problem: PowerFlowProblem | int,
         expectations.append(expectation)
         stds.append(std)
         required_num_shots.append(required_shots)
-        if test_samples:
-            assert fail_prob is not None, "fail_prob is required when test_samples is True"
+        if rand_gen.random() < test_samples_prob:
+            assert fail_prob is not None, "fail_prob is required when test_samples selects a sample test"
             sample_seed = None if seed is None else seed + i
             target_range = (expectation - target_ci_length / 2, expectation + target_ci_length / 2)
             sample_success_prob = get_sample_success_probability(ar_values, probs, required_shots, num_repetitions, target_range, target_ci_confidence,
@@ -160,16 +167,15 @@ def analyze_distribution(problem: PowerFlowProblem | int,
                 angles_string = np.array2string(angles, separator=", ", max_line_width=9999)
                 print(f"Shot count sample test failed: index={problem_ind}, angles=np.array({angles_string}), seed={sample_seed}, "
                       f"required_num_shots={required_shots}, sample_success_prob={sample_success_prob}")
-
     return {"ar_values": ar_values, "probs_list": probs_list, "expectation": expectations, "std": stds, "required_num_shots": required_num_shots}
 
 
-def read_instance(instance: int) -> PowerFlowProblem:
+def read_instance(data_folder: Path, instance: int) -> PowerFlowProblem:
     """Reads a stored power-flow instance.
+    :param data_folder: Folder containing stored instances.
     :param instance: Stored instance index.
     :return: Power-flow problem for the stored instance.
     """
-    data_folder = Path("data/5")
     voltage_deviation_mult = 10
     with (data_folder / f"{instance}.pkl").open("rb") as file:
         return PowerFlowProblem(pickle.load(file), voltage_deviation_mult)
@@ -214,21 +220,26 @@ def get_sample_success_probability(ar_values: ndarray, probs: ndarray, num_shots
 
 
 if __name__ == "__main__":
-    instance = 0
+    data_folder = Path("data/10")
+    instance_inds = range(120)
     num_angles = 100
     target_ci_length = 0.1
     target_ci_confidence = 0.9
-    num_repetitions = 10000
-    test_samples = True
-    fail_prob = 0.001
     shots_estimation_method = "bernstein"
+    test_samples_prob = 0.01
+    num_repetitions = 10000
+    fail_prob = 0.001
     seed = 49
-    angles = np.array(
-        [-2.14244289, -0.6079359, -0.8316442, -2.24066045, -2.20993552, 2.92493802, -2.7095807, -2.36323528, 2.93287444, 2.82948614, -1.03415279, -2.49574782,
-         0.68273255, -0.38894665, 2.84035811, -2.33523773, 1.74808776, -2.98555302, -1.8368707, -1.25331558])
 
-    # analyze_distribution_range(range(100), num_angles, target_ci_length, target_ci_confidence, shots_estimation_method, test_samples, \
-    #                            num_repetitions, fail_prob, seed)
-    analyze_distribution(1, [angles], target_ci_length, target_ci_confidence, shots_estimation_method, test_samples, num_repetitions, fail_prob, seed)
-    # plot_sampling_distribution(instance, target_ci_length, target_ci_confidence, num_repetitions, sample_ci_confidence, shots_estimation_method, seed)
+    analyze_distribution_range(data_folder, instance_inds, num_angles, target_ci_length, target_ci_confidence, shots_estimation_method, test_samples_prob,
+                               num_repetitions, fail_prob, seed)
+
+    # angles = np.array(
+    #     [-2.14244289, -0.6079359, -0.8316442, -2.24066045, -2.20993552, 2.92493802, -2.7095807, -2.36323528, 2.93287444, 2.82948614, -1.03415279, -2.49574782,
+    #      0.68273255, -0.38894665, 2.84035811, -2.33523773, 1.74808776, -2.98555302, -1.8368707, -1.25331558])
+    # analyze_distribution(data_folder, 1, [angles], target_ci_length, target_ci_confidence, shots_estimation_method, test_samples_prob, \
+    #                      num_repetitions, fail_prob, seed)
+    #
+    # plot_sampling_distribution(data_folder, instance, target_ci_length, target_ci_confidence, num_repetitions, sample_ci_confidence, \
+    #                            shots_estimation_method, seed)
     # test_sampled_distributions(range(instance, instance + 1), num_angles, target_ci_length, target_ci_confidence, num_repetitions, seed)
