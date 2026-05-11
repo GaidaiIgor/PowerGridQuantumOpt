@@ -10,7 +10,7 @@ matplotlib.use("QtAgg")
 from matplotlib import pyplot as plt
 from numpy import ndarray, random
 from pandas import DataFrame
-from scipy.stats import norm
+from scipy.stats import binom, norm
 from statsmodels.stats.proportion import proportion_confint
 
 from common.utils import get_variational_quantum_program
@@ -78,8 +78,9 @@ def analyze_distribution_range(instances: range, num_angles: int, target_ci_leng
     vqp = get_variational_quantum_program(len(problem.generators), num_layers, "exact", seed=seed)
     records = []
     for instance in instances:
+        print(f"Analyzing instance: {instance}")
         angle_vectors = rand_gen.uniform(-np.pi, np.pi, (num_angles, len(vqp.circuit.parameters)))
-        analysis = analyze_distribution(instance, angle_vectors, target_ci_length, target_ci_confidence, num_repetitions, test_samples, sample_ci_confidence,
+        analysis = analyze_distribution(instance, angle_vectors, target_ci_length, target_ci_confidence, test_samples, num_repetitions, sample_ci_confidence,
                                         seed)
         records += [{"instance": instance, "required_num_samples": required_num_samples} for required_num_samples in analysis["required_num_samples"]]
 
@@ -94,18 +95,18 @@ def analyze_distribution(problem: PowerFlowProblem | int,
                          angles_list: list[ndarray],
                          target_ci_length: float,
                          target_ci_confidence: float,
-                         num_repetitions: int = 10000,
                          test_samples: bool = False,
-                         sample_ci_confidence: float | None = None,
+                         num_repetitions: int = 10000,
+                         fail_prob: float | None = None,
                          seed: int | None = None) -> dict[str, object]:
     """Computes AR distribution values and moment summaries for multiple angle vectors.
     :param problem: Power-flow instance or stored instance index to analyze.
     :param angles_list: Circuit angle vectors whose probability distributions should be analyzed.
     :param target_ci_length: Maximum allowed full 90 percent confidence interval length for the sampled mean.
     :param target_ci_confidence: Target confidence level for the sampled mean confidence interval.
-    :param num_repetitions: Number of repeated sample sets used when testing predicted sample counts.
     :param test_samples: Whether predicted sample counts should be tested empirically.
-    :param sample_ci_confidence: Confidence level for the sampled success probability confidence interval.
+    :param num_repetitions: Number of repeated sample sets used when testing predicted sample counts.
+    :param fail_prob: Probability at or below which sample test is considered to be failed.
     :param seed: Random seed used to build the variational quantum program.
     :return: AR values plus per-angle probabilities, exact moments, and required sample counts.
     """
@@ -141,11 +142,14 @@ def analyze_distribution(problem: PowerFlowProblem | int,
         ar_3rd_moments.append(np.dot(probs, np.abs(ar_values - expectation) ** 3) / std ** 3)
         required_num_samples.append(required_samples)
         if test_samples:
-            assert sample_ci_confidence is not None, "sample_ci_confidence is required when test_samples is True"
+            assert fail_prob is not None, "fail_prob is required when test_samples is True"
             sample_seed = None if seed is None else seed + i
-            if not test_num_samples(ar_values, probs, expectation, required_samples, target_ci_length, target_ci_confidence, num_repetitions,
-                                    sample_ci_confidence, sample_seed):
-                print(f"Sample count test failed: index={problem_ind}, angles={angles}, seed={sample_seed}, required_num_samples={required_samples}")
+            target_range = (expectation - target_ci_length / 2, expectation + target_ci_length / 2)
+            sample_success_prob = get_sample_success_probability(ar_values, probs, required_samples, num_repetitions, target_range, target_ci_confidence,
+                                                                 sample_seed)
+            if sample_success_prob <= fail_prob:
+                print(f"Sample count test failed: index={problem_ind}, angles={angles}, seed={sample_seed}, required_num_samples={required_samples}, "
+                      f"sample_success_prob={sample_success_prob}")
 
     return {"ar_values": ar_values, "probs_list": probs_list, "expectation": expectations, "std": stds, "ar_3rd_moment": ar_3rd_moments,
             "required_num_samples": required_num_samples}
@@ -162,28 +166,23 @@ def read_instance(instance: int) -> PowerFlowProblem:
         return PowerFlowProblem(pickle.load(file), voltage_deviation_mult)
 
 
-def test_num_samples(ar_values: ndarray, probs: ndarray, expectation: float, required_num_samples: int, target_ci_length: float,
-                     target_ci_confidence: float, num_repetitions: int, sample_ci_confidence: float, seed: int | None = None) -> bool:
-    """Tests whether the required number of samples passes its confidence interval criterion.
+def get_sample_success_probability(ar_values: ndarray, probs: ndarray, num_samples: int, num_repetitions: int, target_range: tuple[float, float],
+                                   success_prob: float, seed: int | None = None) -> float:
+    """Computes the binomial lower-tail probability for sampled mean successes.
     :param ar_values: Approximation-ratio values sampled by the selected angle distribution.
     :param probs: Sampling probabilities for the selected angle distribution.
-    :param expectation: Exact expectation for the selected angle distribution.
-    :param required_num_samples: Number of samples predicted by the confidence interval criterion.
-    :param target_ci_length: Maximum allowed full confidence interval length for the sampled mean.
-    :param target_ci_confidence: Target success probability that sampled mean falls inside the target confidence interval.
+    :param num_samples: Number of samples predicted by the confidence interval criterion.
     :param num_repetitions: Number of repeated sample sets used to estimate success probability.
-    :param sample_ci_confidence: Confidence level for the sampled success probability confidence interval.
+    :param target_range: Inclusive target interval for sampled means.
+    :param success_prob: Success probability that sampled mean falls inside the target confidence interval.
     :param seed: Random seed used to generate repeated samples.
-    :return: Whether the required number of samples passes its confidence interval criterion.
+    :return: Probability of observing the sampled success count or fewer under the target success probability.
     """
-    sampled_values = random.default_rng(seed).choice(ar_values, size=(num_repetitions, required_num_samples), p=probs)
+    sampled_values = random.default_rng(seed).choice(ar_values, size=(num_repetitions, num_samples), p=probs)
     sampled_means = sampled_values.mean(axis=1)
-    target_ci_left = expectation - target_ci_length / 2
-    target_ci_right = expectation + target_ci_length / 2
-    success_mask = (sampled_means >= target_ci_left) & (sampled_means <= target_ci_right)
+    success_mask = (sampled_means >= target_range[0]) & (sampled_means <= target_range[1])
     success_count = np.count_nonzero(success_mask)
-    success_probability_ci = proportion_confint(success_count, num_repetitions, alpha=1 - sample_ci_confidence, method="beta")
-    return success_probability_ci[0] <= target_ci_confidence <= success_probability_ci[1]
+    return binom.cdf(success_count, num_repetitions, success_prob)
 
 
 if __name__ == "__main__":
@@ -193,11 +192,11 @@ if __name__ == "__main__":
     target_ci_confidence = 0.9
     num_repetitions = 10000
     test_samples = True
-    sample_ci_confidence = 0.999
+    fail_prob = 0.001
     seed = 0
     angles = np.array([1.8799063, -1.11660544, 1.86383895, -1.7258123, -0.86514466, -0.51868881, 0.2601866, -2.43402012, -0.58466421, -3.13970336,
                        1.53548939, 2.21090156, -2.26865917, 1.28042375, 2.01755021, 3.02741664, 2.16009981, -0.47685302, 3.01397305, 2.97813185])
 
-    analyze_distribution_range(range(100), num_angles, target_ci_length, target_ci_confidence, num_repetitions, test_samples, sample_ci_confidence, seed)
+    analyze_distribution_range(range(100), num_angles, target_ci_length, target_ci_confidence, num_repetitions, test_samples, fail_prob, seed)
     # plot_sampling_distribution(instance, target_ci_length, target_ci_confidence, num_repetitions, sample_ci_confidence, seed)
     # test_sampled_distributions(range(instance, instance + 1), num_angles, target_ci_length, target_ci_confidence, num_repetitions, seed)
