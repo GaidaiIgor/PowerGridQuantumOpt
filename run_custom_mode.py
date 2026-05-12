@@ -1,11 +1,13 @@
 """Runs custom analysis modes that are intentionally kept outside solver classes."""
 
 import pickle
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from math import ceil, log
 from pathlib import Path
 
 import matplotlib
 import numpy as np
+
 matplotlib.use("QtAgg")
 from matplotlib import pyplot as plt
 from numpy import ndarray, random
@@ -71,7 +73,7 @@ def analyze_distribution_range(data_folder: Path,
                                num_repetitions: int = 10000,
                                fail_prob: float | None = None,
                                seed: int | None = None):
-    """Computes required shot count summaries for a range of stored instances.
+    """Computes required shot count summaries for a range of stored instances in parallel.
     :param data_folder: Folder containing stored instances.
     :param instances: Stored instance indexes.
     :param num_angles: Number of random angle vectors to analyze for each instance.
@@ -89,12 +91,17 @@ def analyze_distribution_range(data_folder: Path,
     problem = read_instance(data_folder, first_instance)
     vqp = get_variational_quantum_program(len(problem.generators), num_layers, "exact", seed=seed)
     records = []
-    for instance in instances:
-        print(f"Analyzing instance: {instance}")
-        angle_vectors = rand_gen.uniform(-np.pi, np.pi, (num_angles, len(vqp.circuit.parameters)))
-        analysis = analyze_distribution(data_folder, instance, angle_vectors, target_ci_length, target_ci_confidence, shots_estimation_method,
-                                        test_samples_prob, num_repetitions, fail_prob, seed)
-        records += [{"instance": instance, "required_num_shots": required_num_shots} for required_num_shots in analysis["required_num_shots"]]
+    with ProcessPoolExecutor() as executor:
+        futures = {}
+        for instance in instances:
+            print(f"Analyzing instance: {instance}")
+            angle_vectors = rand_gen.uniform(-np.pi, np.pi, (num_angles, len(vqp.circuit.parameters)))
+            future = executor.submit(analyze_distribution, data_folder, instance, angle_vectors, target_ci_length, target_ci_confidence,
+                                     shots_estimation_method, test_samples_prob, num_repetitions, fail_prob, seed)
+            futures[future] = instance
+        for future in as_completed(futures):
+            instance = futures[future]
+            records += [{"instance": instance, "required_num_shots": required_num_shots} for required_num_shots in future.result()["required_num_shots"]]
 
     data = DataFrame(records)
     summary = data.groupby("instance")["required_num_shots"].agg(["mean", "max"])
@@ -226,7 +233,7 @@ if __name__ == "__main__":
     target_ci_length = 0.1
     target_ci_confidence = 0.9
     shots_estimation_method = "bernstein"
-    test_samples_prob = 0.01
+    test_samples_prob = 1
     num_repetitions = 10000
     fail_prob = 0.001
     seed = 49
