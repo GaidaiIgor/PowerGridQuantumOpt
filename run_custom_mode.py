@@ -1,5 +1,6 @@
 """Runs custom analysis modes that are intentionally kept outside solver classes."""
 
+from argparse import ArgumentParser, Namespace
 import pickle
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from math import ceil, log
@@ -21,6 +22,44 @@ from plots.general import apply_plot_settings, save_figure
 from src.ContinuousPowerOptimizer import CasadiOptimizer
 from src.PowerFlowProblem import PowerFlowProblem
 from src.Sampler import ExactSampler
+
+
+def main():
+    """Runs the custom distribution analysis script."""
+    args = parse_arguments()
+    
+    data_folder = args.data_folder
+    instance_inds = range(120)
+    num_angles = 100
+    target_ci_length = 0.1
+    target_ci_confidence = 0.9
+    shots_estimation_method = "bernstein"
+    test_samples_prob = 1
+    num_repetitions = 10000
+    fail_prob = 0.001
+    seed = 49
+
+    analyze_distribution_range(data_folder, instance_inds, num_angles, target_ci_length, target_ci_confidence, shots_estimation_method, test_samples_prob,
+                               num_repetitions, fail_prob, seed)
+
+    # angles = np.array(
+    #     [-2.14244289, -0.6079359, -0.8316442, -2.24066045, -2.20993552, 2.92493802, -2.7095807, -2.36323528, 2.93287444, 2.82948614, -1.03415279, -2.49574782,
+    #      0.68273255, -0.38894665, 2.84035811, -2.33523773, 1.74808776, -2.98555302, -1.8368707, -1.25331558])
+    # analyze_distribution(data_folder, 1, [angles], target_ci_length, target_ci_confidence, shots_estimation_method, test_samples_prob, \
+    #                      num_repetitions, fail_prob, seed)
+    #
+    # plot_sampling_distribution(data_folder, instance, target_ci_length, target_ci_confidence, num_repetitions, sample_ci_confidence, \
+    #                            shots_estimation_method, seed)
+    # test_sampled_distributions(range(instance, instance + 1), num_angles, target_ci_length, target_ci_confidence, num_repetitions, seed)
+
+
+def parse_arguments() -> Namespace:
+    """Parses script input arguments.
+    :return: Parsed script input arguments.
+    """
+    parser = ArgumentParser()
+    parser.add_argument("-df", "--data-folder", type=Path, required=True)
+    return parser.parse_args()
 
 
 def plot_sampling_distribution(data_folder: Path, instance: int, target_ci_length: float, target_ci_confidence: float, num_repetitions: int,
@@ -227,26 +266,4 @@ def get_sample_success_probability(ar_values: ndarray, probs: ndarray, num_shots
 
 
 if __name__ == "__main__":
-    data_folder = Path("data/10")
-    instance_inds = range(120)
-    num_angles = 100
-    target_ci_length = 0.1
-    target_ci_confidence = 0.9
-    shots_estimation_method = "bernstein"
-    test_samples_prob = 1
-    num_repetitions = 10000
-    fail_prob = 0.001
-    seed = 49
-
-    analyze_distribution_range(data_folder, instance_inds, num_angles, target_ci_length, target_ci_confidence, shots_estimation_method, test_samples_prob,
-                               num_repetitions, fail_prob, seed)
-
-    # angles = np.array(
-    #     [-2.14244289, -0.6079359, -0.8316442, -2.24066045, -2.20993552, 2.92493802, -2.7095807, -2.36323528, 2.93287444, 2.82948614, -1.03415279, -2.49574782,
-    #      0.68273255, -0.38894665, 2.84035811, -2.33523773, 1.74808776, -2.98555302, -1.8368707, -1.25331558])
-    # analyze_distribution(data_folder, 1, [angles], target_ci_length, target_ci_confidence, shots_estimation_method, test_samples_prob, \
-    #                      num_repetitions, fail_prob, seed)
-    #
-    # plot_sampling_distribution(data_folder, instance, target_ci_length, target_ci_confidence, num_repetitions, sample_ci_confidence, \
-    #                            shots_estimation_method, seed)
-    # test_sampled_distributions(range(instance, instance + 1), num_angles, target_ci_length, target_ci_confidence, num_repetitions, seed)
+    main()
