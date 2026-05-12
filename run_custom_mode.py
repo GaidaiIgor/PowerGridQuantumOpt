@@ -14,6 +14,7 @@ from numpy import ndarray, random
 from pandas import DataFrame
 from scipy.stats import binom, norm
 from statsmodels.stats.proportion import proportion_confint
+from tqdm import tqdm
 
 from common.utils import get_variational_quantum_program
 from plots.general import apply_plot_settings, save_figure
@@ -94,12 +95,11 @@ def analyze_distribution_range(data_folder: Path,
     with ProcessPoolExecutor() as executor:
         futures = {}
         for instance in instances:
-            print(f"Analyzing instance: {instance}")
             angle_vectors = rand_gen.uniform(-np.pi, np.pi, (num_angles, len(vqp.circuit.parameters)))
             future = executor.submit(analyze_distribution, data_folder, instance, angle_vectors, target_ci_length, target_ci_confidence,
                                      shots_estimation_method, test_samples_prob, num_repetitions, fail_prob, seed)
             futures[future] = instance
-        for future in as_completed(futures):
+        for future in tqdm(as_completed(futures), total=len(futures), smoothing=0):
             instance = futures[future]
             records += [{"instance": instance, "required_num_shots": required_num_shots} for required_num_shots in future.result()["required_num_shots"]]
 
