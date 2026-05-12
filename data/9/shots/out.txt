@@ -1,0 +1,171 @@
+SLURM_JOB_ID=17230
+  0%|          | 0/120 [00:00<?, ?it/s]  1%|          | 1/120 [00:51<1:41:38, 51.25s/it]  2%|▏         | 2/120 [00:55<54:32, 27.73s/it]    2%|▎         | 3/120 [00:59<38:51, 19.92s/it]  3%|▎         | 4/120 [01:00<29:01, 15.01s/it]  4%|▍         | 5/120 [01:00<23:12, 12.11s/it]  5%|▌         | 6/120 [01:00<19:13, 10.12s/it]  6%|▌         | 7/120 [01:01<16:37,  8.82s/it]  7%|▋         | 8/120 [01:02<14:36,  7.83s/it]  8%|▊         | 9/120 [01:03<13:04,  7.07s/it]  8%|▊         | 10/120 [01:04<11:52,  6.48s/it] 10%|█         | 12/120 [01:05<09:45,  5.42s/it] 12%|█▏        | 14/120 [01:06<08:26,  4.78s/it] 13%|█▎        | 16/120 [01:08<07:25,  4.29s/it] 15%|█▌        | 18/120 [01:09<06:33,  3.86s/it] 17%|█▋        | 20/120 [01:11<05:58,  3.58s/it] 18%|█▊        | 22/120 [01:12<05:21,  3.29s/it] 20%|██        | 24/120 [01:17<05:09,  3.23s/it] 22%|██▏       | 26/120 [01:19<04:48,  3.06s/it] 23%|██▎       | 28/120 [01:21<04:26,  2.89s/it] 25%|██▌       | 30/120 [01:22<04:07,  2.75s/it] 27%|██▋       | 32/120 [01:22<03:47,  2.59s/it] 28%|██▊       | 34/120 [01:25<03:36,  2.52s/it] 30%|███       | 36/120 [01:26<03:20,  2.39s/it] 32%|███▏      | 38/120 [01:27<03:07,  2.29s/it] 33%|███▎      | 40/120 [01:28<02:57,  2.22s/it] 35%|███▌      | 42/120 [01:30<02:47,  2.15s/it] 37%|███▋      | 44/120 [01:32<02:39,  2.10s/it] 38%|███▊      | 46/120 [01:35<02:33,  2.08s/it] 40%|████      | 48/120 [01:36<02:24,  2.00s/it] 42%|████▏     | 50/120 [01:37<02:16,  1.95s/it] 43%|████▎     | 52/120 [01:39<02:10,  1.92s/it] 45%|████▌     | 54/120 [01:41<02:04,  1.88s/it] 47%|████▋     | 56/120 [01:42<01:57,  1.83s/it] 48%|████▊     | 58/120 [01:43<01:50,  1.78s/it] 50%|█████     | 60/120 [01:44<01:44,  1.75s/it] 52%|█████▏    | 62/120 [01:46<01:39,  1.72s/it] 53%|█████▎    | 64/120 [01:48<01:35,  1.70s/it] 55%|█████▌    | 66/120 [01:49<01:29,  1.66s/it] 57%|█████▋    | 68/120 [01:51<01:25,  1.64s/it] 58%|█████▊    | 70/120 [01:52<01:20,  1.61s/it] 60%|██████    | 72/120 [01:59<01:19,  1.66s/it] 62%|██████▏   | 74/120 [02:00<01:15,  1.63s/it] 63%|██████▎   | 76/120 [02:04<01:12,  1.64s/it] 65%|██████▌   | 78/120 [02:07<01:08,  1.63s/it] 67%|██████▋   | 80/120 [02:08<01:04,  1.61s/it] 68%|██████▊   | 82/120 [02:12<01:01,  1.62s/it] 70%|███████   | 84/120 [02:14<00:57,  1.60s/it] 72%|███████▏  | 86/120 [02:16<00:54,  1.59s/it] 73%|███████▎  | 88/120 [02:23<00:52,  1.63s/it] 75%|███████▌  | 90/120 [02:26<00:48,  1.63s/it] 77%|███████▋  | 92/120 [02:28<00:45,  1.62s/it] 78%|███████▊  | 94/120 [02:30<00:41,  1.60s/it] 80%|████████  | 96/120 [02:34<00:38,  1.61s/it] 82%|████████▏ | 98/120 [02:40<00:36,  1.64s/it] 83%|████████▎ | 100/120 [02:42<00:32,  1.62s/it] 85%|████████▌ | 102/120 [02:52<00:30,  1.69s/it] 87%|████████▋ | 104/120 [02:55<00:27,  1.69s/it] 88%|████████▊ | 106/120 [03:08<00:24,  1.78s/it] 89%|████████▉ | 107/120 [03:09<00:22,  1.77s/it] 91%|█████████ | 109/120 [03:11<00:19,  1.76s/it] 92%|█████████▎| 111/120 [03:18<00:16,  1.79s/it] 94%|█████████▍| 113/120 [03:29<00:12,  1.85s/it] 95%|█████████▌| 114/120 [03:30<00:11,  1.84s/it] 96%|█████████▌| 115/120 [03:47<00:09,  1.98s/it] 97%|█████████▋| 116/120 [03:48<00:07,  1.97s/it] 98%|█████████▊| 117/120 [03:54<00:06,  2.01s/it] 98%|█████████▊| 118/120 [04:13<00:04,  2.15s/it] 99%|█████████▉| 119/120 [07:39<00:03,  3.86s/it]100%|██████████| 120/120 [08:55<00:00,  4.46s/it]100%|██████████| 120/120 [08:55<00:00,  4.46s/it]
+Instance 0: mean required_num_shots = 267.89, max required_num_shots = 312.0
+Instance 1: mean required_num_shots = 361.29, max required_num_shots = 375.0
+Instance 2: mean required_num_shots = 370.33, max required_num_shots = 430.0
+Instance 3: mean required_num_shots = 365.97, max required_num_shots = 402.0
+Instance 4: mean required_num_shots = 246.69, max required_num_shots = 297.0
+Instance 5: mean required_num_shots = 197.99, max required_num_shots = 230.0
+Instance 6: mean required_num_shots = 425.43, max required_num_shots = 481.0
+Instance 7: mean required_num_shots = 308.4, max required_num_shots = 346.0
+Instance 8: mean required_num_shots = 393.24, max required_num_shots = 408.0
+Instance 9: mean required_num_shots = 159.0, max required_num_shots = 184.0
+Instance 10: mean required_num_shots = 129.48, max required_num_shots = 178.0
+Instance 11: mean required_num_shots = 448.14, max required_num_shots = 460.0
+Instance 12: mean required_num_shots = 250.41, max required_num_shots = 304.0
+Instance 13: mean required_num_shots = 254.53, max required_num_shots = 294.0
+Instance 14: mean required_num_shots = 227.4, max required_num_shots = 259.0
+Instance 15: mean required_num_shots = 414.3, max required_num_shots = 426.0
+Instance 16: mean required_num_shots = 367.05, max required_num_shots = 388.0
+Instance 17: mean required_num_shots = 175.47, max required_num_shots = 214.0
+Instance 18: mean required_num_shots = 388.28, max required_num_shots = 401.0
+Instance 19: mean required_num_shots = 375.83, max required_num_shots = 414.0
+Instance 20: mean required_num_shots = 522.57, max required_num_shots = 547.0
+Instance 21: mean required_num_shots = 328.58, max required_num_shots = 354.0
+Instance 22: mean required_num_shots = 508.9, max required_num_shots = 523.0
+Instance 23: mean required_num_shots = 265.07, max required_num_shots = 312.0
+Instance 24: mean required_num_shots = 141.04, max required_num_shots = 171.0
+Instance 25: mean required_num_shots = 449.9, max required_num_shots = 464.0
+Instance 26: mean required_num_shots = 225.25, max required_num_shots = 256.0
+Instance 27: mean required_num_shots = 155.68, max required_num_shots = 170.0
+Instance 28: mean required_num_shots = 394.86, max required_num_shots = 409.0
+Instance 29: mean required_num_shots = 396.09, max required_num_shots = 429.0
+Instance 30: mean required_num_shots = 167.84, max required_num_shots = 214.0
+Instance 31: mean required_num_shots = 338.81, max required_num_shots = 352.0
+Instance 32: mean required_num_shots = 371.86, max required_num_shots = 404.0
+Instance 33: mean required_num_shots = 443.04, max required_num_shots = 460.0
+Instance 34: mean required_num_shots = 275.06, max required_num_shots = 337.0
+Instance 35: mean required_num_shots = 200.31, max required_num_shots = 237.0
+Instance 36: mean required_num_shots = 421.44, max required_num_shots = 460.0
+Instance 37: mean required_num_shots = 373.84, max required_num_shots = 390.0
+Instance 38: mean required_num_shots = 200.44, max required_num_shots = 237.0
+Instance 39: mean required_num_shots = 324.17, max required_num_shots = 363.0
+Instance 40: mean required_num_shots = 411.24, max required_num_shots = 451.0
+Instance 41: mean required_num_shots = 294.22, max required_num_shots = 319.0
+Instance 42: mean required_num_shots = 280.12, max required_num_shots = 305.0
+Instance 43: mean required_num_shots = 449.39, max required_num_shots = 465.0
+Instance 44: mean required_num_shots = 147.71, max required_num_shots = 193.0
+Instance 45: mean required_num_shots = 417.3, max required_num_shots = 431.0
+Instance 46: mean required_num_shots = 125.87, max required_num_shots = 158.0
+Instance 47: mean required_num_shots = 286.9, max required_num_shots = 303.0
+Instance 48: mean required_num_shots = 171.13, max required_num_shots = 203.0
+Instance 49: mean required_num_shots = 323.04, max required_num_shots = 346.0
+Instance 50: mean required_num_shots = 440.47, max required_num_shots = 459.0
+Instance 51: mean required_num_shots = 273.7, max required_num_shots = 319.0
+Instance 52: mean required_num_shots = 393.68, max required_num_shots = 415.0
+Instance 53: mean required_num_shots = 227.01, max required_num_shots = 254.0
+Instance 54: mean required_num_shots = 142.95, max required_num_shots = 178.0
+Instance 55: mean required_num_shots = 299.08, max required_num_shots = 351.0
+Instance 56: mean required_num_shots = 263.2, max required_num_shots = 287.0
+Instance 57: mean required_num_shots = 262.3, max required_num_shots = 296.0
+Instance 58: mean required_num_shots = 360.4, max required_num_shots = 415.0
+Instance 59: mean required_num_shots = 408.43, max required_num_shots = 420.0
+Instance 60: mean required_num_shots = 132.85, max required_num_shots = 162.0
+Instance 61: mean required_num_shots = 498.86, max required_num_shots = 511.0
+Instance 62: mean required_num_shots = 156.39, max required_num_shots = 191.0
+Instance 63: mean required_num_shots = 448.88, max required_num_shots = 552.0
+Instance 64: mean required_num_shots = 279.62, max required_num_shots = 300.0
+Instance 65: mean required_num_shots = 190.58, max required_num_shots = 236.0
+Instance 66: mean required_num_shots = 430.39, max required_num_shots = 441.0
+Instance 67: mean required_num_shots = 69.94, max required_num_shots = 92.0
+Instance 68: mean required_num_shots = 365.39, max required_num_shots = 391.0
+Instance 69: mean required_num_shots = 442.7, max required_num_shots = 502.0
+Instance 70: mean required_num_shots = 465.82, max required_num_shots = 478.0
+Instance 71: mean required_num_shots = 461.41, max required_num_shots = 483.0
+Instance 72: mean required_num_shots = 302.6, max required_num_shots = 344.0
+Instance 73: mean required_num_shots = 213.3, max required_num_shots = 239.0
+Instance 74: mean required_num_shots = 262.54, max required_num_shots = 285.0
+Instance 75: mean required_num_shots = 249.73, max required_num_shots = 288.0
+Instance 76: mean required_num_shots = 362.52, max required_num_shots = 400.0
+Instance 77: mean required_num_shots = 136.86, max required_num_shots = 165.0
+Instance 78: mean required_num_shots = 447.11, max required_num_shots = 464.0
+Instance 79: mean required_num_shots = 386.22, max required_num_shots = 404.0
+Instance 80: mean required_num_shots = 331.4, max required_num_shots = 355.0
+Instance 81: mean required_num_shots = 449.02, max required_num_shots = 467.0
+Instance 82: mean required_num_shots = 456.31, max required_num_shots = 473.0
+Instance 83: mean required_num_shots = 472.47, max required_num_shots = 487.0
+Instance 84: mean required_num_shots = 371.77, max required_num_shots = 384.0
+Instance 85: mean required_num_shots = 97.55, max required_num_shots = 117.0
+Instance 86: mean required_num_shots = 485.67, max required_num_shots = 496.0
+Instance 87: mean required_num_shots = 297.78, max required_num_shots = 345.0
+Instance 88: mean required_num_shots = 463.4, max required_num_shots = 480.0
+Instance 89: mean required_num_shots = 358.75, max required_num_shots = 380.0
+Instance 90: mean required_num_shots = 359.94, max required_num_shots = 374.0
+Instance 91: mean required_num_shots = 444.28, max required_num_shots = 463.0
+Instance 92: mean required_num_shots = 225.14, max required_num_shots = 260.0
+Instance 93: mean required_num_shots = 97.0, max required_num_shots = 132.0
+Instance 94: mean required_num_shots = 262.35, max required_num_shots = 293.0
+Instance 95: mean required_num_shots = 280.37, max required_num_shots = 352.0
+Instance 96: mean required_num_shots = 67.15, max required_num_shots = 94.0
+Instance 97: mean required_num_shots = 315.06, max required_num_shots = 339.0
+Instance 98: mean required_num_shots = 376.26, max required_num_shots = 442.0
+Instance 99: mean required_num_shots = 378.37, max required_num_shots = 400.0
+Instance 100: mean required_num_shots = 138.84, max required_num_shots = 172.0
+Instance 101: mean required_num_shots = 428.16, max required_num_shots = 449.0
+Instance 102: mean required_num_shots = 445.93, max required_num_shots = 476.0
+Instance 103: mean required_num_shots = 509.91, max required_num_shots = 530.0
+Instance 104: mean required_num_shots = 488.91, max required_num_shots = 501.0
+Instance 105: mean required_num_shots = 124.07, max required_num_shots = 161.0
+Instance 106: mean required_num_shots = 179.52, max required_num_shots = 192.0
+Instance 107: mean required_num_shots = 416.15, max required_num_shots = 439.0
+Instance 108: mean required_num_shots = 427.77, max required_num_shots = 445.0
+Instance 109: mean required_num_shots = 250.12, max required_num_shots = 301.0
+Instance 110: mean required_num_shots = 391.59, max required_num_shots = 428.0
+Instance 111: mean required_num_shots = 68.83, max required_num_shots = 90.0
+Instance 112: mean required_num_shots = 286.63, max required_num_shots = 326.0
+Instance 113: mean required_num_shots = 224.85, max required_num_shots = 250.0
+Instance 114: mean required_num_shots = 248.97, max required_num_shots = 306.0
+Instance 115: mean required_num_shots = 227.07, max required_num_shots = 246.0
+Instance 116: mean required_num_shots = 251.65, max required_num_shots = 300.0
+Instance 117: mean required_num_shots = 470.05, max required_num_shots = 487.0
+Instance 118: mean required_num_shots = 302.08, max required_num_shots = 340.0
+Instance 119: mean required_num_shots = 316.13, max required_num_shots = 340.0
+Global: mean required_num_shots = 314.17491666666666, max required_num_shots = 552
+
+real	9m4.577s
+user	236m56.064s
+sys	3m51.351s
+
+================================================================================
+                              Slurm Job Statistics                              
+================================================================================
+         Job ID: 17230
+   User/Account: zgj518/allusers
+       Job Name: 10/shots
+          State: RUNNING
+          Nodes: 1
+      CPU Cores: 120
+     CPU Memory: 60GB (500MB per CPU-core)
+  QOS/Partition: u-default/epyc-cpu
+        Cluster: mocshpc
+     Start Time: Mon May 11, 2026 at 11:46 PM
+       Run Time: 00:09:06 (in progress)
+     Time Limit: 02:00:00
+
+                              Overall Utilization                               
+================================================================================
+  CPU utilization  [|||||||||||                                    22%]
+  CPU memory usage [||||||||||||||||                               33%]
+
+                              Detailed Utilization                              
+================================================================================
+  CPU utilization per node (CPU time used/run time)
+      epyc22: 04:00:17/18:12:40 (efficiency=22.0%)
+
+  CPU memory usage per node - used/allocated
+      epyc22: 18.7GB/57GB (159.3MB/486.4MB per core of 120)
+
+                                     Notes                                      
+================================================================================
+  * The overall CPU utilization of this job is 22.0%. This value is low
+    compared to the target range of 90% and above. Please investigate the
+    reason for the low efficiency. For instance, have you conducted a scaling
+    analysis? For assistance:
+      https://ithelp.utc.edu or ithelp@utc.edu
+
+  * See the URL below for various job metrics plotted as a function of time:
+      https://ondemand.mocshpc.utc.edu/pun/sys/jobstats/17230  (VPN required off-campus)
+
+  * Have a nice day!
+
+
