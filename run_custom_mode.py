@@ -14,7 +14,6 @@ from matplotlib import pyplot as plt
 from numpy import ndarray, random
 from pandas import DataFrame
 from scipy.stats import binom, norm
-from statsmodels.stats.proportion import proportion_confint
 from tqdm import tqdm
 
 from common.utils import get_variational_quantum_program
@@ -48,7 +47,7 @@ def main():
     # analyze_distribution(data_folder, 1, [angles], target_ci_length, target_ci_confidence, shots_estimation_method, test_samples_prob, \
     #                      num_repetitions, fail_prob, seed)
     #
-    # plot_sampling_distribution(data_folder, instance, target_ci_length, target_ci_confidence, num_repetitions, sample_ci_confidence, \
+    # plot_sampling_distribution(data_folder, instance, target_ci_length, target_ci_confidence, num_repetitions, \
     #                            shots_estimation_method, seed)
     # test_sampled_distributions(range(instance, instance + 1), num_angles, target_ci_length, target_ci_confidence, num_repetitions, seed)
 
@@ -63,14 +62,13 @@ def parse_arguments() -> Namespace:
 
 
 def plot_sampling_distribution(data_folder: Path, instance: int, target_ci_length: float, target_ci_confidence: float, num_repetitions: int,
-                               sample_ci_confidence: float, shots_estimation_method: str = "bernstein", seed: int | None = None):
+                               shots_estimation_method: str = "bernstein", seed: int | None = None):
     """Plots the repeated-sampling distribution of the AR sample mean.
     :param data_folder: Folder containing stored instances.
     :param instance: Stored instance index.
     :param target_ci_length: Maximum allowed full confidence interval length for the sampled mean.
     :param target_ci_confidence: Target success probability that sampled mean falls inside the target confidence interval.
     :param num_repetitions: Number of repeated sample sets used to form the histogram.
-    :param sample_ci_confidence: Confidence level for the sampled success probability confidence interval.
     :param shots_estimation_method: Method used to estimate the required number of shots.
     :param seed: Random seed used to generate one circuit angle vector and repeated samples.
     """
@@ -86,9 +84,7 @@ def plot_sampling_distribution(data_folder: Path, instance: int, target_ci_lengt
     target_ci_right = analysis["expectation"][0] + target_ci_length / 2
     success_mask = (sampled_means >= target_ci_left) & (sampled_means <= target_ci_right)
     success_count = np.count_nonzero(success_mask)
-    success_probability_ci = proportion_confint(success_count, num_repetitions, alpha=1 - sample_ci_confidence, method="beta")
     print(f"Success probability: {success_count / num_repetitions}")
-    print(f"{sample_ci_confidence:.0%} CI for success probability: {success_probability_ci}")
 
     apply_plot_settings(plt.gcf())
     plt.hist(sampled_means, bins=30, edgecolor="black")
