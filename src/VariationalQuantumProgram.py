@@ -100,7 +100,7 @@ class VariationalQuantumProgram:
             case "noisyopt":
                 result = self.optimize_parameters_noisyopt(get_target_expectation, initial_angles)
             case "ax":
-                result = self.optimize_parameters_ax(get_target_stats)
+                result = self.optimize_parameters_ax(get_target_stats, len(self.circuit.parameters))
         result.quantum_time = self.quantum_time
         return result
 
@@ -155,29 +155,41 @@ class VariationalQuantumProgram:
         return noisyopt.minimizeCompass(objective, initial_angles, errorcontrol=False, deltatol=1e-4)
 
     @staticmethod
-    def optimize_parameters_ax(objective: Callable[[Sequence[float]], tuple[float, float]]) -> OptimizeResult:
+    def optimize_parameters_ax(objective: Callable[[Sequence[float]], tuple[float, float]], num_params: int) -> OptimizeResult:
         """Optimizes parameters with Ax using BoTorch-backed Bayesian optimization.
         :param objective: Objective function mapping angle vectors to expected cost and SEM.
+        :param num_params: Number of circuit parameters to optimize.
         :return: Optimization result including optimized angles and metadata.
         """
         from logging import WARNING
 
         from ax.api.client import Client
         from ax.api.configs import RangeParameterConfig
+        from ax.global_stopping.strategies.improvement import ImprovementGlobalStoppingStrategy
         from ax.utils.common.logger import set_stderr_log_level
 
-        ax_trial_count = 1000
+        min_trials = 20
+        max_trials = 1000
+        window_size = 10
+        improvement_bar = 1e-3
+
         set_stderr_log_level(WARNING)
         client = Client()
-        parameters = [RangeParameterConfig(name=f"angle_{i}", bounds=(-np.pi, np.pi), parameter_type="float") for i in range(len(initial_angles))]
+        global_stopping_strategy = ImprovementGlobalStoppingStrategy(min_trials=min_trials, window_size=window_size, improvement_bar=improvement_bar)
+        parameters = [RangeParameterConfig(name=f"angle_{i}", bounds=(-np.pi, np.pi), parameter_type="float") for i in range(num_params)]
         client.configure_experiment(parameters=parameters, name="variational_quantum_program_angles")
         client.configure_optimization(objective="-expectation")
-        for _ in range(ax_trial_count):
+        for trial_count in range(max_trials):
             trial_index, parameters = next(iter(client.get_next_trials(max_trials=1).items()))
-            client.complete_trial(trial_index, raw_data={"expectation": objective(VariationalQuantumProgram.ax_parameters_to_angles(parameters))})
+            expectation, sem = objective(VariationalQuantumProgram.ax_parameters_to_angles(parameters))
+            client.complete_trial(trial_index, raw_data={"expectation": (expectation, sem)})
+            success, stop_message = global_stopping_strategy.should_stop_optimization(experiment=client._experiment)
+            if success:
+                break
         parameters, values, trial_index, _ = client.get_best_parameterization()
-        return OptimizeResult(x=VariationalQuantumProgram.ax_parameters_to_angles(parameters), fun=values["expectation"][0], success=True,
-                              message=f"Ax completed {ax_trial_count} trials; best trial index {trial_index}.", nit=ax_trial_count, nfev=ax_trial_count)
+        message = f"Ax success={success}; trial_count={trial_count}; Best trial_index={trial_index}; stop_message={stop_message}"
+        return OptimizeResult(x=VariationalQuantumProgram.ax_parameters_to_angles(parameters), fun=values["expectation"][0], success=success, message=message,
+                              nit=trial_count, nfev=trial_count)
 
     @staticmethod
     def ax_parameters_to_angles(parameters: Mapping[str, int | float | str | bool]) -> ndarray:
