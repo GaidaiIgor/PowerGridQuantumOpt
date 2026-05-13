@@ -168,17 +168,20 @@ class VariationalQuantumProgram:
         from ax.global_stopping.strategies.improvement import ImprovementGlobalStoppingStrategy
         from ax.utils.common.logger import set_stderr_log_level
 
-        min_trials = 20
+        initialization_budget = max(50, 5 * num_params)
+        min_trials = initialization_budget + max(50, 3 * num_params)
         max_trials = 1000
-        window_size = 10
+        window_size = max(20, 2 * num_params)
         improvement_bar = 1e-3
 
         set_stderr_log_level(WARNING)
         client = Client()
-        global_stopping_strategy = ImprovementGlobalStoppingStrategy(min_trials=min_trials, window_size=window_size, improvement_bar=improvement_bar)
         parameters = [RangeParameterConfig(name=f"angle_{i}", bounds=(-np.pi, np.pi), parameter_type="float") for i in range(num_params)]
         client.configure_experiment(parameters=parameters, name="variational_quantum_program_angles")
         client.configure_optimization(objective="-expectation")
+        client.configure_generation_strategy(method="quality", initialization_budget=initialization_budget,
+                                             min_observed_initialization_trials=initialization_budget, initialize_with_center=True)
+        global_stopping_strategy = ImprovementGlobalStoppingStrategy(min_trials=min_trials, window_size=window_size, improvement_bar=improvement_bar)
         for trial_count in range(max_trials):
             trial_index, parameters = next(iter(client.get_next_trials(max_trials=1).items()))
             expectation, sem = objective(VariationalQuantumProgram.ax_parameters_to_angles(parameters))
