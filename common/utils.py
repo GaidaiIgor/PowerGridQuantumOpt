@@ -14,9 +14,20 @@ SOLVER_IDS = ("scip", "smac", "uniform", "hybrid")
 SAMPLER_IDS = ("exact", "finite", "ionq-simulator", "ionq-hardware")
 
 
-def get_solver(solver_id: str, violation_tolerance: float = 1e-10, silent: bool = True, seed: int = 0, violation_mult: float = 10 ** 7,
-               max_inner_time_s: float = 30, max_classical_time: float | None = None, num_generators: int = 5, num_layers: int = 1,
-               initial_angles: str = "random", sampler_id: str = "finite", shots: int = 1000, analyze_expectations: bool = False,
+def get_solver(solver_id: str,
+               violation_tolerance: float = 1e-10,
+               silent: bool = True,
+               seed: int = 0,
+               violation_mult: float = 10 ** 7,
+               max_inner_time_s: float = 30,
+               max_classical_time: float | None = None,
+               num_generators: int = 5,
+               num_layers: int = 1,
+               initial_angles: str = "random",
+               sampler_id: str = "finite",
+               shots: int = 1000,
+               optimization_method: str = "auto",
+               analyze_expectations: bool = False,
                max_process_time: float | None = None) -> PowerFlowSolver:
     """Builds the configured solver for a problem size.
     :param solver_id: Solver identifier. Must be one of ``"scip"``, ``"smac"``, ``"uniform"``, or ``"hybrid"``.
@@ -31,6 +42,7 @@ def get_solver(solver_id: str, violation_tolerance: float = 1e-10, silent: bool 
     :param initial_angles: Initial angle initializer for hybrid runs.
     :param sampler_id: Sampler identifier for hybrid runs.
     :param shots: Number of shots for sampling-based backends.
+    :param optimization_method: Classical angle-optimization method for hybrid runs.
     :param analyze_expectations: Whether hybrid solvers should compute post-optimization expectation analysis.
     :param max_process_time: Maximum process time in seconds for hybrid runs, or ``None`` to disable the cap.
     :return: Solver configured for the current experiment.
@@ -44,26 +56,27 @@ def get_solver(solver_id: str, violation_tolerance: float = 1e-10, silent: bool 
     if solver_id == "uniform":
         return UniformSolver(inner_optimizer_factory, max_classical_time, violation_tolerance, seed)
     if solver_id == "hybrid":
-        vqp = get_variational_quantum_program(num_generators, num_layers, sampler_id, shots, seed)
+        vqp = get_variational_quantum_program(num_generators, num_layers, sampler_id, shots, optimization_method, seed)
         return HybridSolver(vqp, initial_angles, inner_optimizer_factory, violation_tolerance, analyze_expectations, seed, "hybrid", max_classical_time,
                             max_process_time)
     raise ValueError(f"Unsupported solver {solver_id}. Expected one of " + ", ".join(SOLVER_IDS) + ".")
 
 
-def get_variational_quantum_program(num_qubits: int, num_layers: int, sampler_id: str = "finite", shots: int = 1000, seed: int | None = None) \
-    -> VariationalQuantumProgram:
+def get_variational_quantum_program(num_qubits: int, num_layers: int, sampler_id: str = "finite", shots: int = 1000,
+                                    optimization_method: str = "auto", seed: int | None = None) -> VariationalQuantumProgram:
     """Builds the variational quantum program used by hybrid solvers.
     :param num_qubits: Number of qubits used by the program.
     :param num_layers: Number of repeated ansatz blocks.
     :param sampler_id: Sampler identifier for circuit evaluation.
     :param shots: Number of shots for sampling-based backends.
+    :param optimization_method: Classical angle-optimization method.
     :param seed: Randomness seed for sampling-based backends.
     :return: Configured variational quantum program.
     """
     entangler = AllToAllEntangler(num_qubits)
     mixer = ZXMixer(num_qubits)
     sampler = get_sampler(sampler_id, shots, seed)
-    return VariationalQuantumProgram(num_layers, [entangler, mixer], sampler)
+    return VariationalQuantumProgram(num_layers, [entangler, mixer], sampler, optimization_method)
 
 
 def get_sampler(sampler_id: str, shots: int, seed: int | None = None) -> Sampler:

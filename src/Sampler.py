@@ -8,6 +8,7 @@ from qiskit import QuantumCircuit
 from qiskit.primitives import BaseSamplerV2
 from qiskit.quantum_info import Statevector
 from qiskit_ionq import IonQProvider
+from qiskit_ionq.ionq_backend import IonQBackend
 
 
 class Sampler(ABC):
@@ -15,12 +16,18 @@ class Sampler(ABC):
 
     @abstractmethod
     def get_sample_probabilities(self, circuit: QuantumCircuit, param_vals: Sequence[float]) -> dict[str, float]:
-        """Assigns given values to given parameterized circuit, executes it and returns dictionary where keys are bitstrings are values are their sampling probabilities.
+        """Assigns values to a parameterized circuit and returns sampled bitstring probabilities.
         :param circuit: Parameterized circuit to evaluate.
         :param param_vals: Parameter values assigned to the circuit.
         :return: Bitstring-probability mapping.
         """
         pass
+
+    def get_num_shots(self) -> int | None:
+        """Returns number of shots represented by one probability estimate.
+        :return: Shot count for finite sampling, or ``None`` when probabilities are exact.
+        """
+        return None
 
 
 class ExactSampler(Sampler):
@@ -54,9 +61,24 @@ class MySamplerV2(Sampler):
         probabilities = {key: value / self.sampler.default_shots for key, value in counts.items()}
         return probabilities
 
+    def get_num_shots(self) -> int | None:
+        """Returns number of shots represented by one probability estimate.
+        :return: Shot count used by the sampler backend.
+        """
+        return self.sampler.default_shots
+
 
 class IonQSampler(Sampler):
-    """Uses IonQ's hardware or cloud simulators to get probability distribution."""
+    """Uses IonQ hardware or cloud simulators to get probability distribution.
+    :var backend_name: IonQ backend name, e.g. simulator or QPU identifier.
+    :var backend: IonQ backend used for circuit execution.
+    :var shots: Number of shots used per sampling job.
+    :var samples: Number of completed samples.
+    """
+    backend_name: str
+    backend: IonQBackend
+    shots: int
+    samples: int
 
     def __init__(self, backend_name: str, shots: int = 1000, noise_model: str = None):
         """Initializes an IonQ backend and optional noise model for sampling.
@@ -87,3 +109,9 @@ class IonQSampler(Sampler):
         print(f"Probabilities: {counts}")
         self.samples += 1
         return counts
+
+    def get_num_shots(self) -> int | None:
+        """Returns number of shots represented by one probability estimate.
+        :return: Shot count used by the IonQ backend.
+        """
+        return self.shots

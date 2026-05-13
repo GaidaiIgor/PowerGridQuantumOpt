@@ -8,14 +8,19 @@ from qiskit import QuantumCircuit
 from qiskit_ionq import IonQProvider
 
 
-def get_function_expectation(function: Callable[[str], float], probabilities: dict[str, float]) -> float:
-    """Evaluates expectation of the cost function for a given probability distribution.
+def get_function_stats(function: Callable[[str], float], probabilities: dict[str, float], num_shots: int | None) -> tuple[float, float]:
+    """Evaluates expectation and standard error of its sampled mean estimate.
     :param function: Function that maps a bitstring sample to a scalar.
     :param probabilities: Bitstring-probability mapping.
-    :return: Expected cost under the provided distribution.
+    :param num_shots: Number of shots used to estimate probabilities, or ``None`` when probabilities are exact.
+    :return: Expected cost and standard error of the mean.
     """
-    expectation = sum(function(bitstring) * probability for bitstring, probability in probabilities.items())
-    return expectation
+    weighted_values = [(function(bitstring), probability) for bitstring, probability in probabilities.items()]
+    expectation = sum(value * probability for value, probability in weighted_values)
+    if num_shots is None:
+        return expectation, 0
+    variance = sum((value - expectation) ** 2 * probability for value, probability in weighted_values)
+    return expectation, np.sqrt(variance / num_shots)
 
 
 def get_job_cost(circuit: QuantumCircuit, nfev: int) -> tuple[int, int, int, float]:

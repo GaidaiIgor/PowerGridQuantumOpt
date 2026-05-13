@@ -296,7 +296,7 @@ class UniformSolver(PowerFlowSolver):
         """Samples bitstrings uniformly and returns the incumbent history.
         :param problem: Power-flow optimization problem to solve.
         :param progress_path: Path for persisting incumbent progress snapshots.
-        :return: Solver history whose last entry is the final incumbent reached before exhausting bitstrings or hitting ``max_time``, together with solver-specific extra information.
+        :return: Solver history whose last entry is the final incumbent reached before exhausting bitstrings or hitting ``max_time``.
         """
         def update_history(new_result: EvaluationResult):
             """Appends a new incumbent history entry.
@@ -416,7 +416,7 @@ class HybridSolver(PowerFlowSolver):
             assert result.success, f"Angle optimization failed: {result.message}"
 
             while len(inner_optimizer.cache) < num_bitstrings:
-                self.vqp.get_function_expectation(cost_function, result.x)
+                self.vqp.get_function_stats(cost_function, result.x)
         except TimeoutError:
             pass
         assert len(history) > 0, "Hybrid solver did not record any feasible history entry."
@@ -450,15 +450,5 @@ class HybridSolver(PowerFlowSolver):
 
         exact_sampler = ExactSampler()
         opt_probs = exact_sampler.get_sample_probabilities(self.vqp.circuit, optimal_angles)
-        opt_expectation = utils.get_function_expectation(cost_function_untimed, opt_probs) * -best_total
+        opt_expectation = utils.get_function_stats(cost_function_untimed, opt_probs, None)[0] * -best_total
         return {"ar_uniform": uniform_expectation, "ar_opt": opt_expectation}
-
-    def get_feasible_probs(self, feasible_bitstrings: set[str], probs: dict[str, float]) -> dict[str, float]:
-        """Removes infeasible bitstrings from a probability distribution and renormalizes it.
-        :param feasible_bitstrings: Bitstrings that should be kept in the distribution.
-        :param probs: Probability distribution over bitstrings.
-        :return: Feasible-only renormalized probability distribution.
-        """
-        feasible_probs = {generator_statuses: probability for generator_statuses, probability in probs.items() if generator_statuses in feasible_bitstrings}
-        total_probability = sum(feasible_probs.values())
-        return {generator_statuses: probability / total_probability for generator_statuses, probability in feasible_probs.items()}

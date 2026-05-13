@@ -2,17 +2,15 @@
 
 import pickle
 import time
-from itertools import product
 from pathlib import Path
 
-import common.debug as debug
 import numpy as np
 from networkx import Graph
 
+import common.debug as debug
 from common.utils import get_solver
 from src.Generator import Generator
 from src.PowerFlowProblem import PowerFlowProblem
-from src.utils import my_format
 
 
 def run_single():
@@ -26,12 +24,13 @@ def run_single():
     max_classical_time = None
     num_layers = 1
     initial_angles = "random"
-    sampler_id = "exact"
+    sampler_id = "finite"
     shots = 1000
+    optimization_method = "ax"
     analyze_expectations = True
     max_process_time = None
-    data_path = Path("data/5")
-    instance = 0
+    data_path = Path("data/10")
+    instance = 7
     voltage_deviation_mult = 10
 
     with (data_path / f"{instance}.pkl").open("rb") as file:
@@ -40,7 +39,7 @@ def run_single():
     np.random.seed(seed)
 
     solver = get_solver(solver_id, violation_tolerance, silent, seed, violation_mult, max_inner_time_s, max_classical_time, num_generators, num_layers,
-                        initial_angles, sampler_id, shots, analyze_expectations, max_process_time=max_process_time)
+                        initial_angles, sampler_id, shots, optimization_method, analyze_expectations, max_process_time)
     progress_folder = Path(".progress")
     progress_folder.mkdir(exist_ok=True)
     progress_path = progress_folder / f"{instance}.pkl"
