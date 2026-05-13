@@ -76,7 +76,7 @@ def get_variational_quantum_program(num_qubits: int, num_layers: int, sampler_id
     entangler = AllToAllEntangler(num_qubits)
     mixer = ZXMixer(num_qubits)
     sampler = get_sampler(sampler_id, shots, seed)
-    return VariationalQuantumProgram(num_layers, [entangler, mixer], sampler, optimization_method)
+    return VariationalQuantumProgram(num_layers, [entangler, mixer], sampler, optimization_method, seed=seed)
 
 
 def get_sampler(sampler_id: str, shots: int, seed: int | None = None) -> Sampler:

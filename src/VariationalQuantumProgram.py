@@ -28,6 +28,7 @@ class VariationalQuantumProgram:
     :var circuit: Fully constructed parameterized quantum circuit.
     :var quantum_time: Accumulated time spent evaluating sampled quantum probabilities.
     :var num_jobs: Number of quantum computer jobs.
+    :var seed: Optional seed for optimizer-local randomness.
     """
     num_layers: int
     layer_types: list[CircuitLayer]
@@ -36,13 +37,15 @@ class VariationalQuantumProgram:
     circuit: QuantumCircuit
     quantum_time: float
     num_jobs: int
+    seed: int | None
 
-    def __init__(self, num_layers: int, layer_types: list[CircuitLayer], sampler: Sampler, optimization_method: str = "auto"):
+    def __init__(self, num_layers: int, layer_types: list[CircuitLayer], sampler: Sampler, optimization_method: str = "auto", seed: int | None = None):
         """Appends configured layer blocks and initializes program state.
         :param num_layers: Number of repeated ansatz blocks.
         :param layer_types: Layer templates composed once per block.
         :param sampler: Sampling backend used for probability estimation.
         :param optimization_method: Classical angle-optimization method.
+        :param seed: Optional seed for optimizer-local randomness.
         """
         if optimization_method not in OPTIMIZATION_METHOD_IDS:
             raise ValueError(f"Unsupported optimization method {optimization_method}. Expected one of " + ", ".join(OPTIMIZATION_METHOD_IDS) + ".")
@@ -54,6 +57,7 @@ class VariationalQuantumProgram:
         self.circuit = self.build_circuit()
         self.quantum_time = 0
         self.num_jobs = 0
+        self.seed = seed
 
     def build_circuit(self) -> QuantumCircuit:
         """Builds the layered ansatz circuit from configured layer templates.
@@ -134,14 +138,23 @@ class VariationalQuantumProgram:
         result.success = True
         return result
 
-    @staticmethod
-    def optimize_parameters_adam(objective: Callable[[Sequence[float]], float], initial_angles: ndarray) -> OptimizeResult:
-        """Optimizes parameters with Qiskit ADAM.
+    def optimize_parameters_adam(self, objective: Callable[[Sequence[float]], float], initial_angles: ndarray) -> OptimizeResult:
+        """Optimizes parameters with Qiskit ADAM and simultaneous-perturbation gradients.
         :param objective: Objective function mapping angle vectors to expected cost.
         :param initial_angles: Initial parameter vector for classical optimization.
         :return: Optimization result including optimized angles and metadata.
         """
-        result = ADAM().minimize(objective, initial_angles)
+        def estimate_gradient(angles: ndarray) -> ndarray:
+            """Estimates a stochastic gradient from one simultaneous perturbation.
+            :param angles: Center point for the gradient estimate.
+            :return: SPSA-style gradient estimate at ``angles``.
+            """
+            delta = rng.choice((-1, 1), size=len(angles))
+            return (objective(angles + perturbation * delta) - objective(angles - perturbation * delta)) / (2 * perturbation) * delta
+
+        perturbation = 0.1
+        rng = np.random.default_rng(self.seed)
+        result = ADAM(maxiter=1000, lr=0.03, tol=0).minimize(objective, initial_angles, jac=estimate_gradient)
         result.success = True
         return result
 
