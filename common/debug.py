@@ -113,7 +113,7 @@ def print_solution_from_csv(csv_path: str | Path, instance_index: int):
     history = converter.loads(solution_row["history"], list[HistoryEntry])
     for entry_ind, entry in enumerate(history):
         print(f"===========================================================================")
-        print(f"History entry {entry_ind}: time={entry.time:.6g}, job_ind={entry.job_ind}")
+        print(f"History entry {entry_ind}: time={entry.time:.6g}, expectation_jobs={entry.expectation_jobs}, fidelity_jobs={entry.fidelity_jobs}")
         print_evaluation_result(problem, entry.result)
 
 
@@ -162,7 +162,7 @@ def print_evaluation_result(problem: PowerFlowProblem, result: EvaluationResult)
             line_power = voltage_phasors[node_ind] * np.conj(current_phasor)
             signed_line_power = -line_power
             total_line_power += signed_line_power
-            print(f"  Line {node_label}--{neighbor_label}: Capacity {np.abs(current_phasor):.3g} <= {line_data['capacity']:.3g}; "
+            print(f"  Line {node_label}--{neighbor_label}: Capacity {np.abs(current_phasor):.3g} <= {line_data["capacity"]:.3g}; "
                   f"Power P: {signed_line_power.real:.3g}, Q: {signed_line_power.imag:.3g}")
         print(f"  Total line power: P: {total_line_power.real:.3g}, Q: {total_line_power.imag:.3g}")
         total_node_power_balance = total_generation + load_power + total_line_power

@@ -48,8 +48,9 @@ def run_single():
     print("\nSolution:")
     debug.print_evaluation_result(problem, history[-1].result)
     print(f"Optimized bitstrings: {extra["optimized_bitstrings"]}")
-    print(f"Solution found job ind: {history[-1].job_ind}")
-    print(f"Total opt jobs: {extra["total_opt_jobs"]}")
+    print(f"Solution found expectation jobs: {history[-1].expectation_jobs}")
+    print(f"Total expectation jobs: {extra["total_expectation_jobs"]}")
+    print(f"Total fidelity jobs: {extra["total_fidelity_jobs"]}")
     if solver.analyze_expectations:
         print(f"AR uniform: {extra["ar_uniform"]}")
         print(f"AR opt: {extra["ar_opt"]}")

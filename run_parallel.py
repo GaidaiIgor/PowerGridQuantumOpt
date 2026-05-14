@@ -51,8 +51,8 @@ def run_parallel():
     solver = get_solver(solver_id, violation_tolerance, silent, seed, violation_mult, max_inner_time_s, max_classical_time_s, num_generators, num_layers,
                         initial_angles, sampler_id, shots, optimization_method, analyze_expectations, max_process_time_s)
     solutions_path = Path(".solutions.csv")
-    columns = ["instance", "generators", "cont_params", "cost", "violation", "job_ind", "total_opt_jobs", "classical_opt_time", "optimized_bitstrings",
-               "max_inner", "ar_uniform", "ar_opt", "error", "history"]
+    columns = ["instance", "generators", "cont_params", "cost", "violation", "expectation_jobs", "total_expectation_jobs", "total_fidelity_jobs",
+               "classical_opt_time", "optimized_bitstrings", "max_inner", "ar_uniform", "ar_opt", "error", "history"]
     if solutions_path.exists():
         existing_df = pd.read_csv(solutions_path, dtype={"instance": "Int64", "generators": "string"}).reindex(columns=columns)
     else:
@@ -85,16 +85,15 @@ def run_parallel():
             index = future_to_metadata[future]
             progress_path = progress_folder / f"{index}.pkl"
             log_path = progress_folder / f"{index}.txt"
+            extra = {}
             try:
                 history, extra = future.result()
                 error = None
             except Exception as ex:
                 if progress_path.exists():
                     history = pd.read_pickle(progress_path)
-                    extra = history[-1].optimizer_stats
                 else:
                     history = None
-                    extra = {}
                 if isinstance(ex, FutureTimeoutError):
                     timeout_count += 1
                     error = f"Timeout after {max_process_time_s}s"
@@ -111,8 +110,9 @@ def run_parallel():
                         "cont_params": last_result.params,
                         "cost": last_result.fun,
                         "violation": last_result.violation,
-                        "job_ind": history[-1].job_ind,
-                        "total_opt_jobs": extra.get("total_opt_jobs"),
+                        "expectation_jobs": history[-1].expectation_jobs,
+                        "total_expectation_jobs": extra.get("total_expectation_jobs"),
+                        "total_fidelity_jobs": extra.get("total_fidelity_jobs"),
                         "classical_opt_time": extra.get("classical_opt_time"),
                         "optimized_bitstrings": extra.get("optimized_bitstrings"),
                         "max_inner": extra.get("max_inner"),
@@ -121,8 +121,9 @@ def run_parallel():
                         "history": converter.dumps(history)}
             rows[index] = row
             output_df = pd.DataFrame.from_dict(rows, orient="index").rename_axis("instance").reset_index().reindex(columns=columns).sort_values("instance")
-            output_df["job_ind"] = output_df["job_ind"].astype("Int64")
-            output_df["total_opt_jobs"] = output_df["total_opt_jobs"].astype("Int64")
+            output_df["expectation_jobs"] = output_df["expectation_jobs"].astype("Int64")
+            output_df["total_expectation_jobs"] = output_df["total_expectation_jobs"].astype("Int64")
+            output_df["total_fidelity_jobs"] = output_df["total_fidelity_jobs"].astype("Int64")
             output_df["optimized_bitstrings"] = output_df["optimized_bitstrings"].astype("Int64")
             output_df.to_csv(solutions_path, index=False)
 
@@ -217,14 +218,16 @@ def print_stats(df: pd.DataFrame, violation_tolerance: float):
     :param df: Result dataframe whose summary statistics are printed.
     :param violation_tolerance: Violation threshold above which an instance is considered infeasible.
     """
-    total_opt_jobs_values = pd.to_numeric(df["total_opt_jobs"], errors="coerce")
+    total_expectation_jobs_values = pd.to_numeric(df["total_expectation_jobs"], errors="coerce")
+    total_fidelity_jobs_values = pd.to_numeric(df["total_fidelity_jobs"], errors="coerce")
     classical_opt_time_values = pd.to_numeric(df["classical_opt_time"], errors="coerce") / 3600
     optimized_bitstring_values = pd.to_numeric(df["optimized_bitstrings"], errors="coerce")
     max_inner_values = pd.to_numeric(df["max_inner"], errors="coerce")
     infeasible_count = (pd.to_numeric(df["violation"], errors="coerce") > violation_tolerance).sum()
     ar_uniform_values = pd.to_numeric(df["ar_uniform"], errors="coerce")
     ar_opt_values = pd.to_numeric(df["ar_opt"], errors="coerce")
-    print(f"Total opt jobs: avg={total_opt_jobs_values.mean()}, max={total_opt_jobs_values.max()}")
+    print(f"Total expectation jobs: avg={total_expectation_jobs_values.mean()}, max={total_expectation_jobs_values.max()}")
+    print(f"Total fidelity jobs: avg={total_fidelity_jobs_values.mean()}, max={total_fidelity_jobs_values.max()}")
     print(f"Classical angle optimization time (h): avg={classical_opt_time_values.mean()}, max={classical_opt_time_values.max()}")
     print(f"Optimized bitstrings: avg={optimized_bitstring_values.mean()}, max={optimized_bitstring_values.max()}")
     print(f"Max inner optimization time (s): avg={max_inner_values.mean()}, max={max_inner_values.max()}")

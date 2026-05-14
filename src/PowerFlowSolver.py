@@ -74,7 +74,7 @@ class HistoryEventHandler(Eventhdlr):
         :param event: Event payload provided by SCIP.
         """
         current_time = time.perf_counter() - self.start_time
-        self.history.append(HistoryEntry(current_time, None, {}, SCIPSolver.extract_evaluation_result(self.model, self.variables)))
+        self.history.append(HistoryEntry(current_time, None, None, {}, SCIPSolver.extract_evaluation_result(self.model, self.variables)))
         pd.to_pickle(self.history, self.progress_path)
 
 
@@ -215,7 +215,7 @@ class SmacSolver(PowerFlowSolver):
             """
             current_time = time.perf_counter()
             stats = get_optimizer_stats(inner_optimizer)
-            history.append(HistoryEntry(current_time - start_time, None, stats.copy(), new_result))
+            history.append(HistoryEntry(current_time - start_time, None, None, stats.copy(), new_result))
             pd.to_pickle(history, progress_path)
 
         history = []
@@ -304,7 +304,7 @@ class UniformSolver(PowerFlowSolver):
             """
             current_time = time.perf_counter()
             stats = get_optimizer_stats(inner_optimizer)
-            history.append(HistoryEntry(current_time - start_time, None, stats.copy(), new_result))
+            history.append(HistoryEntry(current_time - start_time, None, None, stats.copy(), new_result))
             pd.to_pickle(history, progress_path)
 
         history = []
@@ -359,8 +359,8 @@ class HybridSolver(PowerFlowSolver):
             :param new_result: Improved incumbent returned by the inner optimizer.
             """
             stats = get_optimizer_stats(inner_optimizer)
-            classical_time = time.perf_counter() - start_time - self.vqp.quantum_time
-            history.append(HistoryEntry(classical_time, self.vqp.num_jobs, stats.copy(), new_result))
+            classical_time = time.perf_counter() - start_time - self.vqp.expectation_time - self.vqp.fidelity_time
+            history.append(HistoryEntry(classical_time, self.vqp.expectation_jobs, self.vqp.fidelity_jobs, stats.copy(), new_result))
             pd.to_pickle(history, progress_path)
 
         def get_inner_result(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> EvaluationResult:
@@ -369,11 +369,11 @@ class HybridSolver(PowerFlowSolver):
             :param max_classical_time: Classical angle-optimization time cap in seconds, or ``None`` to disable time checks.
             :return: Inner-optimizer result for the given status pattern.
             """
-            if max_classical_time is not None and time.perf_counter() - start_time - self.vqp.quantum_time > max_classical_time:
+            if max_classical_time is not None and time.perf_counter() - start_time - self.vqp.expectation_time - self.vqp.fidelity_time > max_classical_time:
                 raise TimeoutError("Classical angle optimization time exceeded limit.")
             if max_classical_time is not None and time.perf_counter() - start_time > self.max_process_time - 60:
-                raise AssertionError(f"Ran out of process time. "
-                                     f"Remaining classical time = {max_classical_time - time.perf_counter() + start_time + self.vqp.quantum_time}")
+                remaining_time = max_classical_time - time.perf_counter() + start_time + self.vqp.expectation_time + self.vqp.fidelity_time
+                raise AssertionError(f"Ran out of process time. Remaining classical time = {remaining_time}")
             return inner_optimizer.optimize(generator_statuses)
 
         def get_cost(generator_statuses: str, max_classical_time: float | None = self.max_classical_time) -> float:
@@ -412,7 +412,9 @@ class HybridSolver(PowerFlowSolver):
         try:
             start_time = time.perf_counter()
             result = self.vqp.optimize_parameters(cost_function, initial_angles)
-            extra |= {"classical_opt_time": time.perf_counter() - start_time - self.vqp.quantum_time, "total_opt_jobs": self.vqp.num_jobs}
+            extra |= get_optimizer_stats(inner_optimizer)
+            extra |= {"classical_opt_time": time.perf_counter() - start_time - self.vqp.expectation_time - self.vqp.fidelity_time,
+                      "total_expectation_jobs": self.vqp.expectation_jobs, "total_fidelity_jobs": self.vqp.fidelity_jobs}
             assert result.success, f"Angle optimization failed: {result.message}"
 
             while len(inner_optimizer.cache) < num_bitstrings:
@@ -425,7 +427,6 @@ class HybridSolver(PowerFlowSolver):
         assert np.isclose(best_result.total, history[-1].result.total), \
             f"Lowest overall: fun={best_result.fun}; violation={best_result.violation}. Lowest feasible: fun={history[-1].result.fun}."
 
-        extra |= get_optimizer_stats(inner_optimizer)
         if self.analyze_expectations:
             assert extra.get("classical_opt_time") is not None, "Expectation analysis requires completed angle optimization."
             extra |= self.analyze_ar_expectations(inner_optimizer, cost_function, result.x)

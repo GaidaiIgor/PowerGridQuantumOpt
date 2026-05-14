@@ -27,8 +27,10 @@ class VariationalQuantumProgram:
     :var sampler: Sampling backend used to estimate output probabilities.
     :var optimization_method: Classical angle-optimization method.
     :var circuit: Fully constructed parameterized quantum circuit.
-    :var quantum_time: Accumulated time spent evaluating sampled quantum probabilities.
-    :var num_jobs: Number of quantum computer jobs.
+    :var expectation_time: Accumulated time spent evaluating expectation sample probabilities.
+    :var expectation_jobs: Number of expectation-evaluation quantum jobs.
+    :var fidelity_time: Accumulated time spent evaluating QNSPSA fidelity probabilities.
+    :var fidelity_jobs: Number of QNSPSA fidelity-evaluation quantum jobs.
     :var seed: Optional seed for optimizer-local randomness.
     """
     num_layers: int
@@ -36,8 +38,10 @@ class VariationalQuantumProgram:
     sampler: Sampler
     optimization_method: str
     circuit: QuantumCircuit
-    quantum_time: float
-    num_jobs: int
+    expectation_time: float
+    expectation_jobs: int
+    fidelity_time: float
+    fidelity_jobs: int
     seed: int | None
 
     def __init__(self, num_layers: int, layer_types: list[CircuitLayer], sampler: Sampler, optimization_method: str = "auto", seed: int | None = None):
@@ -56,8 +60,6 @@ class VariationalQuantumProgram:
         self.sampler = sampler
         self.optimization_method = optimization_method
         self.circuit = self.build_circuit()
-        self.quantum_time = 0
-        self.num_jobs = 0
         self.seed = seed
 
     def build_circuit(self) -> QuantumCircuit:
@@ -66,24 +68,10 @@ class VariationalQuantumProgram:
         """
         qc = QuantumCircuit(self.layer_types[0].num_qubits)
         qc.h(range(qc.num_qubits))
-        # qc.barrier()
         for i in range(self.num_layers):
             for layer_type in self.layer_types:
                 qc.compose(layer_type.get_circuit(str(i)), inplace=True)
-                # qc.barrier()
         return qc
-
-    def get_function_stats(self, function: Callable[[str], float], param_vals: Sequence[float]) -> tuple[float, float]:
-        """Evaluates expectation and standard error for given circuit parameter values.
-        :param function: Function mapping sampled bitstrings to costs.
-        :param param_vals: Parameter values assigned to the ansatz circuit.
-        :return: Expected cost and standard error of the sampled mean estimate.
-        """
-        t1 = time.perf_counter()
-        probabilities = self.sampler.get_sample_probabilities(self.circuit, param_vals)
-        self.quantum_time += time.perf_counter() - t1
-        self.num_jobs += 1
-        return utils.get_function_stats(function, probabilities, self.sampler.get_num_shots())
 
     def optimize_parameters(self, target_function: Callable[[str], float], initial_angles: ndarray) -> OptimizeResult:
         """Optimizes variational parameters of the circuit to minimize expectation of target function and returns optimized parameter values.
@@ -91,8 +79,7 @@ class VariationalQuantumProgram:
         :param initial_angles: Initial parameter vector for classical optimization.
         :return: Optimization result including optimized angles and metadata.
         """
-        self.quantum_time = 0
-        self.num_jobs = 0
+        self.reset_stats()
         get_target_stats = partial(self.get_function_stats, target_function)
         get_target_expectation = lambda angles: get_target_stats(angles)[0]
         match self.get_optimization_method():
@@ -108,8 +95,27 @@ class VariationalQuantumProgram:
                 result = self.optimize_parameters_noisyopt(get_target_expectation, initial_angles)
             case "ax":
                 result = self.optimize_parameters_ax(get_target_stats, len(self.circuit.parameters))
-        result.quantum_time = self.quantum_time
+        result.expectation_time = self.expectation_time
         return result
+
+    def reset_stats(self):
+        """Resets quantum-evaluation counters before a parameter optimization run."""
+        self.expectation_time = 0
+        self.expectation_jobs = 0
+        self.fidelity_time = 0
+        self.fidelity_jobs = 0
+
+    def get_function_stats(self, function: Callable[[str], float], param_vals: Sequence[float]) -> tuple[float, float]:
+        """Evaluates expectation and standard error for given circuit parameter values.
+        :param function: Function mapping sampled bitstrings to costs.
+        :param param_vals: Parameter values assigned to the ansatz circuit.
+        :return: Expected cost and standard error of the sampled mean estimate.
+        """
+        t1 = time.perf_counter()
+        probabilities = self.sampler.get_sample_probabilities(self.circuit, param_vals)
+        self.expectation_time += time.perf_counter() - t1
+        self.expectation_jobs += 1
+        return utils.get_function_stats(function, probabilities, self.sampler.get_num_shots())
 
     def get_optimization_method(self) -> str:
         """Returns the concrete optimization method selected for this run.
@@ -155,8 +161,8 @@ class VariationalQuantumProgram:
             overlap_circuit = self.circuit.assign_parameters(shifted_angles)
             overlap_circuit.compose(self.circuit.assign_parameters(angles).inverse(), inplace=True)
             probabilities = self.sampler.get_sample_probabilities(overlap_circuit, [])
-            self.quantum_time += time.perf_counter() - t1
-            self.num_jobs += 1
+            self.fidelity_time += time.perf_counter() - t1
+            self.fidelity_jobs += 1
             return probabilities.get("0" * self.circuit.num_qubits, 0)
 
         if self.seed is not None:
