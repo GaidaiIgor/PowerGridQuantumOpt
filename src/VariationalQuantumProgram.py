@@ -8,7 +8,8 @@ import noisyopt
 import numpy as np
 from numpy import ndarray
 from qiskit import QuantumCircuit
-from qiskit_algorithms.optimizers import SPSA, ADAM
+from qiskit_algorithms.optimizers import SPSA, ADAM, QNSPSA
+from qiskit_algorithms.utils import algorithm_globals
 from scipy import optimize
 from scipy.optimize import OptimizeResult
 
@@ -16,7 +17,7 @@ from . import utils
 from .CircuitLayer import CircuitLayer
 from .Sampler import Sampler, ExactSampler
 
-OPTIMIZATION_METHOD_IDS = ("auto", "l-bfgs-b", "spsa", "adam", "noisyopt", "ax")
+OPTIMIZATION_METHOD_IDS = ("auto", "l-bfgs-b", "spsa", "qnspsa", "adam", "noisyopt", "ax")
 
 
 class VariationalQuantumProgram:
@@ -99,6 +100,8 @@ class VariationalQuantumProgram:
                 result = self.optimize_parameters_l_bfgs_b(get_target_expectation, initial_angles)
             case "spsa":
                 result = self.optimize_parameters_spsa(get_target_expectation, initial_angles)
+            case "qnspsa":
+                result = self.optimize_parameters_qnspsa(get_target_expectation, initial_angles)
             case "adam":
                 result = self.optimize_parameters_adam(get_target_expectation, initial_angles)
             case "noisyopt":
@@ -135,6 +138,30 @@ class VariationalQuantumProgram:
         :return: Optimization result including optimized angles and metadata.
         """
         result = SPSA(maxiter=1000).minimize(objective, initial_angles)
+        result.success = True
+        return result
+
+    def optimize_parameters_qnspsa(self, objective: Callable[[Sequence[float]], float], initial_angles: ndarray) -> OptimizeResult:
+        """Optimizes parameters with Qiskit quantum natural SPSA.
+        :param objective: Objective function mapping angle vectors to expected cost.
+        :param initial_angles: Initial parameter vector for classical optimization.
+        :return: Optimization result including optimized angles and metadata."""
+        def fidelity(angles: ndarray, shifted_angles: ndarray) -> float:
+            """Estimates fidelity between ansatz states prepared with two angle vectors.
+            :param angles: First angle vector used by the inverse ansatz.
+            :param shifted_angles: Second angle vector used by the forward ansatz.
+            :return: Probability of returning to the all-zero state after compute-uncompute."""
+            t1 = time.perf_counter()
+            overlap_circuit = self.circuit.assign_parameters(shifted_angles)
+            overlap_circuit.compose(self.circuit.assign_parameters(angles).inverse(), inplace=True)
+            probabilities = self.sampler.get_sample_probabilities(overlap_circuit, [])
+            self.quantum_time += time.perf_counter() - t1
+            self.num_jobs += 1
+            return probabilities.get("0" * self.circuit.num_qubits, 0)
+
+        if self.seed is not None:
+            algorithm_globals.random_seed = self.seed
+        result = QNSPSA(fidelity, maxiter=1000, learning_rate=0.03, perturbation=0.1).minimize(objective, initial_angles)
         result.success = True
         return result
 
