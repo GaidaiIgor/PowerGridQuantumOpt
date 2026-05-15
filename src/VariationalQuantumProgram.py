@@ -167,7 +167,7 @@ class VariationalQuantumProgram:
 
         if self.seed is not None:
             algorithm_globals.random_seed = self.seed
-        result = QNSPSA(fidelity, maxiter=1000, hessian_delay=200).minimize(objective, initial_angles)
+        result = QNSPSA(fidelity, maxiter=1000, hessian_delay=200, regularization=0.1).minimize(objective, initial_angles)
         result.success = True
         return result
 
