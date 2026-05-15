@@ -26,11 +26,11 @@ def run_single():
     initial_angles = "random"
     sampler_id = "finite"
     shots = 1000
-    optimization_method = "ax"
+    optimization_method = "qnspsa"
     analyze_expectations = True
     max_process_time = None
-    data_path = Path("data/10")
-    instance = 7
+    data_path = Path("data/5")
+    instance = 0
     voltage_deviation_mult = 10
 
     with (data_path / f"{instance}.pkl").open("rb") as file:
