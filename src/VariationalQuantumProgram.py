@@ -15,9 +15,10 @@ from scipy.optimize import OptimizeResult
 
 from . import utils
 from .CircuitLayer import CircuitLayer
+from .NoisyOptimizer import NoisyAngleOptimizer
 from .Sampler import Sampler, ExactSampler
 
-OPTIMIZATION_METHOD_IDS = ("auto", "l-bfgs-b", "spsa", "qnspsa", "adam", "noisyopt", "ax")
+OPTIMIZATION_METHOD_IDS = ("auto", "l-bfgs-b", "spsa", "qnspsa", "adam", "noisyopt", "custom", "ax")
 
 
 class VariationalQuantumProgram:
@@ -93,6 +94,8 @@ class VariationalQuantumProgram:
                 result = self.optimize_parameters_adam(get_target_expectation, initial_angles)
             case "noisyopt":
                 result = self.optimize_parameters_noisyopt(get_target_expectation, initial_angles)
+            case "custom":
+                result = self.optimize_parameters_custom(get_target_stats, initial_angles)
             case "ax":
                 result = self.optimize_parameters_ax(get_target_stats, len(self.circuit.parameters))
         result.expectation_time = self.expectation_time
@@ -199,6 +202,14 @@ class VariationalQuantumProgram:
         :return: Optimization result including optimized angles and metadata.
         """
         return noisyopt.minimizeCompass(objective, initial_angles, errorcontrol=False, deltatol=1e-4)
+
+    def optimize_parameters_custom(self, objective: Callable[[Sequence[float]], tuple[float, float]], initial_angles: ndarray) -> OptimizeResult:
+        """Optimizes parameters with the custom noisy Adam-SPSA optimizer.
+        :param objective: Objective function mapping angle vectors to expected cost and SEM.
+        :param initial_angles: Initial parameter vector for classical optimization.
+        :return: Optimization result including optimized angles and metadata.
+        """
+        return NoisyAngleOptimizer(seed=self.seed).minimize(objective, initial_angles)
 
     @staticmethod
     def optimize_parameters_ax(objective: Callable[[Sequence[float]], tuple[float, float]], num_params: int) -> OptimizeResult:
