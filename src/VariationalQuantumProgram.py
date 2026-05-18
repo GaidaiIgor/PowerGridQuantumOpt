@@ -209,7 +209,7 @@ class VariationalQuantumProgram:
         :param initial_angles: Initial parameter vector for classical optimization.
         :return: Optimization result including optimized angles and metadata.
         """
-        return NoisyAngleOptimizer(seed=self.seed).minimize(objective, initial_angles)
+        return NoisyAngleOptimizer(maxiter=2000, seed=self.seed).minimize(objective, initial_angles)
 
     @staticmethod
     def optimize_parameters_ax(objective: Callable[[Sequence[float]], tuple[float, float]], num_params: int) -> OptimizeResult:
