@@ -198,7 +198,7 @@ class VariationalQuantumProgram:
             delta = rng.choice((-1, 1), size=len(angles))
             return (objective(angles + perturbation * delta) - objective(angles - perturbation * delta)) / (2 * perturbation) * delta
 
-        perturbation = 1
+        perturbation = 0.01
         rng = np.random.default_rng(self.seed)
         options = {"maxiter": 1000, "lr": 0.04} | self.optimization_options
         result = ADAM(**options).minimize(objective, initial_angles, jac=estimate_gradient)
