@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=120
 #SBATCH --mem=60G
-#SBATCH -t 01:30:00
+#SBATCH -t 02:30:00
 #SBATCH -o out.txt
 
 module load python/3.13.11
@@ -15,5 +15,5 @@ export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 
 echo "SLURM_JOB_ID=$SLURM_JOB_ID"
-time python /storage/home/zgj518/projects/PowerGridQuantumOpt/run_parallel.py -df /storage/home/zgj518/projects/PowerGridQuantumOpt/data/10 -s hybrid -ae -mct 0.5 -t 1 -sa finite -om adam -oo '{"amsgrad": True}'
+time python /storage/home/zgj518/projects/PowerGridQuantumOpt/run_parallel.py -df /storage/home/zgj518/projects/PowerGridQuantumOpt/data/10 -s hybrid -ae -mct 0.5 -t 2 -sa finite -om adam -oo '{"maxiter": 2000}'
 jobstats $SLURM_JOB_ID
