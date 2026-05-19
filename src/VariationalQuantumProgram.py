@@ -15,11 +15,12 @@ from scipy import optimize
 from scipy.optimize import OptimizeResult
 
 from . import utils
+from .adam_custom import ADAM as CustomADAM
 from .CircuitLayer import CircuitLayer
 from .NoisyOptimizer import NoisyAngleOptimizer
 from .Sampler import Sampler, ExactSampler
 
-OPTIMIZATION_METHOD_IDS = ("auto", "l-bfgs-b", "spsa", "qnspsa", "adam", "noisyopt", "custom", "ax")
+OPTIMIZATION_METHOD_IDS = ("auto", "l-bfgs-b", "spsa", "qnspsa", "adam", "adam_custom", "noisyopt", "custom", "ax")
 
 
 class VariationalQuantumProgram:
@@ -98,6 +99,8 @@ class VariationalQuantumProgram:
                 result = self.optimize_parameters_qnspsa(get_target_expectation, initial_angles)
             case "adam":
                 result = self.optimize_parameters_adam(get_target_expectation, initial_angles)
+            case "adam_custom":
+                result = self.optimize_parameters_adam_custom(get_target_expectation, initial_angles)
             case "noisyopt":
                 result = self.optimize_parameters_noisyopt(get_target_expectation, initial_angles)
             case "custom":
@@ -197,8 +200,29 @@ class VariationalQuantumProgram:
 
         perturbation = 0.1
         rng = np.random.default_rng(self.seed)
-        options = {"maxiter": 1000, "lr": 0.03} | self.optimization_options
+        options = {"maxiter": 1000, "lr": 0.04} | self.optimization_options
         result = ADAM(**options).minimize(objective, initial_angles, jac=estimate_gradient)
+        result.success = True
+        return result
+
+    def optimize_parameters_adam_custom(self, objective: Callable[[Sequence[float]], float], initial_angles: ndarray) -> OptimizeResult:
+        """Optimizes parameters with local ADAM and simultaneous-perturbation gradients.
+        :param objective: Objective function mapping angle vectors to expected cost.
+        :param initial_angles: Initial parameter vector for classical optimization.
+        :return: Optimization result including optimized angles and metadata.
+        """
+        def estimate_gradient(angles: ndarray) -> ndarray:
+            """Estimates a stochastic gradient from one simultaneous perturbation.
+            :param angles: Center point for the gradient estimate.
+            :return: SPSA-style gradient estimate at ``angles``.
+            """
+            delta = rng.choice((-1, 1), size=len(angles))
+            return (objective(angles + perturbation * delta) - objective(angles - perturbation * delta)) / (2 * perturbation) * delta
+
+        perturbation = 0.1
+        rng = np.random.default_rng(self.seed)
+        options = {"maxiter": 1000, "lr": 0.04} | self.optimization_options
+        result = CustomADAM(**options).minimize(objective, initial_angles, jac=estimate_gradient)
         result.success = True
         return result
 
