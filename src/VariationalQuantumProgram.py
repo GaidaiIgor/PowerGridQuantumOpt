@@ -15,12 +15,12 @@ from scipy import optimize
 from scipy.optimize import OptimizeResult
 
 from . import utils
-from .adam_custom import ADAM as CustomADAM
+from .adam_custom import ADAM as CustomADAM, SEMADAM
 from .CircuitLayer import CircuitLayer
 from .NoisyOptimizer import NoisyAngleOptimizer
 from .Sampler import Sampler, ExactSampler
 
-OPTIMIZATION_METHOD_IDS = ("auto", "l-bfgs-b", "spsa", "qnspsa", "adam", "adam_custom", "noisyopt", "custom", "ax")
+OPTIMIZATION_METHOD_IDS = ("auto", "l-bfgs-b", "spsa", "qnspsa", "adam", "adam_custom", "semadam", "noisyopt", "custom", "ax")
 
 
 class VariationalQuantumProgram:
@@ -101,6 +101,8 @@ class VariationalQuantumProgram:
                 result = self.optimize_parameters_adam(get_target_expectation, initial_angles)
             case "adam_custom":
                 result = self.optimize_parameters_adam_custom(get_target_expectation, initial_angles)
+            case "semadam":
+                result = self.optimize_parameters_semadam(get_target_stats, initial_angles)
             case "noisyopt":
                 result = self.optimize_parameters_noisyopt(get_target_expectation, initial_angles)
             case "custom":
@@ -223,6 +225,16 @@ class VariationalQuantumProgram:
         rng = np.random.default_rng(self.seed)
         options = {"maxiter": 1000, "lr": 0.04} | self.optimization_options
         result = CustomADAM(**options).minimize(objective, initial_angles, jac=estimate_gradient)
+        result.success = True
+        return result
+
+    def optimize_parameters_semadam(self, objective: Callable[[Sequence[float]], tuple[float, float]], initial_angles: ndarray) -> OptimizeResult:
+        """Optimizes parameters with local SEM-aware ADAM and built-in simultaneous-perturbation gradients.
+        :param objective: Objective function mapping angle vectors to expected cost and SEM.
+        :param initial_angles: Initial parameter vector for classical optimization.
+        :return: Optimization result including optimized angles and metadata."""
+        options = {"maxiter": 1000, "lr": 0.04, "amsgrad": True, "seed": self.seed} | self.optimization_options
+        result = SEMADAM(**options).minimize(objective, initial_angles)
         result.success = True
         return result
 
