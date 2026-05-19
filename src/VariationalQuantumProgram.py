@@ -202,7 +202,7 @@ class VariationalQuantumProgram:
 
         perturbation = 0.1
         rng = np.random.default_rng(self.seed)
-        options = {"maxiter": 1000, "lr": 0.04} | self.optimization_options
+        options = {"maxiter": 1000, "lr": 0.04, "amsgrad": True} | self.optimization_options
         result = ADAM(**options).minimize(objective, initial_angles, jac=estimate_gradient)
         result.success = True
         return result
