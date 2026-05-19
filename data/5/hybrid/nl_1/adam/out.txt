@@ -1,0 +1,32 @@
+SLURM_JOB_ID=28548
+Using 120 worker(s).
+  0%|          | 0/120 [00:00<?, ?it/s]  1%|          | 1/120 [00:22<43:49, 22.10s/it]  3%|▎         | 4/120 [00:22<10:44,  5.55s/it]  7%|▋         | 8/120 [00:22<05:12,  2.79s/it] 12%|█▎        | 15/120 [00:22<02:37,  1.50s/it] 18%|█▊        | 22/120 [00:22<01:40,  1.03s/it] 24%|██▍       | 29/120 [00:22<01:11,  1.28it/s] 30%|███       | 36/120 [00:23<00:54,  1.54it/s] 36%|███▌      | 43/120 [00:23<00:42,  1.81it/s] 42%|████▏     | 50/120 [00:24<00:33,  2.08it/s] 48%|████▊     | 57/120 [00:24<00:26,  2.34it/s] 53%|█████▎    | 64/120 [00:24<00:21,  2.60it/s] 59%|█████▉    | 71/120 [00:24<00:17,  2.85it/s] 65%|██████▌   | 78/120 [00:25<00:13,  3.09it/s] 71%|███████   | 85/120 [00:25<00:10,  3.33it/s] 77%|███████▋  | 92/120 [00:26<00:07,  3.51it/s] 82%|████████▎ | 99/120 [00:27<00:05,  3.65it/s] 88%|████████▊ | 106/120 [00:28<00:03,  3.73it/s] 94%|█████████▍| 113/120 [00:29<00:01,  3.80it/s] 94%|█████████▍| 113/120 [00:39<00:02,  2.83it/s]100%|██████████| 120/120 [00:53<00:00,  2.26it/s]100%|██████████| 120/120 [00:53<00:00,  2.26it/s]
+Run complete: 0 timeout(s), 0 other failure(s).
+
+All instances:
+Total expectation jobs: avg=2001.0, max=2001
+Total fidelity jobs: avg=0.0, max=0
+Classical angle optimization time (h): avg=0.0011141971389593826, max=0.009909749413297201
+Optimized bitstrings: avg=32.0, max=32
+Max inner optimization time (s): avg=1.1995265849051067, max=30.027485332917422
+Infeasible instances: 2
+AR uniform: avg=0.28978406437515747
+AR opt: avg=0.9406971627631405
+
+Selected 100 instances:
+Total expectation jobs: avg=2001.0, max=2001
+Total fidelity jobs: avg=0.0, max=0
+Classical angle optimization time (h): avg=0.0007663112757281245, max=0.0016782108233180932
+Optimized bitstrings: avg=32.0, max=32
+Max inner optimization time (s): avg=0.6022796805854886, max=3.892016964033246
+Infeasible instances: 0
+AR uniform: avg=0.3082744888986478
+AR opt: avg=0.9480691951601325
+
+real	0m56.847s
+user	46m55.280s
+sys	1m25.841s
+No data was found for job 28548. This is probably because it is too old
+or it expired from Jobstats database. If you are not running this command on the
+cluster where the job was run then use the -c option to specify the cluster.
+If the run time was very short then try running "seff 28548".

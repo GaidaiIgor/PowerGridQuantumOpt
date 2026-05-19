@@ -1,0 +1,32 @@
+SLURM_JOB_ID=28592
+Using 120 worker(s).
+  0%|          | 0/120 [00:00<?, ?it/s]  1%|          | 1/120 [00:33<1:06:47, 33.68s/it]  3%|▎         | 4/120 [00:33<16:19,  8.45s/it]    9%|▉         | 11/120 [00:33<05:35,  3.08s/it] 15%|█▌        | 18/120 [00:34<03:12,  1.89s/it] 21%|██        | 25/120 [00:34<02:09,  1.37s/it] 27%|██▋       | 32/120 [00:34<01:34,  1.07s/it] 32%|███▎      | 39/120 [00:34<01:11,  1.13it/s] 38%|███▊      | 46/120 [00:34<00:55,  1.32it/s] 44%|████▍     | 53/120 [00:35<00:44,  1.50it/s] 50%|█████     | 60/120 [00:35<00:35,  1.68it/s] 56%|█████▌    | 67/120 [00:36<00:28,  1.85it/s] 62%|██████▏   | 74/120 [00:36<00:22,  2.02it/s] 68%|██████▊   | 81/120 [00:36<00:17,  2.19it/s] 73%|███████▎  | 88/120 [00:37<00:13,  2.35it/s] 79%|███████▉  | 95/120 [00:37<00:09,  2.50it/s] 85%|████████▌ | 102/120 [00:39<00:06,  2.60it/s] 91%|█████████ | 109/120 [00:40<00:04,  2.68it/s] 97%|█████████▋| 116/120 [00:42<00:01,  2.72it/s]100%|██████████| 120/120 [00:44<00:00,  2.68it/s]
+Run complete: 0 timeout(s), 0 other failure(s).
+
+All instances:
+Total expectation jobs: avg=3001.0, max=3001
+Total fidelity jobs: avg=0.0, max=0
+Classical angle optimization time (h): avg=0.0011235229372121263, max=0.004213802969510046
+Optimized bitstrings: avg=32.0, max=32
+Max inner optimization time (s): avg=1.0153175116865896, max=5.485752383014187
+Infeasible instances: 2
+AR uniform: avg=0.28978403238128236
+AR opt: avg=0.9057971966410037
+
+Selected 100 instances:
+Total expectation jobs: avg=3001.0, max=3001
+Total fidelity jobs: avg=0.0, max=0
+Classical angle optimization time (h): avg=0.0008289143089366715, max=0.0018456086177482372
+Optimized bitstrings: avg=32.0, max=32
+Max inner optimization time (s): avg=0.62009023059858, max=3.935327378800139
+Infeasible instances: 0
+AR uniform: avg=0.3082744888986478
+AR opt: avg=0.9075559822836307
+
+real	0m49.463s
+user	68m16.191s
+sys	1m30.580s
+No data was found for job 28592. This is probably because it is too old
+or it expired from Jobstats database. If you are not running this command on the
+cluster where the job was run then use the -c option to specify the cluster.
+If the run time was very short then try running "seff 28592".

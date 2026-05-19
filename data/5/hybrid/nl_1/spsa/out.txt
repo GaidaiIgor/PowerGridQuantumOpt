@@ -1,0 +1,30 @@
+SLURM_JOB_ID=18974
+Using 120 worker(s).
+  0%|          | 0/120 [00:00<?, ?it/s]  1%|          | 1/120 [00:26<53:09, 26.80s/it]  6%|▌         | 7/120 [00:26<07:14,  3.85s/it] 11%|█         | 13/120 [00:27<03:42,  2.08s/it] 16%|█▌        | 19/120 [00:27<02:24,  1.44s/it] 21%|██        | 25/120 [00:27<01:44,  1.10s/it] 26%|██▌       | 31/120 [00:27<01:19,  1.13it/s] 31%|███       | 37/120 [00:27<01:02,  1.33it/s] 36%|███▌      | 43/120 [00:27<00:50,  1.54it/s] 41%|████      | 49/120 [00:28<00:40,  1.74it/s] 46%|████▌     | 55/120 [00:28<00:33,  1.93it/s] 51%|█████     | 61/120 [00:28<00:27,  2.13it/s] 56%|█████▌    | 67/120 [00:28<00:22,  2.31it/s] 61%|██████    | 73/120 [00:29<00:18,  2.49it/s] 66%|██████▌   | 79/120 [00:29<00:15,  2.67it/s] 71%|███████   | 85/120 [00:29<00:12,  2.84it/s] 76%|███████▌  | 91/120 [00:30<00:09,  3.01it/s] 81%|████████  | 97/120 [00:30<00:07,  3.15it/s] 86%|████████▌ | 103/120 [00:32<00:05,  3.19it/s] 91%|█████████ | 109/120 [00:33<00:03,  3.27it/s] 96%|█████████▌| 115/120 [00:34<00:01,  3.35it/s] 96%|█████████▌| 115/120 [00:50<00:02,  2.30it/s]100%|██████████| 120/120 [00:54<00:00,  2.20it/s]100%|██████████| 120/120 [00:54<00:00,  2.20it/s]
+Run complete: 0 timeout(s), 0 other failure(s).
+
+All instances:
+Total opt jobs: avg=2051.0, max=2051
+Classical angle optimization time (h): avg=0.0012946410524665327, max=0.010052240679570888
+Optimized bitstrings: avg=32.0, max=32
+Max inner optimization time (s): avg=1.3261265771327695, max=30.026084234006703
+Infeasible instances: 2
+AR uniform: avg=0.2897840756286395
+AR opt: avg=0.9258810042842269
+
+Selected 100 instances:
+Total opt jobs: avg=2051.0, max=2051
+Classical angle optimization time (h): avg=0.0009147907991253304, max=0.0019510519056994882
+Optimized bitstrings: avg=32.0, max=32
+Max inner optimization time (s): avg=0.6822334953420796, max=4.355565955163911
+Infeasible instances: 0
+AR uniform: avg=0.3082744888986478
+AR opt: avg=0.9319899911595251
+
+real	0m58.542s
+user	54m56.797s
+sys	1m38.000s
+No data was found for job 18974. This is probably because it is too old
+or it expired from Jobstats database. If you are not running this command on the
+cluster where the job was run then use the -c option to specify the cluster.
+If the run time was very short then try running "seff 18974".
