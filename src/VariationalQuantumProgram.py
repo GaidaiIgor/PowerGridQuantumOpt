@@ -1,8 +1,9 @@
 """Variational quantum program for optimizing generator commitment distributions."""
 
 import time
+from collections.abc import Callable, Mapping, Sequence
 from functools import partial
-from typing import Callable, Mapping, Sequence
+from typing import Any
 
 import noisyopt
 import numpy as np
@@ -27,6 +28,7 @@ class VariationalQuantumProgram:
     :var layer_types: Ordered layer templates composed in each block.
     :var sampler: Sampling backend used to estimate output probabilities.
     :var optimization_method: Classical angle-optimization method.
+    :var optimization_options: Dict with optimization options supported by the chosen optimization method.
     :var circuit: Fully constructed parameterized quantum circuit.
     :var expectation_time: Accumulated time spent evaluating expectation sample probabilities.
     :var expectation_jobs: Number of expectation-evaluation quantum jobs.
@@ -38,6 +40,7 @@ class VariationalQuantumProgram:
     layer_types: list[CircuitLayer]
     sampler: Sampler
     optimization_method: str
+    optimization_options: dict[str, Any]
     circuit: QuantumCircuit
     expectation_time: float
     expectation_jobs: int
@@ -45,12 +48,14 @@ class VariationalQuantumProgram:
     fidelity_jobs: int
     seed: int | None
 
-    def __init__(self, num_layers: int, layer_types: list[CircuitLayer], sampler: Sampler, optimization_method: str = "auto", seed: int | None = None):
+    def __init__(self, num_layers: int, layer_types: list[CircuitLayer], sampler: Sampler, optimization_method: str = "auto",
+                 optimization_options: Mapping[str, Any] | None = None, seed: int | None = None):
         """Appends configured layer blocks and initializes program state.
         :param num_layers: Number of repeated ansatz blocks.
         :param layer_types: Layer templates composed once per block.
         :param sampler: Sampling backend used for probability estimation.
         :param optimization_method: Classical angle-optimization method.
+        :param optimization_options: Dict with optimization options supported by the chosen optimization method.
         :param seed: Optional seed for optimizer-local randomness.
         """
         if optimization_method not in OPTIMIZATION_METHOD_IDS:
@@ -60,6 +65,7 @@ class VariationalQuantumProgram:
         self.layer_types = layer_types
         self.sampler = sampler
         self.optimization_method = optimization_method
+        self.optimization_options = {} if optimization_options is None else dict(optimization_options)
         self.circuit = self.build_circuit()
         self.seed = seed
 
@@ -97,7 +103,7 @@ class VariationalQuantumProgram:
             case "custom":
                 result = self.optimize_parameters_custom(get_target_stats, initial_angles)
             case "ax":
-                result = self.optimize_parameters_ax(get_target_stats, len(self.circuit.parameters))
+                result = self.optimize_parameters_ax(get_target_stats)
         result.expectation_time = self.expectation_time
         return result
 
@@ -130,23 +136,23 @@ class VariationalQuantumProgram:
             return self.optimization_method
         raise ValueError(f"Unsupported optimization method {self.optimization_method}. Expected one of " + ", ".join(OPTIMIZATION_METHOD_IDS) + ".")
 
-    @staticmethod
-    def optimize_parameters_l_bfgs_b(objective: Callable[[Sequence[float]], float], initial_angles: ndarray) -> OptimizeResult:
+    def optimize_parameters_l_bfgs_b(self, objective: Callable[[Sequence[float]], float], initial_angles: ndarray) -> OptimizeResult:
         """Optimizes parameters with SciPy L-BFGS-B.
         :param objective: Objective function mapping angle vectors to expected cost.
         :param initial_angles: Initial parameter vector for classical optimization.
         :return: Optimization result including optimized angles and metadata.
         """
-        return optimize.minimize(objective, initial_angles, method="L-BFGS-B", options={"maxiter": np.iinfo(np.int32).max})
+        options = {"maxiter": np.iinfo(np.int32).max} | self.optimization_options
+        return optimize.minimize(objective, initial_angles, method="L-BFGS-B", options=options)
 
-    @staticmethod
-    def optimize_parameters_spsa(objective: Callable[[Sequence[float]], float], initial_angles: ndarray) -> OptimizeResult:
+    def optimize_parameters_spsa(self, objective: Callable[[Sequence[float]], float], initial_angles: ndarray) -> OptimizeResult:
         """Optimizes parameters with Qiskit SPSA.
         :param objective: Objective function mapping angle vectors to expected cost.
         :param initial_angles: Initial parameter vector for classical optimization.
         :return: Optimization result including optimized angles and metadata.
         """
-        result = SPSA(maxiter=1000).minimize(objective, initial_angles)
+        options = {"maxiter": 1000} | self.optimization_options
+        result = SPSA(**options).minimize(objective, initial_angles)
         result.success = True
         return result
 
@@ -170,7 +176,8 @@ class VariationalQuantumProgram:
 
         if self.seed is not None:
             algorithm_globals.random_seed = self.seed
-        result = QNSPSA(fidelity, maxiter=10000, hessian_delay=10000, regularization=1).minimize(objective, initial_angles)
+        options = {"maxiter": 1000, "hessian_delay": 1000, "regularization": 1} | self.optimization_options
+        result = QNSPSA(fidelity, **options).minimize(objective, initial_angles)
         result.success = True
         return result
 
@@ -190,18 +197,19 @@ class VariationalQuantumProgram:
 
         perturbation = 0.1
         rng = np.random.default_rng(self.seed)
-        result = ADAM(maxiter=1000, lr=0.03, tol=0).minimize(objective, initial_angles, jac=estimate_gradient)
+        options = {"maxiter": 1000, "lr": 0.03, "tol": 0} | self.optimization_options
+        result = ADAM(**options).minimize(objective, initial_angles, jac=estimate_gradient)
         result.success = True
         return result
 
-    @staticmethod
-    def optimize_parameters_noisyopt(objective: Callable[[Sequence[float]], float], initial_angles: ndarray) -> OptimizeResult:
+    def optimize_parameters_noisyopt(self, objective: Callable[[Sequence[float]], float], initial_angles: ndarray) -> OptimizeResult:
         """Optimizes parameters with ``noisyopt`` compass search.
         :param objective: Objective function mapping angle vectors to expected cost.
         :param initial_angles: Initial parameter vector for classical optimization.
         :return: Optimization result including optimized angles and metadata.
         """
-        return noisyopt.minimizeCompass(objective, initial_angles, errorcontrol=False, deltatol=1e-4)
+        options = {"errorcontrol": False, "deltatol": 1e-4} | self.optimization_options
+        return noisyopt.minimizeCompass(objective, initial_angles, **options)
 
     def optimize_parameters_custom(self, objective: Callable[[Sequence[float]], tuple[float, float]], initial_angles: ndarray) -> OptimizeResult:
         """Optimizes parameters with the custom noisy Adam-SPSA optimizer.
@@ -209,13 +217,12 @@ class VariationalQuantumProgram:
         :param initial_angles: Initial parameter vector for classical optimization.
         :return: Optimization result including optimized angles and metadata.
         """
-        return NoisyAngleOptimizer(maxiter=2000, seed=self.seed).minimize(objective, initial_angles)
+        options = {"maxiter": 1000, "seed": self.seed} | self.optimization_options
+        return NoisyAngleOptimizer(**options).minimize(objective, initial_angles)
 
-    @staticmethod
-    def optimize_parameters_ax(objective: Callable[[Sequence[float]], tuple[float, float]], num_params: int) -> OptimizeResult:
+    def optimize_parameters_ax(self, objective: Callable[[Sequence[float]], tuple[float, float]]) -> OptimizeResult:
         """Optimizes parameters with Ax using BoTorch-backed Bayesian optimization.
         :param objective: Objective function mapping angle vectors to expected cost and SEM.
-        :param num_params: Number of circuit parameters to optimize.
         :return: Optimization result including optimized angles and metadata.
         """
         from logging import WARNING
@@ -225,11 +232,14 @@ class VariationalQuantumProgram:
         from ax.global_stopping.strategies.improvement import ImprovementGlobalStoppingStrategy
         from ax.utils.common.logger import set_stderr_log_level
 
-        initialization_budget = max(50, 5 * num_params)
-        min_trials = initialization_budget + max(50, 3 * num_params)
-        max_trials = 1000
-        window_size = max(20, 2 * num_params)
-        improvement_bar = 1e-3
+        num_params = len(self.circuit.parameters)
+        options = {"initialization_budget": max(50, 5 * num_params), "max_trials": 1000, "window_size": max(20, 2 * num_params), "improvement_bar": 1e-3} | \
+            self.optimization_options
+        initialization_budget = options.pop("initialization_budget")
+        min_trials = options.pop("min_trials", initialization_budget + max(50, 3 * num_params))
+        max_trials = options.pop("max_trials")
+        window_size = options.pop("window_size")
+        improvement_bar = options.pop("improvement_bar")
 
         set_stderr_log_level(WARNING)
         client = Client()
@@ -238,7 +248,7 @@ class VariationalQuantumProgram:
         client.configure_optimization(objective="-expectation")
         client.configure_generation_strategy(method="quality", initialization_budget=initialization_budget,
                                              min_observed_initialization_trials=initialization_budget, initialize_with_center=True)
-        global_stopping_strategy = ImprovementGlobalStoppingStrategy(min_trials=min_trials, window_size=window_size, improvement_bar=improvement_bar)
+        global_stopping_strategy = ImprovementGlobalStoppingStrategy(min_trials=min_trials, window_size=window_size, improvement_bar=improvement_bar, **options)
         for trial_count in range(max_trials):
             trial_index, parameters = next(iter(client.get_next_trials(max_trials=1).items()))
             expectation, sem = objective(VariationalQuantumProgram.ax_parameters_to_angles(parameters))

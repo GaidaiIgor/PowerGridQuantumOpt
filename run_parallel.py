@@ -1,6 +1,7 @@
 """Runs multiple stored power-flow instances in parallel."""
 
 import argparse
+import ast
 import os
 import pickle
 import shutil
@@ -41,6 +42,7 @@ def run_parallel():
     sampler_id = args.sampler
     shots = args.shots
     optimization_method = args.optimization_method
+    optimization_options = args.optimization_options
     analyze_expectations = args.analyze_expectations
     max_process_time_s = args.timeout * 3600
     instance_indices = list(range(120))
@@ -49,7 +51,7 @@ def run_parallel():
 
     np.random.seed(seed)
     solver = get_solver(solver_id, violation_tolerance, silent, seed, violation_mult, max_inner_time_s, max_classical_time_s, num_generators, num_layers,
-                        initial_angles, sampler_id, shots, optimization_method, analyze_expectations, max_process_time_s)
+                        initial_angles, sampler_id, shots, optimization_method, optimization_options, analyze_expectations, max_process_time_s)
     solutions_path = Path(".solutions.csv")
     columns = ["instance", "generators", "cont_params", "cost", "violation", "expectation_jobs", "total_expectation_jobs", "total_fidelity_jobs",
                "classical_opt_time", "optimized_bitstrings", "max_inner", "ar_uniform", "ar_opt", "error", "history"]
@@ -138,9 +140,7 @@ def run_parallel():
 
 
 def parse_cli_args() -> argparse.Namespace:
-    """Parses command-line arguments for ``run_parallel``.
-    :return: Parsed command-line arguments.
-    """
+    """Parses command-line arguments for run_parallel and returns their namespace."""
     parser = argparse.ArgumentParser(description="Runs multiple stored power-flow instances in parallel.")
     parser.add_argument("-df", "--data-folder", required=True, type=Path, help="Folder containing stored power-flow instance pickle files.")
     parser.add_argument("-s", "--solver", required=True, choices=SOLVER_IDS, help="Solver to run.")
@@ -150,6 +150,8 @@ def parse_cli_args() -> argparse.Namespace:
     parser.add_argument("-sh", "--shots", default=1000, type=int, help="Number of shots for sampling-based backends.")
     parser.add_argument("-om", "--optimization-method", default="auto", choices=OPTIMIZATION_METHOD_IDS,
                         help="Classical angle optimizer for the hybrid solver.")
+    parser.add_argument("-oo", "--optimization-options", default=None, type=ast.literal_eval,
+                        help="Python dict literal with options passed to the selected classical angle optimizer.")
     parser.add_argument("-ae", "--analyze-expectations", action="store_true", help="Enables post-optimization expectation analysis for hybrid runs.")
     parser.add_argument("-mct", "--max-classical-time", default=None, type=float, help="Maximum classical angle-optimization time in hours for hybrid runs.")
     parser.add_argument("-t", "--timeout", required=True, type=float, help="Per-instance timeout in hours.")

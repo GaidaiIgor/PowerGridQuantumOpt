@@ -27,6 +27,7 @@ def run_single():
     sampler_id = "finite"
     shots = 1000
     optimization_method = "qnspsa"
+    optimization_options = None
     analyze_expectations = True
     max_process_time = None
     data_path = Path("data/5")
@@ -39,7 +40,7 @@ def run_single():
     np.random.seed(seed)
 
     solver = get_solver(solver_id, violation_tolerance, silent, seed, violation_mult, max_inner_time_s, max_classical_time, num_generators, num_layers,
-                        initial_angles, sampler_id, shots, optimization_method, analyze_expectations, max_process_time)
+                        initial_angles, sampler_id, shots, optimization_method, optimization_options, analyze_expectations, max_process_time)
     progress_folder = Path(".progress")
     progress_folder.mkdir(exist_ok=True)
     progress_path = progress_folder / f"{instance}.pkl"
