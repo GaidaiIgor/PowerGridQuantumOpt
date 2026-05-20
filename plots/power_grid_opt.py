@@ -80,7 +80,7 @@ def plot_average_histories():
 def plot_history_diff():
     """Plots differences between the two configured solver curves."""
     num_generators = [10]
-    solver_ids = ["hybrid/nl_1/adam", "uniform"]
+    solver_ids = ["hybrid/nl_1/noisyopt", "uniform"]
     ref_ind = 0
     violation_tolerance = 1e-10
 

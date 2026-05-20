@@ -147,7 +147,7 @@ class VariationalQuantumProgram:
         :param initial_angles: Initial parameter vector for classical optimization.
         :return: Optimization result including optimized angles and metadata.
         """
-        options = {"maxiter": np.iinfo(np.int32).max} | self.optimization_options
+        options = {"maxiter": np.iinfo(np.int32).max, "maxfun": np.iinfo(np.int32).max} | self.optimization_options
         return optimize.minimize(objective, initial_angles, method="L-BFGS-B", options=options)
 
     def optimize_parameters_spsa(self, objective: Callable[[Sequence[float]], float], initial_angles: ndarray) -> OptimizeResult:
