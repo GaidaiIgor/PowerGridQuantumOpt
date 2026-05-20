@@ -1,6 +1,6 @@
 """Plotting helpers for power-grid optimization outputs."""
 from pathlib import Path
-from typing import Sequence
+from typing import Literal, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -79,12 +79,14 @@ def plot_average_histories():
 
 def plot_history_diff():
     """Plots differences between the two configured solver curves."""
-    num_generators = [10]
-    solver_ids = ["hybrid/nl_1/noisyopt", "uniform"]
+    num_generators = [11]
+    solver_ids = ["hybrid/nl_1/adam", "uniform"]
     ref_ind = 0
     violation_tolerance = 1e-10
+    time_grid = "auto"
+    time_grid = np.linspace(0, 200, 50)
 
-    history_data = load_histories(num_generators, solver_ids, ref_ind, violation_tolerance)
+    history_data = load_histories(num_generators, solver_ids, ref_ind, violation_tolerance, time_grid)
     lines = []
     for num_gens_ind, num_gens in enumerate(num_generators):
         xs, solver_data = history_data[num_gens_ind]
@@ -132,19 +134,24 @@ def plot_average_ar_vs_generators():
     save_figure()
 
 
-def load_histories(num_generators: list[int], solver_ids: list[str], ref_ind: int, violation_tolerance: float) -> list[tuple[np.ndarray, list[np.ndarray]]]:
+def load_histories(num_generators: list[int], solver_ids: list[str], ref_ind: int, violation_tolerance: float, time_grid: Sequence[float] | str = "auto") \
+    -> list[tuple[np.ndarray, list[np.ndarray]]]:
     """Collects average normalized objective histories across datasets.
     :param num_generators: Generator counts whose datasets should be loaded.
     :param solver_ids: Solver ids whose CSV files should be loaded from subfolders inside each dataset folder.
     :param ref_ind: Index of the solver used to select the fastest instances and time grid in each dataset.
     :param violation_tolerance: Maximum violation still treated as feasible in extracted histories.
+    :param time_grid: Time grid used to align objective histories, or ``"auto"`` to infer the default grid per dataset.
     :return: History data in `num_generators` order, each entry storing one time grid and solver curves in `solver_ids` order.
     """
     histories = []
     for num_gens in num_generators:
         dfs = load_dfs(num_gens, solver_ids, ref_ind)
-        time_grid = np.linspace(0, max(dfs[ref_ind]["classical_opt_time"]), 50)
-        histories.append((time_grid, extract_normalized_solver_histories(dfs, time_grid, violation_tolerance)))
+        if isinstance(time_grid, str) and time_grid == "auto":
+            dataset_time_grid = np.linspace(0, max(dfs[ref_ind]["classical_opt_time"]), 50)
+        else:
+            dataset_time_grid = time_grid
+        histories.append((dataset_time_grid, extract_normalized_solver_histories(dfs, dataset_time_grid, violation_tolerance)))
     return histories
 
 
