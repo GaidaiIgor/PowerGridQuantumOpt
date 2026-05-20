@@ -83,8 +83,8 @@ def plot_history_diff():
     solver_ids = ["hybrid/nl_1/adam", "uniform"]
     ref_ind = 0
     violation_tolerance = 1e-10
-    time_grid = "auto"
-    time_grid = np.linspace(0, 200, 50)
+    # time_grid = "auto"
+    time_grid = np.linspace(0, 400, 50)
 
     history_data = load_histories(num_generators, solver_ids, ref_ind, violation_tolerance, time_grid)
     lines = []
