@@ -79,12 +79,12 @@ def plot_average_histories():
 
 def plot_history_diff():
     """Plots differences between the two configured solver curves."""
-    num_generators = [11]
+    num_generators = [13]
     solver_ids = ["hybrid/nl_1/adam", "uniform"]
     ref_ind = 0
     violation_tolerance = 1e-10
     # time_grid = "auto"
-    time_grid = np.linspace(0, 400, 50)
+    time_grid = np.linspace(0, 1600, 50)
 
     history_data = load_histories(num_generators, solver_ids, ref_ind, violation_tolerance, time_grid)
     lines = []
@@ -238,11 +238,24 @@ def get_average_normalized_history(time_grid: Sequence[float], solver_histories:
     return totals / feasible_count
 
 
+def plot_mean_max_shots_vs_generators():
+    """Plots the mean and max shot values against generator count."""
+    generator_counts = [5, 6, 7, 8, 9, 10, 11, 12, 13]
+    avg_shots = [390, 378, 351, 349, 315, 294, 294, 275, 273]
+    max_shots = [606, 611, 599, 617, 552, 596, 603, 610, 611]
+    lines = [Line(generator_counts, avg_shots, color=0, label="Mean"),
+             Line(generator_counts, max_shots, color=1, label="Max")]
+    plot_general(lines, axis_labels=("Generator", "Shots"))
+    # plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+    save_figure()
+
+
 if __name__ == "__main__":
     # plot_instance_objective_histories()
     # plot_average_histories()
-    plot_history_diff()
+    # plot_history_diff()
     # plot_ar_vs_instance()
     # plot_ar_diff_vs_instance()
     # plot_average_ar_vs_generators()
+    plot_mean_max_shots_vs_generators()
     plt.show()
