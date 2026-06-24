@@ -79,12 +79,12 @@ def plot_average_histories():
 
 def plot_history_diff():
     """Plots differences between the two configured solver curves."""
-    num_generators = [13]
+    num_generators = [10]
     solver_ids = ["hybrid/nl_1/adam", "uniform"]
     ref_ind = 0
     violation_tolerance = 1e-10
     # time_grid = "auto"
-    time_grid = np.linspace(0, 1600, 50)
+    time_grid = np.linspace(0, 200, 50)
 
     history_data = load_histories(num_generators, solver_ids, ref_ind, violation_tolerance, time_grid)
     lines = []
@@ -93,21 +93,21 @@ def plot_history_diff():
         first_ys, second_ys = solver_data[:2]
         lines.append(Line(xs, first_ys - second_ys, color=num_gens_ind, marker=0, label=str(num_gens)))
     lines.append(Line([0, 10000], [0, 0], color="black", marker="none", style="--"))
-    plot_general(lines, axis_labels=("Time [s]", "Normalized Objective Difference"), boundaries=(0, xs[-1], -0.02, 0.1))
+    plot_general(lines, axis_labels=("Time [s]", "AR difference"), boundaries=(0, xs[-1], -0.02, 0.1))
     save_figure()
 
 
 def plot_ar_vs_instance():
     """Plots `ar_uniform_fun` and `ar_opt_fun` against row index for the configured generator count."""
-    num_generators = 10
-    df = load_dfs(num_generators, ["hybrid/nl_1/exact"], 0)[0]
+    num_generators = 13
+    df = load_dfs(num_generators, ["hybrid/nl_1/adam"], 0)[0]
     ar_uniform_average = df["ar_uniform"].mean()
     ar_opt_average = df["ar_opt"].mean()
     lines = [Line(np.arange(len(df)), df["ar_uniform"], color=0, style="none", label="AR Uniform"),
              Line([0, len(df) - 1], [ar_uniform_average] * 2, color=0, marker="none", style="--"),
              Line(np.arange(len(df)), df["ar_opt"], color=1, style="none", label="AR Opt"),
              Line([0, len(df) - 1], [ar_opt_average] * 2, color=1, marker="none", style="--")]
-    plot_general(lines, axis_labels=("Instance index", "Approximation Ratio"), boundaries=(0, len(df) + 6, 0, 1))
+    plot_general(lines, axis_labels=("Instance index", "AR"), boundaries=(0, len(df) + 6, 0, 1))
     plt.text(len(df), ar_uniform_average, f"{ar_uniform_average:.3f}", color=lines[1].color, va="center")
     plt.text(len(df), ar_opt_average, f"{ar_opt_average:.3f}", color=lines[3].color, va="center")
     save_figure()
@@ -245,7 +245,7 @@ def plot_mean_max_shots_vs_generators():
     max_shots = [606, 611, 599, 617, 552, 596, 603, 610, 611]
     lines = [Line(generator_counts, avg_shots, color=0, label="Mean"),
              Line(generator_counts, max_shots, color=1, label="Max")]
-    plot_general(lines, axis_labels=("Generator", "Shots"))
+    plot_general(lines, axis_labels=("Number of generators", "Shots"))
     # plt.gca().xaxis.set_major_locator(plt.MaxNLocator(integer=True))
     save_figure()
 
@@ -254,8 +254,8 @@ if __name__ == "__main__":
     # plot_instance_objective_histories()
     # plot_average_histories()
     # plot_history_diff()
-    # plot_ar_vs_instance()
+    plot_ar_vs_instance()
     # plot_ar_diff_vs_instance()
     # plot_average_ar_vs_generators()
-    plot_mean_max_shots_vs_generators()
+    # plot_mean_max_shots_vs_generators()
     plt.show()

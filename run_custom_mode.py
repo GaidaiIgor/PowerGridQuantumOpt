@@ -78,7 +78,7 @@ def plot_sampling_distribution(data_folder: Path, instance: int, target_ci_lengt
     angles = random.default_rng(seed).uniform(-np.pi, np.pi, len(vqp.circuit.parameters))
     analysis = analyze_distribution(None, problem, [angles], target_ci_length, target_ci_confidence, shots_estimation_method=shots_estimation_method, seed=seed)
     sampled_values = random.default_rng(seed).choice(analysis["ar_values"], size=(num_repetitions, analysis["required_num_shots"][0]),
-                                                    p=analysis["probs_list"][0])
+                                                     p=analysis["probs_list"][0])
     sampled_means = sampled_values.mean(axis=1)
     target_ci_left = analysis["expectation"][0] - target_ci_length / 2
     target_ci_right = analysis["expectation"][0] + target_ci_length / 2
