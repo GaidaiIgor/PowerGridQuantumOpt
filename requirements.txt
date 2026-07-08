@@ -9,6 +9,7 @@ PySCIPOpt~=6.0.0
 qiskit~=2.3.0
 qiskit-algorithms~=0.4.0
 qiskit-ionq~=1.0.2
+pylatexenc~=2.10
 PyQt6~=6.11.0
 scipy~=1.17.0
 tqdm~=4.67.3
