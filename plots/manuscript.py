@@ -381,5 +381,5 @@ def _draw_star(axes: Axes, center: tuple[float, float], radius: float, color: st
 
 
 if __name__ == "__main__":
-    figure = draw_workflow_outline(Path(__file__).resolve().parent / "graphics" / "workflow_outline.png")
+    figure = draw_workflow_outline(Path(__file__).resolve().parent / "out" / "workflow_outline.png")
     plt.close(figure)
