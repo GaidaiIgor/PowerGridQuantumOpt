@@ -77,24 +77,28 @@ def plot_average_histories():
     save_figure()
 
 
-def plot_history_diff():
-    """Plots differences between the two configured solver curves."""
-    num_generators = [10]
+def plot_history_diff_all():
+    """Plots history differences for all configured generator counts."""
+    for num_generators, tmax in [(10, 200), (11, 400), (12, 800), (13, 1600)]:
+        plot_history_diff(num_generators, tmax)
+
+
+def plot_history_diff(num_generators: int, tmax: float):
+    """Plots differences between the two configured solver curves.
+    :param num_generators: Generator count whose dataset should be plotted.
+    :param tmax: Maximum plotted time.
+    """
     solver_ids = ["hybrid/nl_1/adam", "uniform"]
     ref_ind = 0
     violation_tolerance = 1e-10
     # time_grid = "auto"
-    time_grid = np.linspace(0, 200, 50)
+    time_grid = np.linspace(0, tmax, 50)
 
-    history_data = load_histories(num_generators, solver_ids, ref_ind, violation_tolerance, time_grid)
-    lines = []
-    for num_gens_ind, num_gens in enumerate(num_generators):
-        xs, solver_data = history_data[num_gens_ind]
-        first_ys, second_ys = solver_data[:2]
-        lines.append(Line(xs, first_ys - second_ys, color=num_gens_ind, marker=0, label=str(num_gens)))
-    lines.append(Line([0, 10000], [0, 0], color="black", marker="none", style="--"))
-    plot_general(lines, axis_labels=("Time [s]", "AR difference"), boundaries=(0, xs[-1], -0.02, 0.1))
-    save_figure()
+    xs, solver_data = load_histories([num_generators], solver_ids, ref_ind, violation_tolerance, time_grid)[0]
+    first_ys, second_ys = solver_data[:2]
+    lines = [Line(xs, first_ys - second_ys, color=0, marker=0, label=str(num_generators)), Line([0, 10000], [0, 0], color="black", marker="none", style="--")]
+    plot_general(lines, axis_labels=("Time [s]", "AR difference"), boundaries=(0, xs[-1], -0.02, 0.05))
+    save_figure(str(Path(__file__).resolve().parent / "out" / f"history_diff_{num_generators}.png"))
 
 
 def plot_ar_vs_instance():
@@ -253,8 +257,8 @@ def plot_mean_max_shots_vs_generators():
 if __name__ == "__main__":
     # plot_instance_objective_histories()
     # plot_average_histories()
-    # plot_history_diff()
-    plot_ar_vs_instance()
+    plot_history_diff_all()
+    # plot_ar_vs_instance()
     # plot_ar_diff_vs_instance()
     # plot_average_ar_vs_generators()
     # plot_mean_max_shots_vs_generators()
