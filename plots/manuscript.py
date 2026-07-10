@@ -9,6 +9,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.figure import Figure
 from matplotlib.patches import Arc, Circle, FancyArrowPatch, FancyBboxPatch, PathPatch, Polygon, Rectangle
 from matplotlib.path import Path as MplPath
+from matplotlib.textpath import TextPath
 from qiskit import QuantumCircuit
 from qiskit.circuit import ParameterVector
 
@@ -137,17 +138,17 @@ def _draw_quantum_panel(axes: Axes):
         _draw_meter(axes, meter_x, y)
 
     _draw_right_curly_brace(axes, meter_x + 33, qubit_ys[-1] - 34, qubit_ys[0] + 34, 32, text_color, 1.7)
-    axes.text(meter_x + 73, qubit_ys[1], "Measurements", ha="left", va="center", fontsize=17, color=text_color)
+    axes.text(meter_x + 73, qubit_ys[1], "Measurements", ha="left", va="center", fontsize=20.4, color=text_color)
 
 
 def _draw_exchange_line(axes: Axes):
     """Draws the dashed separator and exchanged variable labels.
     :param axes: Axes receiving the separator primitives."""
     axes.plot((8, 116), (530, 530), color=blue, linewidth=2, linestyle=(0, (4, 4)))
-    axes.plot((291, 1197), (530, 530), color=blue, linewidth=2, linestyle=(0, (4, 4)))
+    axes.plot((291, 1157), (530, 530), color=blue, linewidth=2, linestyle=(0, (4, 4)))
     axes.plot((1398, workflow_width - 8), (530, 530), color=blue, linewidth=2, linestyle=(0, (4, 4)))
     axes.text(134, 530, "angles", ha="left", va="center", fontsize=27, weight="bold", color=green)
-    axes.text(1215, 530, r"$\bar{u}_1,\;\ldots,\;\bar{u}_M$", ha="left", va="center", fontsize=25, weight="bold", color=blue)
+    axes.text(1175, 530, "bitstrings", ha="left", va="center", fontsize=27, weight="bold", color=blue)
 
 
 def _draw_cost_panel(axes: Axes):
@@ -185,7 +186,20 @@ def _draw_workflow_arrows(axes: Axes):
                                    color=orange, linewidth=0, mutation_scale=1))
     axes.add_patch(FancyArrowPatch((266, 290), (116, 760), connectionstyle="arc3,rad=-0.32", arrowstyle="Simple,head_length=24,head_width=24,tail_width=6",
                                    color=green, linewidth=0, mutation_scale=1))
-    axes.text(753, 108, r"$\bar{F}(C)$", ha="center", va="center", fontsize=23, color=orange)
+    label = axes.text(753, 108, r"$\boldsymbol{F}(\boldsymbol{C})$", ha="center", va="center", fontsize=27, weight="bold", color=orange)
+    probe = axes.text(753, 108, r"$\boldsymbol{F}$", ha="left", va="center", fontsize=27, weight="bold", alpha=0)
+    axes.figure.canvas.draw()
+    renderer = axes.figure.canvas.get_renderer()
+    label_box = label.get_window_extent(renderer).transformed(axes.transData.inverted())
+    f_box = probe.get_window_extent(renderer).transformed(axes.transData.inverted())
+    probe.remove()
+    f_path = TextPath((0, 0), r"$\boldsymbol{F}$", size=27)
+    xs = [point[0] for point in f_path.vertices]
+    ys = [point[1] for point in f_path.vertices]
+    top_xs = [point[0] for point in f_path.vertices if point[1] >= min(ys) + 0.9 * (max(ys) - min(ys))]
+    scale = f_box.width / (max(xs) - min(xs))
+    axes.plot((label_box.x0 + (min(top_xs) - min(xs)) * scale, label_box.x0 + (max(top_xs) - min(xs)) * scale),
+              (label_box.y1 + 5.2, label_box.y1 + 5.2), color=orange, linewidth=2, solid_capstyle="butt", zorder=4)
 
 
 def _draw_gate(axes: Axes, x: float, y: float, width: float, height: float, label: str, edge_color: str, fill_color: str, font_size: int):
@@ -276,8 +290,8 @@ def _draw_cost_chart(axes: Axes, x: float, y: float, width: float, height: float
         axes.add_patch(Circle((xi, top), 5, facecolor="#1f78ff", edgecolor="#1f78ff", zorder=2))
     axes.add_patch(FancyArrowPatch((x, y), (x + width, y), arrowstyle="-|>", color=blue, linewidth=1.5, mutation_scale=14, shrinkA=0, shrinkB=0, zorder=4))
     axes.add_patch(FancyArrowPatch((x, y), (x, y + height), arrowstyle="-|>", color=blue, linewidth=1.5, mutation_scale=14, shrinkA=0, shrinkB=0, zorder=4))
-    axes.text(x - 18, y + height * 0.72, r"$C$", ha="right", va="center", fontsize=22, color=text_color)
-    axes.text(x + width * 0.56, y - 23, "Bitstrings", ha="center", va="center", fontsize=20, color=text_color)
+    axes.text(x - 8.5, y + height / 2 - 2.8, r"$C$", ha="right", va="center", fontsize=22, color=text_color)
+    axes.text(x + width / 2, y - 23, "Bitstrings", ha="center", va="center", fontsize=20, color=text_color)
 
 
 def _draw_small_arrow(axes: Axes, start: tuple[float, float], end: tuple[float, float], color: str):
