@@ -97,7 +97,7 @@ def plot_history_diff(num_generators: int, tmax: float):
     xs, solver_data = load_histories([num_generators], solver_ids, ref_ind, violation_tolerance, time_grid)[0]
     first_ys, second_ys = solver_data[:2]
     lines = [Line(xs, first_ys - second_ys, color=0, marker=0, label=str(num_generators)), Line([0, 10000], [0, 0], color="black", marker="none", style="--")]
-    plot_general(lines, axis_labels=("Time [s]", "AR difference"), boundaries=(0, xs[-1], -0.02, 0.05))
+    plot_general(lines, axis_labels=("Time [s]", "AR difference"), boundaries=(0, xs[-1], -0.02, 0.05), font_size=30)
     save_figure(str(Path(__file__).resolve().parent / "out" / f"history_diff_{num_generators}.png"))
 
 
@@ -107,11 +107,11 @@ def plot_ar_vs_instance():
     df = load_dfs(num_generators, ["hybrid/nl_1/adam"], 0)[0]
     ar_uniform_average = df["ar_uniform"].mean()
     ar_opt_average = df["ar_opt"].mean()
-    lines = [Line(np.arange(len(df)), df["ar_uniform"], color=0, style="none", label="AR Uniform"),
+    lines = [Line(np.arange(len(df)), df["ar_uniform"], color=0, style="none", label="Uniform"),
              Line([0, len(df) - 1], [ar_uniform_average] * 2, color=0, marker="none", style="--"),
-             Line(np.arange(len(df)), df["ar_opt"], color=1, style="none", label="AR Opt"),
+             Line(np.arange(len(df)), df["ar_opt"], color=1, style="none", label="Hybrid"),
              Line([0, len(df) - 1], [ar_opt_average] * 2, color=1, marker="none", style="--")]
-    plot_general(lines, axis_labels=("Instance index", "AR"), boundaries=(0, len(df) + 6, 0, 1))
+    plot_general(lines, axis_labels=("Instance index", "AR"), boundaries=(0, len(df) + 6, 0, 1), legend_loc="upper right")
     plt.text(len(df), ar_uniform_average, f"{ar_uniform_average:.3f}", color=lines[1].color, va="center")
     plt.text(len(df), ar_opt_average, f"{ar_opt_average:.3f}", color=lines[3].color, va="center")
     save_figure()
@@ -257,8 +257,8 @@ def plot_mean_max_shots_vs_generators():
 if __name__ == "__main__":
     # plot_instance_objective_histories()
     # plot_average_histories()
-    plot_history_diff_all()
-    # plot_ar_vs_instance()
+    # plot_history_diff_all()
+    plot_ar_vs_instance()
     # plot_ar_diff_vs_instance()
     # plot_average_ar_vs_generators()
     # plot_mean_max_shots_vs_generators()
