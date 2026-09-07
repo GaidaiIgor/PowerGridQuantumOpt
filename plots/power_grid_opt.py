@@ -166,7 +166,7 @@ def load_histories(num_generators: list[int], solver_ids: list[str], ref_ind: in
 
 
 def load_dfs(num_generators: int, solver_ids: list[str], ref_ind: int | None = None) -> list[pd.DataFrame]:
-    """Loads solver data and optionally restricts all data frames to the fastest feasible reference instances.
+    """Loads solver data and optionally restricts all data frames to at most 100 fastest feasible reference instances.
     :param num_generators: Generator count whose solver CSV should be loaded.
     :param solver_ids: Solver ids whose CSV files should be loaded.
     :param ref_ind: Index of the reference solver inside `solver_ids`, or ``None`` to skip trimming.
@@ -177,7 +177,7 @@ def load_dfs(num_generators: int, solver_ids: list[str], ref_ind: int | None = N
         return dfs
     ref_df = dfs[ref_ind]
     feasible = pd.to_numeric(ref_df["violation"], errors="coerce") <= VIOLATION_TOLERANCE
-    fastest_100_inds = pd.to_numeric(ref_df["classical_opt_time"], errors="coerce")[feasible].nsmallest(100).index
+    fastest_100_inds = pd.to_numeric(ref_df["classical_opt_time"], errors="coerce")[feasible].dropna().nsmallest(100).index
     return [df.loc[fastest_100_inds] for df in dfs]
 
 
