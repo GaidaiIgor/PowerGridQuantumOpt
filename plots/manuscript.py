@@ -54,9 +54,10 @@ def draw_quantum_circuit(file_path: str | Path | None = None) -> Figure:
     return figure
 
 
-def draw_workflow_outline(file_path: str | Path | None = None) -> Figure:
+def draw_workflow_outline(file_path: str | Path | None = None, inner_optimization: bool = True) -> Figure:
     """Draws a controlled-code version of the hybrid optimization workflow figure.
     :param file_path: Optional path where the rendered workflow image should be saved.
+    :param inner_optimization: Whether the inner optimization label and its arrows should be drawn.
     :return: Matplotlib figure containing the workflow diagram."""
     plt.rcParams.update({"font.family": "DejaVu Sans", "mathtext.fontset": "dejavusans", "font.size": 18})
     figure = plt.figure(figsize=(15.14, 11.48), facecolor=background_color)
@@ -72,7 +73,7 @@ def draw_workflow_outline(file_path: str | Path | None = None) -> Figure:
     axes.text(workflow_width / 2, 1106, "Quantum", ha="center", va="center", fontsize=42, weight="bold", color=blue)
     _draw_quantum_panel(axes)
     _draw_exchange_line(axes)
-    _draw_cost_panel(axes)
+    _draw_cost_panel(axes, inner_optimization)
     _draw_optimizer_panel(axes)
     _draw_workflow_arrows(axes)
 
@@ -148,21 +149,24 @@ def _draw_exchange_line(axes: Axes):
     axes.plot((291, 1157), (530, 530), color=blue, linewidth=2, linestyle=(0, (4, 4)))
     axes.plot((1398, workflow_width - 8), (530, 530), color=blue, linewidth=2, linestyle=(0, (4, 4)))
     axes.text(134, 530, "angles", ha="left", va="center", fontsize=27, weight="bold", color=green)
-    axes.text(1175, 530, "bitstrings", ha="left", va="center", fontsize=27, weight="bold", color=blue)
+    axes.text(1277, 552, "bitstrings", ha="center", va="center", fontsize=27, weight="bold", color=blue)
+    axes.text(1277, 510, r"$\boldsymbol{\bar{u}_1 \;\ldots\; \bar{u}_M}$", ha="center", va="center", fontsize=27, weight="bold", color=blue)
 
 
-def _draw_cost_panel(axes: Axes):
+def _draw_cost_panel(axes: Axes, inner_optimization: bool):
     """Draws the lower-right cost computation panel.
-    :param axes: Axes receiving the cost-panel primitives."""
+    :param axes: Axes receiving the cost-panel primitives.
+    :param inner_optimization: Whether the inner optimization label and its arrows should be drawn."""
     panel = FancyBboxPatch((876, 160), 344, 310, boxstyle="round,pad=0,rounding_size=16", edgecolor=orange, facecolor="#fffdf8", linewidth=2)
     axes.add_patch(panel)
     axes.text(1048, 435, "2. Compute Cost", ha="center", va="center", fontsize=25, weight="bold", color=orange)
 
     _draw_cost_chart(axes, 936, 285, 235, 112)
     axes.text(1049, 213, r"$C(\bar{u}_1)\;\ldots\;C(\bar{u}_M)$", ha="center", va="center", fontsize=26, color=orange)
-    axes.text(1048, 76, "Inner Optimization", ha="left", va="center", fontsize=24, weight="bold", color=orange)
-    _draw_small_arrow(axes, (1126, 94), (973, 195), orange)
-    _draw_small_arrow(axes, (1126, 94), (1121, 195), orange)
+    if inner_optimization:
+        axes.text(1048, 76, "Inner Optimization", ha="left", va="center", fontsize=24, weight="bold", color=orange)
+        _draw_small_arrow(axes, (1126, 94), (973, 195), orange)
+        _draw_small_arrow(axes, (1126, 94), (1121, 195), orange)
 
 
 def _draw_optimizer_panel(axes: Axes):
@@ -395,5 +399,6 @@ def _draw_star(axes: Axes, center: tuple[float, float], radius: float, color: st
 
 
 if __name__ == "__main__":
-    figure = draw_workflow_outline(Path(__file__).resolve().parent / "out" / "workflow_outline.png")
-    plt.close(figure)
+    out_path = Path(__file__).resolve().parent / "out"
+    plt.close(draw_workflow_outline(out_path / "workflow_outline.png"))
+    plt.close(draw_workflow_outline(out_path / "workflow_outline_alt.png", inner_optimization=False))
