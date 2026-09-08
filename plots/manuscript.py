@@ -54,10 +54,11 @@ def draw_quantum_circuit(file_path: str | Path | None = None) -> Figure:
     return figure
 
 
-def draw_workflow_outline(file_path: str | Path | None = None, inner_optimization: bool = True) -> Figure:
+def draw_workflow_outline(file_path: str | Path | None = None, inner_optimization: bool = True, average_label: str | None = None) -> Figure:
     """Draws a controlled-code version of the hybrid optimization workflow figure.
     :param file_path: Optional path where the rendered workflow image should be saved.
     :param inner_optimization: Whether the inner optimization label and its arrows should be drawn.
+    :param average_label: Mathtext expression to average inside angle brackets in the returned cost label, or None to label it as the inner optimum instead.
     :return: Matplotlib figure containing the workflow diagram."""
     plt.rcParams.update({"font.family": "DejaVu Sans", "mathtext.fontset": "dejavusans", "font.size": 18})
     figure = plt.figure(figsize=(15.14, 11.48), facecolor=background_color)
@@ -75,7 +76,7 @@ def draw_workflow_outline(file_path: str | Path | None = None, inner_optimizatio
     _draw_exchange_line(axes)
     _draw_cost_panel(axes, inner_optimization)
     _draw_optimizer_panel(axes)
-    _draw_workflow_arrows(axes)
+    _draw_workflow_arrows(axes, average_label)
 
     axes.text(workflow_width / 2, 32, "Classical", ha="center", va="center", fontsize=36, weight="bold", color=orange)
     if file_path is not None:
@@ -181,15 +182,19 @@ def _draw_optimizer_panel(axes: Axes):
     axes.add_patch(FancyBboxPatch((435, 185), 95, 12, boxstyle="round,pad=0,rounding_size=3", edgecolor=green, facecolor="#a6ca86", linewidth=1.6))
 
 
-def _draw_workflow_arrows(axes: Axes):
+def _draw_workflow_arrows(axes: Axes, average_label: str | None):
     """Draws the large directional arrows connecting the workflow panels.
-    :param axes: Axes receiving the workflow arrows."""
+    :param axes: Axes receiving the workflow arrows.
+    :param average_label: Mathtext expression to average inside angle brackets in the returned cost label, or None to label it as the inner optimum instead."""
     axes.add_patch(FancyArrowPatch((1398, 760), (1248, 290), connectionstyle="arc3,rad=-0.32", arrowstyle="Simple,head_length=28,head_width=28,tail_width=7",
                                    color=blue, linewidth=0, mutation_scale=1))
     axes.add_patch(FancyArrowPatch((1048, 132), (480, 134), connectionstyle="arc3,rad=-0.22", arrowstyle="Simple,head_length=24,head_width=24,tail_width=5",
                                    color=orange, linewidth=0, mutation_scale=1))
     axes.add_patch(FancyArrowPatch((266, 290), (116, 760), connectionstyle="arc3,rad=-0.32", arrowstyle="Simple,head_length=24,head_width=24,tail_width=6",
                                    color=green, linewidth=0, mutation_scale=1))
+    if average_label is not None:
+        axes.text(753, 108, rf"$\boldsymbol{{\langle {average_label} \rangle}}$", ha="center", va="center", fontsize=27, weight="bold", color=orange)
+        return
     label = axes.text(753, 108, r"$\boldsymbol{F}(\boldsymbol{C})$", ha="center", va="center", fontsize=27, weight="bold", color=orange)
     probe = axes.text(753, 108, r"$\boldsymbol{F}$", ha="left", va="center", fontsize=27, weight="bold", alpha=0)
     axes.figure.canvas.draw()
@@ -401,4 +406,6 @@ def _draw_star(axes: Axes, center: tuple[float, float], radius: float, color: st
 if __name__ == "__main__":
     out_path = Path(__file__).resolve().parent / "out"
     plt.close(draw_workflow_outline(out_path / "workflow_outline.png"))
-    plt.close(draw_workflow_outline(out_path / "workflow_outline_alt.png", inner_optimization=False))
+    plt.close(draw_workflow_outline(out_path / "workflow_outline_alt.png", inner_optimization=False, average_label="C"))
+    plt.close(draw_workflow_outline(out_path / "workflow_outline_alt_2.png", inner_optimization=False, average_label=r"\mathbf{AR}"))
+    plt.close(draw_workflow_outline(out_path / "workflow_outline_alt_3.png", average_label=r"\mathbf{AR}"))
