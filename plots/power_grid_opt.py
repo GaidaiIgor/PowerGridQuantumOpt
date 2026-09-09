@@ -13,6 +13,7 @@ from src.HistoryEntry import HistoryEntry
 
 VIOLATION_TOLERANCE = 1e-10
 SOLVER_COLORS = {"SCIP": 0, "SMAC": 1, "Uniform": 2, "Hybrid": 3}
+CONFIDENCE = 0.9
 
 
 def plot_probability_distribution(probs: dict[str, float], y_max: float = 1):
@@ -98,13 +99,11 @@ def plot_ar_vs_time(num_generators: int, solver_ids: list[str], solver_names: li
     :param tmax: Maximum plotted time.
     :param y_bounds: Minimum and maximum values shown on the y-axis.
     """
-    confidence = 0.9
     xs, solver_data = load_histories([num_generators], solver_ids, len(solver_ids) - 1, np.linspace(0, tmax, 50))[0]
     lines = [Line(xs, histories.mean(axis=0), color=SOLVER_COLORS[name], label=name) for histories, name in zip(solver_data, solver_names, strict=True)]
     plot_general(lines, axis_labels=("Time [s]", "AR"), boundaries=(None, None) + y_bounds)
     for line, histories in zip(lines, solver_data, strict=True):
-        half_widths = t.ppf(0.5 + confidence / 2, len(histories) - 1) * sem(histories, axis=0)
-        plt.fill_between(xs, line.ys - half_widths, line.ys + half_widths, color=line.color, alpha=0.2, linewidth=0)
+        shade_confidence_interval(xs, histories, line.color)
     save_figure(str(Path(__file__).resolve().parent / "out" / f"ar_vs_time_{num_generators}.jpg"))
 
 
@@ -125,9 +124,10 @@ def plot_history_diff(num_generators: int, tmax: float):
     time_grid = np.linspace(0, tmax, 50)
 
     xs, solver_data = load_histories([num_generators], solver_ids, ref_ind, time_grid)[0]
-    first_ys, second_ys = (histories.mean(axis=0) for histories in solver_data[:2])
-    lines = [Line(xs, first_ys - second_ys, color=0, marker=0, label=str(num_generators)), Line([0, 10000], [0, 0], color="black", marker="none", style="--")]
+    diffs = solver_data[0] - solver_data[1]
+    lines = [Line(xs, diffs.mean(axis=0), color=0, marker=0, label=str(num_generators)), Line([0, 10000], [0, 0], color="black", marker="none", style="--")]
     plot_general(lines, axis_labels=("Time [s]", "AR difference"), boundaries=(0, xs[-1], -0.02, 0.05), font_size=30)
+    shade_confidence_interval(xs, diffs, lines[0].color)
     save_figure(str(Path(__file__).resolve().parent / "out" / f"history_diff_{num_generators}.png"))
 
 
@@ -155,6 +155,17 @@ def plot_ar_diff_vs_instance():
              Line([0, len(df) - 1], [0, 0], color="black", marker="none", style="--")]
     plot_general(lines, axis_labels=("Instance index", "Opt - Uniform AR Diff"), boundaries=(0, 99, None, 1))
     save_figure()
+
+
+def shade_confidence_interval(xs: Sequence[float], values: np.ndarray, color: str | tuple[float, float, float]):
+    """Shades the confidence interval of the mean of per-instance curves around their average.
+    :param xs: X-axis coordinates shared by all per-instance curves.
+    :param values: Per-instance curve values with instances along the first axis.
+    :param color: Matplotlib color of the shaded area.
+    """
+    means = values.mean(axis=0)
+    half_widths = t.ppf(0.5 + CONFIDENCE / 2, len(values) - 1) * sem(values, axis=0)
+    plt.fill_between(xs, means - half_widths, means + half_widths, color=color, alpha=0.2, linewidth=0)
 
 
 def load_histories(num_generators: list[int], solver_ids: list[str], ref_ind: int, time_grid: Sequence[float] | str = "auto") \
