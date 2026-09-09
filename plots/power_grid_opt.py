@@ -131,9 +131,16 @@ def plot_history_diff(num_generators: int, tmax: float):
     save_figure(str(Path(__file__).resolve().parent / "out" / f"history_diff_{num_generators}.png"))
 
 
-def plot_ar_vs_instance():
-    """Plots `ar_uniform_fun` and `ar_opt_fun` against row index for the configured generator count."""
-    num_generators = 13
+def plot_ar_vs_instance_all():
+    """Plots approximation ratios against instance index for all configured generator counts."""
+    for num_generators in [10, 13]:
+        plot_ar_vs_instance(num_generators)
+
+
+def plot_ar_vs_instance(num_generators: int):
+    """Plots `ar_uniform_fun` and `ar_opt_fun` against row index with confidence intervals for their means.
+    :param num_generators: Generator count whose dataset should be plotted.
+    """
     df = load_dfs(num_generators, ["hybrid/nl_1/adam"], 0)[0]
     ar_uniform_average = df["ar_uniform"].mean()
     ar_opt_average = df["ar_opt"].mean()
@@ -142,9 +149,11 @@ def plot_ar_vs_instance():
              Line(np.arange(len(df)), df["ar_opt"], color=1, style="none", label="Hybrid"),
              Line([0, len(df) - 1], [ar_opt_average] * 2, color=1, marker="none", style="--")]
     plot_general(lines, axis_labels=("Instance index", "AR"), boundaries=(0, len(df) + 6, 0, 1), legend_loc="upper right")
+    for column, line in zip(["ar_uniform", "ar_opt"], lines[1::2], strict=True):
+        shade_confidence_interval([0, len(df) - 1], np.column_stack([df[column]] * 2), line.color)
     plt.text(len(df), ar_uniform_average, f"{ar_uniform_average:.3f}", color=lines[1].color, va="center")
     plt.text(len(df), ar_opt_average, f"{ar_opt_average:.3f}", color=lines[3].color, va="center")
-    save_figure()
+    save_figure(str(Path(__file__).resolve().parent / "out" / f"ar_vs_instance_{num_generators}.jpg"))
 
 
 def plot_ar_diff_vs_instance():
@@ -287,7 +296,7 @@ if __name__ == "__main__":
     # plot_ar_vs_time_5()
     # plot_ar_vs_time_13()
     # plot_history_diff_all()
-    plot_ar_vs_instance()
+    plot_ar_vs_instance_all()
     # plot_ar_diff_vs_instance()
     # plot_mean_max_shots_vs_generators()
     plt.show()
