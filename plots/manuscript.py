@@ -1,9 +1,11 @@
 """Draws manuscript-specific quantum circuit figures."""
+import pickle
 from itertools import combinations, pairwise
 from math import cos, hypot, pi, sin
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import networkx as nx
 from matplotlib.axes import Axes
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.figure import Figure
@@ -12,6 +14,7 @@ from matplotlib.path import Path as MplPath
 from matplotlib.textpath import TextPath
 from qiskit import QuantumCircuit
 from qiskit.circuit import ParameterVector
+from scipy.spatial.distance import pdist
 
 background_color = "#f8fbff"
 blue = "#1550c8"
@@ -19,6 +22,7 @@ green = "#2b7a16"
 orange = "#c97800"
 rzz_edge = "#d28a22"
 purple = "#5a3db6"
+red = "#d62728"
 text_color = "#111111"
 workflow_width = 1514
 
@@ -101,6 +105,43 @@ def draw_right_curly_brace(file_path: str | Path | None = None) -> Figure:
         file_path = Path(file_path)
         file_path.parent.mkdir(parents=True, exist_ok=True)
         figure.savefig(file_path, dpi=300, facecolor=background_color)
+    return figure
+
+
+def draw_instance_graph(num_generators: int, instance_index: int = 0, file_path: str | Path | None = None) -> Figure:
+    """Draws the graph of a dataset instance in Kamada-Kawai layout, marking each generator with a red dot inside its node.
+    :param num_generators: Number of generators in the dataset, i.e. name of the dataset folder inside ``data``.
+    :param instance_index: Index of the instance within the dataset.
+    :param file_path: Optional path where the rendered graph image should be saved.
+    :return: Matplotlib figure containing the instance graph."""
+    with (Path(__file__).resolve().parent.parent / f"data/{num_generators}/{instance_index}.pkl").open("rb") as file:
+        graph = pickle.load(file)
+    positions = nx.kamada_kawai_layout(graph, scale=0.5, center=(0.5, 0.5))
+
+    figure = plt.figure(figsize=(6, 6), facecolor="white")
+    axes = figure.add_axes((0, 0, 1, 1))
+    axes.set_aspect("equal")
+    axes.axis("off")
+    axes.set_facecolor("white")
+    for first_node, second_node in graph.edges:
+        axes.plot(*zip(positions[first_node], positions[second_node]), color=text_color, linewidth=1.5, zorder=1)
+    node_radius = min(0.06, 0.4 * min(pdist(list(positions.values()))))
+    for node, node_data in graph.nodes(data=True):
+        axes.add_patch(Circle(positions[node], node_radius, facecolor="white", edgecolor=blue, linewidth=2, zorder=2))
+        node_generators = len(node_data["generators"])
+        for i in range(node_generators):
+            angle = pi / 2 + 2 * pi * i / node_generators
+            shift = (0, 0) if node_generators == 1 else (0.45 * node_radius * cos(angle), 0.45 * node_radius * sin(angle))
+            axes.add_patch(Circle((positions[node][0] + shift[0], positions[node][1] + shift[1]), 0.18 * node_radius, color=red, zorder=3))
+
+    xs, ys = zip(*positions.values())
+    margin = 1.5 * node_radius
+    axes.set_xlim(min(xs) - margin, max(xs) + margin)
+    axes.set_ylim(min(ys) - margin, max(ys) + margin)
+    if file_path is not None:
+        file_path = Path(file_path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        figure.savefig(file_path, dpi=300, facecolor="white")
     return figure
 
 
@@ -409,3 +450,5 @@ if __name__ == "__main__":
     plt.close(draw_workflow_outline(out_path / "workflow_outline_alt.png", inner_optimization=False, average_label="C"))
     plt.close(draw_workflow_outline(out_path / "workflow_outline_alt_2.png", inner_optimization=False, average_label=r"\mathbf{AR}"))
     plt.close(draw_workflow_outline(out_path / "workflow_outline_alt_3.png", average_label=r"\mathbf{AR}"))
+    for dataset_size in (5, 7, 10, 13):
+        plt.close(draw_instance_graph(dataset_size, file_path=out_path / f"instance_graph_{dataset_size}.png"))
