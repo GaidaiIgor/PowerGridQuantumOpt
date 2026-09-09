@@ -1,6 +1,6 @@
 """Plotting helpers for power-grid optimization outputs."""
 from pathlib import Path
-from typing import Literal, Sequence
+from typing import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,6 +12,7 @@ from plots.general import Line, plot_general, save_figure
 from src.HistoryEntry import HistoryEntry
 
 VIOLATION_TOLERANCE = 1e-10
+SOLVER_COLORS = {"SCIP": 0, "SMAC": 1, "Uniform": 2, "Hybrid": 3}
 
 
 def plot_probability_distribution(probs: dict[str, float], y_max: float = 1):
@@ -79,21 +80,32 @@ def plot_average_histories():
     save_figure()
 
 
-def plot_ar_vs_time():
-    """Plots average approximation ratio against time with confidence intervals for all solvers on the 5-generator dataset."""
-    solver_ids = ["scip", "smac", "uniform", "hybrid/nl_1"]
-    solver_names = ["SCIP", "SMAC", "Uniform", "Hybrid"]
-    ref_ind = solver_ids.index("hybrid/nl_1")
-    confidence = 0.9
+def plot_ar_vs_time_5():
+    """Plots average approximation ratio against time for all solvers on the 5-generator dataset."""
+    plot_ar_vs_time(5, ["scip", "smac", "uniform", "hybrid/nl_1"], ["SCIP", "SMAC", "Uniform", "Hybrid"], 1800, (-0.025, 1.025))
 
-    xs, solver_data = load_histories([5], solver_ids, ref_ind, np.linspace(0, 1800, 50))[0]
-    lines = [Line(xs, histories.mean(axis=0), color=solver_ind, label=name)
-             for solver_ind, (histories, name) in enumerate(zip(solver_data, solver_names, strict=True))]
-    plot_general(lines, axis_labels=("Time [s]", "AR"), boundaries=(None, None, -0.025, 1.025))
+
+def plot_ar_vs_time_13():
+    """Plots average approximation ratio against time for all solvers except SCIP on the 13-generator dataset."""
+    plot_ar_vs_time(13, ["smac", "uniform", "hybrid/nl_1/adam"], ["SMAC", "Uniform", "Hybrid"], 3600, (0.9, 1.01))
+
+
+def plot_ar_vs_time(num_generators: int, solver_ids: list[str], solver_names: list[str], tmax: float, y_bounds: tuple[float, float]):
+    """Plots average approximation ratio against time with confidence intervals for the configured solvers.
+    :param num_generators: Generator count whose dataset should be plotted.
+    :param solver_ids: Solver ids whose histories should be plotted, with the instance-trimming reference solver last.
+    :param solver_names: Legend labels in `solver_ids` order, also selecting the line colors.
+    :param tmax: Maximum plotted time.
+    :param y_bounds: Minimum and maximum values shown on the y-axis.
+    """
+    confidence = 0.9
+    xs, solver_data = load_histories([num_generators], solver_ids, len(solver_ids) - 1, np.linspace(0, tmax, 50))[0]
+    lines = [Line(xs, histories.mean(axis=0), color=SOLVER_COLORS[name], label=name) for histories, name in zip(solver_data, solver_names, strict=True)]
+    plot_general(lines, axis_labels=("Time [s]", "AR"), boundaries=(None, None) + y_bounds)
     for line, histories in zip(lines, solver_data, strict=True):
         half_widths = t.ppf(0.5 + confidence / 2, len(histories) - 1) * sem(histories, axis=0)
         plt.fill_between(xs, line.ys - half_widths, line.ys + half_widths, color=line.color, alpha=0.2, linewidth=0)
-    save_figure()
+    save_figure(str(Path(__file__).resolve().parent / "out" / f"ar_vs_time_{num_generators}.jpg"))
 
 
 def plot_history_diff_all():
@@ -261,7 +273,8 @@ def plot_mean_max_shots_vs_generators():
 if __name__ == "__main__":
     # plot_instance_objective_histories()
     # plot_average_histories()
-    # plot_ar_vs_time()
+    # plot_ar_vs_time_5()
+    # plot_ar_vs_time_13()
     # plot_history_diff_all()
     plot_ar_vs_instance()
     # plot_ar_diff_vs_instance()
