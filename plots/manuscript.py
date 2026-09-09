@@ -3,6 +3,7 @@ import pickle
 from itertools import combinations, pairwise
 from math import cos, hypot, pi, sin
 from pathlib import Path
+from random import Random
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -12,6 +13,7 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Arc, Circle, FancyArrowPatch, FancyBboxPatch, PathPatch, Polygon, Rectangle
 from matplotlib.path import Path as MplPath
 from matplotlib.textpath import TextPath
+from matplotlib.transforms import Affine2D
 from qiskit import QuantumCircuit
 from qiskit.circuit import ParameterVector
 from scipy.spatial.distance import pdist
@@ -138,6 +140,52 @@ def draw_instance_graph(num_generators: int, instance_index: int = 0, file_path:
     margin = 1.5 * node_radius
     axes.set_xlim(min(xs) - margin, max(xs) + margin)
     axes.set_ylim(min(ys) - margin, max(ys) + margin)
+    if file_path is not None:
+        file_path = Path(file_path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        figure.savefig(file_path, dpi=300, facecolor="white")
+    return figure
+
+
+def draw_bitstring_encoding(file_path: str | Path | None = None, seed: int = 3) -> Figure:
+    """Draws a random measured bitstring whose bits are annotated with the problem variables they encode.
+    :param file_path: Optional path where the rendered bitstring image should be saved.
+    :param seed: Seed of the random generator producing the drawn bits.
+    :return: Matplotlib figure containing the annotated bitstring."""
+    plt.rcParams.update({"font.family": "DejaVu Sans", "mathtext.fontset": "dejavusans"})
+    groups = ((r"$g_0$", 1, blue, "#eef5ff"), (r"$g_1$", 1, blue, "#eef5ff"), (r"$V_0$", 3, green, "#eef8ea"), (r"$V_1$", 3, green, "#eef8ea"),
+              (r"$\delta_1$", 3, purple, "#f0edff"))
+    bit_width, bit_height, gap, group_gap, left, bottom = 58, 68, 9, 22, 40, 190
+    num_bits = sum(count for _, count, _, _ in groups)
+    bits = Random(seed).choices("01", k=num_bits)
+    content_width = num_bits * bit_width + (num_bits - 1) * gap + (len(groups) - 1) * group_gap
+    width = 2 * left + content_width + 52
+    label_y = bottom - 70
+
+    figure = plt.figure(figsize=(width / 100, (bit_height + 120) / 100), facecolor="white")
+    axes = figure.add_axes((0, 0, 1, 1))
+    axes.set_xlim(0, width)
+    axes.set_ylim(bottom - 100, bottom + bit_height + 20)
+    axes.set_aspect("equal")
+    axes.axis("off")
+    axes.set_facecolor("white")
+
+    bit_index, x_left = 0, left
+    for label, count, edge_color, fill_color in groups:
+        for i in range(count):
+            x = x_left + i * (bit_width + gap)
+            axes.add_patch(FancyBboxPatch((x, bottom), bit_width, bit_height, boxstyle="round,pad=0,rounding_size=8", edgecolor=edge_color,
+                                          facecolor=fill_color, linewidth=2))
+            axes.text(x + bit_width / 2, bottom + bit_height / 2, bits[bit_index + i], ha="center", va="center", fontsize=34, color=text_color)
+        x_right = x_left + count * bit_width + (count - 1) * gap
+        if count == 1:
+            axes.plot((x_left + bit_width / 2,) * 2, (bottom - 12, bottom - 36), color=edge_color, linewidth=1.8)
+        else:
+            _draw_bottom_curly_brace(axes, x_left, x_right, bottom - 12, 24, edge_color, 2)
+        axes.text((x_left + x_right) / 2, label_y, label, ha="center", va="center", fontsize=28, color=edge_color)
+        bit_index, x_left = bit_index + count, x_right + gap + group_gap
+    axes.text(left + content_width + 20, bottom + bit_height / 2, r"$\ldots$", ha="left", va="center", fontsize=34, color=text_color)
+
     if file_path is not None:
         file_path = Path(file_path)
         file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -308,6 +356,31 @@ def _draw_right_curly_brace(axes: Axes, x: float, y_bottom: float, y_top: float,
     :param width: Horizontal distance from tips to the middle cusp.
     :param color: Brace stroke color.
     :param linewidth: Brace stroke width."""
+    axes.add_patch(PathPatch(_curly_brace_path(x, y_bottom, y_top, width), fill=False, edgecolor=color, linewidth=linewidth, capstyle="round",
+                             joinstyle="round"))
+
+
+def _draw_bottom_curly_brace(axes: Axes, x_left: float, x_right: float, y: float, depth: float, color: str, linewidth: float):
+    """Draws a stroked curly brace below a horizontal span, obtained by rotating a right brace clockwise.
+    :param axes: Axes receiving the brace.
+    :param x_left: X-coordinate of the left brace tip.
+    :param x_right: X-coordinate of the right brace tip.
+    :param y: Y-coordinate of the brace tips.
+    :param depth: Vertical distance from the tips to the middle cusp.
+    :param color: Brace stroke color.
+    :param linewidth: Brace stroke width."""
+    span = x_right - x_left
+    path = _curly_brace_path(0, -span / 2, span / 2, depth).transformed(Affine2D().rotate_deg(-90).translate((x_left + x_right) / 2, y))
+    axes.add_patch(PathPatch(path, fill=False, edgecolor=color, linewidth=linewidth, capstyle="round", joinstyle="round"))
+
+
+def _curly_brace_path(x: float, y_bottom: float, y_top: float, width: float) -> MplPath:
+    """Builds the path of a right curly brace.
+    :param x: X-coordinate of the brace tips.
+    :param y_bottom: Lower y-coordinate.
+    :param y_top: Upper y-coordinate.
+    :param width: Horizontal distance from the tips to the middle cusp.
+    :return: Path tracing the brace from its top tip to its bottom tip."""
     y_mid = (y_top + y_bottom) / 2
     height = y_top - y_bottom
     cap_height = 0.12 * height
@@ -322,7 +395,7 @@ def _draw_right_curly_brace(axes: Axes, x: float, y_bottom: float, y_top: float,
     codes = [MplPath.MOVETO, MplPath.CURVE4, MplPath.CURVE4, MplPath.CURVE4, MplPath.LINETO,
              MplPath.CURVE4, MplPath.CURVE4, MplPath.CURVE4, MplPath.CURVE4, MplPath.CURVE4,
              MplPath.CURVE4, MplPath.LINETO, MplPath.CURVE4, MplPath.CURVE4, MplPath.CURVE4]
-    axes.add_patch(PathPatch(MplPath(vertices, codes), fill=False, edgecolor=color, linewidth=linewidth, capstyle="round", joinstyle="round"))
+    return MplPath(vertices, codes)
 
 
 def _draw_cost_chart(axes: Axes, x: float, y: float, width: float, height: float):
@@ -450,5 +523,6 @@ if __name__ == "__main__":
     plt.close(draw_workflow_outline(out_path / "workflow_outline_alt.png", inner_optimization=False, average_label="C"))
     plt.close(draw_workflow_outline(out_path / "workflow_outline_alt_2.png", inner_optimization=False, average_label=r"\mathbf{AR}"))
     plt.close(draw_workflow_outline(out_path / "workflow_outline_alt_3.png", average_label=r"\mathbf{AR}"))
+    plt.close(draw_bitstring_encoding(out_path / "bitstring_encoding.png"))
     for dataset_size in (5, 7, 10, 13):
         plt.close(draw_instance_graph(dataset_size, file_path=out_path / f"instance_graph_{dataset_size}.png"))
