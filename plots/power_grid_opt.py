@@ -86,25 +86,32 @@ def plot_ar_vs_time_5():
     plot_ar_vs_time(5, ["scip", "smac", "uniform", "hybrid/nl_1"], ["SCIP", "SMAC", "Uniform", "Hybrid"], 1800, (-0.025, 1.025))
 
 
+def plot_ar_vs_time_5_reduced_voltage():
+    """Plots average approximation ratio against time for all solvers on the 5-generator dataset with SCIP data from the reduced voltage range."""
+    plot_ar_vs_time(5, ["scip/volt_0.8_1.2", "smac", "uniform", "hybrid/nl_1"], ["SCIP", "SMAC", "Uniform", "Hybrid"], 1800, (-0.025, 1.025),
+                    "_volt_0.8_1.2")
+
+
 def plot_ar_vs_time_13():
     """Plots average approximation ratio against time for all solvers except SCIP on the 13-generator dataset."""
     plot_ar_vs_time(13, ["smac", "uniform", "hybrid/nl_1/adam"], ["SMAC", "Uniform", "Hybrid"], 3600, (0.9, 1.01))
 
 
-def plot_ar_vs_time(num_generators: int, solver_ids: list[str], solver_names: list[str], tmax: float, y_bounds: tuple[float, float]):
+def plot_ar_vs_time(num_generators: int, solver_ids: list[str], solver_names: list[str], tmax: float, y_bounds: tuple[float, float], suffix: str = ""):
     """Plots average approximation ratio against time with confidence intervals for the configured solvers.
     :param num_generators: Generator count whose dataset should be plotted.
     :param solver_ids: Solver ids whose histories should be plotted, with the instance-trimming reference solver last.
     :param solver_names: Legend labels in `solver_ids` order, also selecting the line colors.
     :param tmax: Maximum plotted time.
     :param y_bounds: Minimum and maximum values shown on the y-axis.
+    :param suffix: Suffix appended to the output figure name.
     """
     xs, solver_data = load_histories([num_generators], solver_ids, len(solver_ids) - 1, np.linspace(0, tmax, 50))[0]
     lines = [Line(xs, histories.mean(axis=0), color=SOLVER_COLORS[name], label=name) for histories, name in zip(solver_data, solver_names, strict=True)]
     plot_general(lines, axis_labels=("Time [s]", "AR"), boundaries=(None, None) + y_bounds)
     for line, histories in zip(lines, solver_data, strict=True):
         shade_confidence_interval(xs, histories, line.color)
-    save_figure(str(Path(__file__).resolve().parent / "out" / f"ar_vs_time_{num_generators}.jpg"))
+    save_figure(str(Path(__file__).resolve().parent / "out" / f"ar_vs_time_{num_generators}{suffix}.jpg"))
 
 
 def plot_history_diff_all():
@@ -294,7 +301,8 @@ if __name__ == "__main__":
     # plot_instance_objective_histories()
     # plot_average_histories()
     # plot_ar_vs_time_5()
-    plot_ar_vs_time_13()
+    plot_ar_vs_time_5_reduced_voltage()
+    # plot_ar_vs_time_13()
     # plot_history_diff_all()
     # plot_ar_vs_instance_all()
     # plot_ar_diff_vs_instance()

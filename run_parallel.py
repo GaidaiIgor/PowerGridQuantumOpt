@@ -18,7 +18,6 @@ from cattrs.preconf.json import make_converter
 from pebble import ProcessPool
 from tqdm import tqdm
 
-from common.debug import set_all_node_voltage_ranges
 from common.utils import SAMPLER_IDS, SOLVER_IDS, get_solver
 from src.HistoryEntry import HistoryEntry
 from src.PowerFlowProblem import PowerFlowProblem
@@ -187,7 +186,6 @@ def run_instance(data_folder: Path, index: int, solver: PowerFlowSolver, voltage
         np.random.seed(seed)
         with (data_folder / f"{index}.pkl").open("rb") as file:
             problem = PowerFlowProblem(pickle.load(file), voltage_deviation_mult)
-        set_all_node_voltage_ranges(problem, (0.8, 1.2))  # TEMP HACK
         progress_path = progress_folder / f"{index}.pkl"
         return solver.solve(problem, progress_path=progress_path)
 
